@@ -530,7 +530,7 @@ como reserva e para os testes sem janela, e fica sem extensões fora do WSI.
 
 ### 7.6 Resolução interna e widescreen (2026-11-24) — `src/hooks/render_opts.h`
 
-`DW4_RES=<altura>` (480, 720, 1080, 1440, 2160) e `DW4_ASPECT=<L:A>` (16:9, 16:10, 21:9; 4:3 =
+`DW4_RES=<altura>` (480, 720, 1080, 1440, 2160) e `DW4_ASPECT=<L:A>` (16:9, 21:9; 16:10 deixou de ser oferecida em 2026-11-24; 4:3 =
 original); no launcher, Gráficos → Imagem. Vale para os **dois** renderizadores (o cabeçalho é
 comum). Desenho tirado do Amped 2 e dos dois SSX 3 (`docs/REFERENCIAS.md`), código nosso.
 
@@ -644,10 +644,14 @@ comum). Desenho tirado do Amped 2 e dos dois SSX 3 (`docs/REFERENCIAS.md`), cód
     posição mostrou que o limiar de "encostado na borda" (92%) não pegava o mapa; passou a 85%.
     **Confirmado pelo usuário jogando (2026-11-24, OpenGL):** 4:3, 16:9 e 21:9 normais.
     Depois também no Vulkan em 21:9.
-- **ABERTO: menu do START quebra em 21:9** (usuário, Vulkan, 2026-11-24): aparece esticado; em
-  16:9 está certo. Sem captura ainda (o F9 com lista de draws só existe no OpenGL); o usuário vai
-  mandar. Suspeitas a conferir na captura: as regras de `ro_squeeze` com limiar em fração da
-  largura (lote de tela inteira, faixa do HUD) pegando um painel do menu só em 21:9.
+- **Menu do START quebrado em 21:9 — a regra da faixa do HUD pegava o menu (2026-11-24):**
+  captura `f9-015` do usuário: os painéis da esquerda arrancados para o canto, textos no meio,
+  barra de ajuda esticada. A barra de ajuda do menu é um lote 2D largo encostado embaixo
+  (-54..933 × 366..509 com o painel deslizante) e passava no critério genérico de "faixa";
+  a zona crescente então puxava os painéis. Correção: a faixa do HUD é reconhecida pela
+  **geometria exata** dela (-18..659 × 393..485, ±3). Reproduz sem janela (START no lobby);
+  verificado em 21:9 e 16:9: HUD ancorado e menu inteiro na coluna 4:3. Confirmado pelo usuário
+  jogando em 21:9.
 - **Limites conhecidos:** menus e vídeos ficam com faixas laterais; a sonda de pixel do F9 só
   funciona em 480 + 4:3; os frames de referência (`tests/golden`) só valem para 480 + 4:3.
 - **Verificado sem janela:** 1440 + 16:9 nos dois renderizadores (seleção de Digimon, login,

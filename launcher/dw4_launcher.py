@@ -4,7 +4,8 @@
     launcher.sh                 abre o launcher
     launcher.sh --play          inicia o jogo direto, com as opcoes salvas
     launcher.sh --selftest      carrega a interface fora da tela e sai ("selftest ok")
-    launcher.sh --screenshot <pagina> <arquivo.png>   (documentacao/testes)
+    launcher.sh --screenshot <pagina> <arquivo.png> [--lang pt|en] [--size LxA] [--defaults]
+                                (documentacao/testes; nao grava a configuracao)
 
 Funciona na raiz do repositorio (executavel em build/) e dentro de um pacote
 de release (executavel ao lado). Tudo o que ele grava fica na pasta do
@@ -50,9 +51,9 @@ DEFAULTS = {
     "lang": "auto",          # auto | pt | en
     "fullscreen": False,
     "vsync": True,
-    "renderer": "vulkan",    # vulkan | opengl | cpu  (API grafica; "gpu" antigo = opengl)
+    "renderer": "vulkan",    # vulkan | opengl  (API grafica; "gpu" antigo = opengl)
     "res": 480,              # altura da imagem: 480 (original) | 720 | 1080 | 1440 | 2160
-    "aspect": "4:3",         # 4:3 (original) | 16:9 | 16:10 | 21:9
+    "aspect": "4:3",         # 4:3 (original) | 16:9 | 21:9
     "fps": 30,               # limite de quadros: 30 (como rodava no Xbox) | 60
     "parallel": False,       # jogo e GPU emulada em paralelo (RECOMP_KICK_AHEAD); experimental
     "keyboard": True,
@@ -79,7 +80,7 @@ STR = {
         "ended_ok": "O jogo foi fechado.",
         "ended_crash": "O jogo fechou com erro. O log foi guardado em: ",
         "window": "Janela", "fullscreen": "Tela cheia", "fullscreen_d": "Tela cheia sem borda, na resolução da área de trabalho.",
-        "window_d": "Fora da tela cheia, a janela abre do tamanho da resolução interna escolhida abaixo (em 480p e "
+        "window_d": "Fora da tela cheia, a janela abre do tamanho da resolução interna escolhida acima (em 480p e "
                     "720p, no dobro, para não ficar pequena). Se não couber no monitor, é reduzida mantendo a forma.",
         "vsync": "Sincronização vertical", "vsync_d": "Apresenta os quadros no ritmo do monitor. Desligue só para testes.",
         "perf": "Desempenho", "parallel": "Jogo e placa de vídeo em paralelo (experimental)",
@@ -94,26 +95,25 @@ STR = {
         "res_d": "Altura em que o jogo é desenhado. Use a do seu monitor para a imagem mais nítida; "
                  "valores altos pedem mais da placa de vídeo.",
         "aspect": "Proporção", "aspect_orig": "4:3 (original)",
-        "aspect_d": "Em 16:9, 16:10 ou 21:9 o cenário aparece mais largo, sem esticar; menus, vídeos e "
-                    "o painel de status continuam em 4:3 no meio da tela.",
-        "image_cpu": "Resolução e proporção valem para OpenGL e Vulkan; o renderizador de CPU as ignora.",
+        "aspect_d": "Em 16:9 ou 21:9 o cenário aparece mais largo, sem esticar. O painel do jogador e o "
+                    "minimapa vão para os cantos da tela; menus, diálogos e vídeos continuam em 4:3 no meio.",
         "fps": "Limite de quadros", "fps_30": "30 fps (original)", "fps_60": "60 fps (2× mais rápido)",
         "fps_d": "No Xbox o jogo rodava a 30 quadros por segundo. A velocidade dele acompanha os quadros: "
                  "em 60 fps a imagem fica mais fluida, mas tudo (movimento, combate, textos) anda duas vezes "
                  "mais rápido que no console.",
         "renderer": "API gráfica", "r_vk": "Vulkan — padrão", "r_gl": "OpenGL 3.3",
-        "r_cpu": "CPU (referência, muito lento)",
+       
         "renderer_d": "É a forma como o jogo fala com a placa de vídeo. Vulkan e OpenGL desenham a mesma imagem; "
                       "o Vulkan é o mais rápido, principalmente em resolução alta.",
         "api_vk": "Vulkan (padrão) — o mais rápido: o quadro pronto vai direto da placa de vídeo para a janela. "
                   "Em 1440p e 4K é o que segura os 60 fps. Precisa de um driver com Vulkan.",
         "api_gl": "OpenGL 3.3 — a mais antiga e compatível; funciona em praticamente qualquer placa e driver. "
-                  "Mais lenta em resolução alta. Use se o Vulkan der problema.",
-        "api_cpu": "CPU — desenha tudo no processador, sem usar a placa de vídeo. Faz poucos quadros por segundo; "
-                   "serve só para comparar quando a imagem parece errada.",
+                  "Mais lenta em resolução alta. Jogando, o defeito conhecido do chão que escurece apareceu menos com ela, "
+                  "e a imagem ficou mais estável: vale trocar se isso incomodar ou se o Vulkan der problema.",
         "api_note": "Com Vulkan o jogo usa pouco processador (bem menos de um núcleo em cenas leves) e deixa o "
                     "trabalho pesado para a placa de vídeo; medido numa RTX 5070, onde 4K roda a 60 fps. "
-                    "O OpenGL traz cada quadro de volta pela memória, o que custa quadros de 1440p para cima. "
+                    "O OpenGL traz cada quadro de volta pela memória, o que custa quadros de 1440p para cima; "
+                    "em compensação, o defeito conhecido do chão que escurece aparece menos com ele. "
                     "Se a API escolhida não estiver disponível, o jogo abre com a outra.",
         "vk_missing": "Vulkan não foi encontrado neste sistema: o jogo vai abrir com OpenGL.",
         "keyboard": "Teclado como controle 1", "keyboard_d": "Um controle conectado continua funcionando junto.",
@@ -128,7 +128,8 @@ STR = {
         "known": "Problemas conhecidos",
         "known_1": "Pular o vídeo de abertura com START pode, raramente, fechar o jogo. Se acontecer, abra de novo.",
         "known_2": "Reflexos e brilhos gerados automaticamente não estão implementados; alguns objetos podem parecer chapados.",
-        "known_3": "Em algumas áreas o chão escurece por alguns quadros e volta. É só visual; a causa ainda não foi achada.",
+        "known_3": "Em algumas áreas o chão escurece por alguns quadros e volta. É só visual; a causa ainda não foi achada. "
+                   "Acontece menos com a API gráfica OpenGL (Gráficos).",
         "known_4": "Testado em uma única máquina (CachyOS, NVIDIA RTX 5070), onde roda a 60 fps em 4K. Outras placas "
                    "(AMD, Intel), processadores mais fracos e outros sistemas ainda não foram testados.",
         "slow": "Se o jogo estiver lento",
@@ -166,7 +167,7 @@ STR = {
         "ended_ok": "The game was closed.",
         "ended_crash": "The game closed with an error. The log was kept at: ",
         "window": "Window", "fullscreen": "Fullscreen", "fullscreen_d": "Borderless fullscreen at the desktop resolution.",
-        "window_d": "Outside fullscreen, the window opens at the internal resolution chosen below (doubled at 480p "
+        "window_d": "Outside fullscreen, the window opens at the internal resolution chosen above (doubled at 480p "
                     "and 720p, so it is not tiny). If it does not fit the display it is shrunk, keeping its shape.",
         "vsync": "Vertical sync", "vsync_d": "Presents frames at the display's pace. Turn off for testing only.",
         "perf": "Performance", "parallel": "Game and graphics card in parallel (experimental)",
@@ -181,26 +182,25 @@ STR = {
         "res_d": "The height the game is drawn at. Use your display's for the sharpest picture; "
                  "high values ask more of the graphics card.",
         "aspect": "Aspect ratio", "aspect_orig": "4:3 (original)",
-        "aspect_d": "At 16:9, 16:10 or 21:9 the scenery gets wider without stretching; menus, movies and "
-                    "the status panel stay 4:3 in the middle of the screen.",
-        "image_cpu": "Resolution and aspect ratio apply to OpenGL and Vulkan; the CPU renderer ignores them.",
+        "aspect_d": "At 16:9 or 21:9 the scenery gets wider without stretching. The player panel and the "
+                    "minimap move to the screen corners; menus, dialogue and movies stay 4:3 in the middle.",
         "fps": "Frame rate limit", "fps_30": "30 fps (original)", "fps_60": "60 fps (2× faster)",
         "fps_d": "On the Xbox the game ran at 30 frames per second. Its speed follows the frames: at 60 fps "
                  "the picture is smoother, but everything (movement, combat, text) goes twice as fast as "
                  "on the console.",
         "renderer": "Graphics API", "r_vk": "Vulkan — default", "r_gl": "OpenGL 3.3",
-        "r_cpu": "CPU (reference, very slow)",
+       
         "renderer_d": "This is how the game talks to your graphics card. Vulkan and OpenGL draw the same picture; "
                       "Vulkan is the faster one, mostly at high resolutions.",
         "api_vk": "Vulkan (default) — the faster one: the finished frame goes straight from the graphics card to "
                   "the window. At 1440p and 4K this is what holds 60 fps. Needs a driver with Vulkan.",
         "api_gl": "OpenGL 3.3 — the older, most compatible one; works on practically any card and driver. "
-                  "Slower at high resolutions. Use it if Vulkan gives you trouble.",
-        "api_cpu": "CPU — draws everything on the processor, without the graphics card. A few frames per second; "
-                   "only for comparing when the picture looks wrong.",
+                  "Slower at high resolutions. In play, the known floor-darkening glitch showed up less with it and the "
+                  "picture was steadier: worth switching if that bothers you or if Vulkan gives you trouble.",
         "api_note": "With Vulkan the game uses little processor (well under one core in light scenes) and leaves "
                     "the heavy work to the graphics card; measured on an RTX 5070, where 4K runs at 60 fps. "
-                    "OpenGL copies every frame back through memory, which costs frames at 1440p and above. "
+                    "OpenGL copies every frame back through memory, which costs frames at 1440p and above; "
+                    "on the other hand, the known floor-darkening glitch shows up less with it. "
                     "If the chosen API is unavailable, the game starts with the other.",
         "vk_missing": "Vulkan was not found on this system: the game will start with OpenGL.",
         "keyboard": "Keyboard as controller 1", "keyboard_d": "A connected controller keeps working alongside it.",
@@ -215,7 +215,8 @@ STR = {
         "known": "Known issues",
         "known_1": "Skipping the intro movie with START can, rarely, make the game quit. If it happens, start it again.",
         "known_2": "Automatically generated reflections and shine are not implemented; some objects may look flat.",
-        "known_3": "In some areas the floor darkens for a few frames and comes back. It is only visual; the cause has not been found yet.",
+        "known_3": "In some areas the floor darkens for a few frames and comes back. It is only visual; the cause has not been found yet. "
+                   "It happens less with the OpenGL graphics API (Graphics).",
         "known_4": "Tested on one machine (CachyOS, NVIDIA RTX 5070), where it runs at 60 fps in 4K. Other cards "
                    "(AMD, Intel), slower processors and other systems are untested.",
         "slow": "If the game is slow",
@@ -275,9 +276,13 @@ class Backend(QObject):
             self.cfg["res"] = 480
         if self.cfg["fps"] not in (60, 30):
             self.cfg["fps"] = 30
-        if self.cfg["aspect"] not in ("4:3", "16:9", "16:10", "21:9"):
+        if self.cfg["aspect"] == "16:10":       # deixou de ser oferecida (DW4R-2): a mais proxima
+            self.cfg["aspect"] = "16:9"
+        if self.cfg["aspect"] not in ("4:3", "16:9", "21:9"):
             self.cfg["aspect"] = "4:3"
-        if self.cfg["renderer"] not in ("opengl", "vulkan", "cpu"):
+        if self.cfg["renderer"] == "cpu":       # deixou de ser oferecido no launcher (DW4R-2)
+            self.cfg["renderer"] = "vulkan"
+        if self.cfg["renderer"] not in ("opengl", "vulkan"):
             self.cfg["renderer"] = "opengl"     # "gpu" das versoes ate 0.1.0
         self._vulkan = self._detect_vulkan()
         self.proc = None
@@ -518,11 +523,13 @@ class Backend(QObject):
         # permite investigar uma queda de quadros depois, pelo relatorio.
         env.setdefault("DW4_VK_STATS", "1")
         env.setdefault("DW4_GL_STATS", "1")
-        env["DW4_RENDERER"] = c["renderer"]     # opengl | vulkan | cpu (src/hooks/gl_host.c)
+        env["DW4_RENDERER"] = c["renderer"]     # opengl | vulkan (src/hooks/gl_host.c)
         env["DW4_RES"] = str(int(c["res"]))     # src/hooks/render_opts.h
         env["DW4_ASPECT"] = c["aspect"]
         env["DW4_FPS_LIMIT"] = str(int(c["fps"]))   # src/hooks/fps_limit.c
-        for k, on in (("RECOMP_FULLSCREEN", c["fullscreen"]), ("DW4_SW_RENDER", c["renderer"] == "cpu")):
+        # O rasterizador em CPU saiu do launcher; segue existindo para quem desenvolve
+        # (DW4_SW_RENDER=1 ./run.sh). Uma variavel herdada do ambiente nao pode liga-lo aqui.
+        for k, on in (("RECOMP_FULLSCREEN", c["fullscreen"]), ("DW4_SW_RENDER", False)):
             if on:
                 env[k] = "1"
             else:
@@ -766,6 +773,11 @@ def main() -> int:
     app.setApplicationName("Digimon World 4 - Recomp")
     app.setDesktopFileName("dw4-recomp-launcher")
     backend = Backend()
+    if "--screenshot" in args:          # so para a captura; nada disto e gravado
+        if "--defaults" in args:        # opcoes de fabrica, sem a pasta de jogo do usuario
+            backend.cfg = dict(DEFAULTS)
+        if "--lang" in args:
+            backend.cfg["lang"] = args[args.index("--lang") + 1]
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("app", backend)
     engine.load(QUrl.fromLocalFile(str(HERE / "qml" / "Main.qml")))
@@ -784,6 +796,10 @@ def main() -> int:
     if "--screenshot" in args:
         i = args.index("--screenshot")
         win.setProperty("page", int(args[i + 1]))
+        if "--size" in args:            # a tela "offscreen" e pequena e limitaria a janela
+            w, _, h = args[args.index("--size") + 1].partition("x")
+            win.setProperty("width", int(w))
+            win.setProperty("height", int(h))
         if "--open-combo" in args:          # captura com um select aberto (teste visual)
             QTimer.singleShot(150, lambda: win.setProperty("debugOpenCombo", True))
 

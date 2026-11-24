@@ -24,10 +24,12 @@ caminho para as três plataformas (macOS via MoltenVK).
   leitura sem janela); modo paralelo jogo/executor opcional (`RECOMP_KICK_AHEAD=1`). Confirmado
   pelo usuário jogando em 4K e 1440p a 60 fps nas áreas pesadas (RTX 5070); não testado em
   outras placas nem em máquinas fracas.
-- **Aberto:** crash intermitente ao pular o vídeo de abertura com START (assinatura no
-  `STATUS.md`); texgen não implementado; resolução interna e widescreen (`src/hooks/render_opts.h`) ainda não
-  foram jogados com janela; licença do
-  projeto ainda não escolhida.
+- **Widescreen (DW4R-2):** só 16:9 e 21:9 (16:10 retirada). Fade, HUD e minimapa tratados em
+  `src/hooks/render_opts.h` (`ro_squeeze`, chamada no flush do lote); recorte do guest (scissor)
+  nos dois renderizadores. Detalhes e casos em `PORT_NOTES.md` §7.6.
+- **Aberto:** crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
+  assinatura no `STATUS.md`); texgen não implementado; o chão que escurece por alguns quadros;
+  HUD em widescreen só conferido com 1 jogador; licença do projeto ainda não escolhida.
 
 ## Onde ler antes de mexer
 
@@ -72,7 +74,7 @@ src/hooks/                    todo o código próprio do runtime
   nv2a_vk_backend.c           renderizador Vulkan  -> build/libdw4_vk.so (recarrega a quente)
   shaders/                    GLSL do Vulkan (glslc -> SPIR-V embutido); porte do shader do OpenGL
   gl_module.h                 interface comum aos dois renderizadores (ABI)
-  render_opts.h               resolução interna e proporção, comum aos dois (DW4_RES, DW4_ASPECT)
+  render_opts.h               resolução interna, proporção e regras de widescreen (fade, HUD, minimapa), comum aos dois
   widescreen.c                alarga o culling do jogo em widescreen (gancho sub_000BC050_enter)
   gl_host.c                   escolhe a API (DW4_RENDERER), contexto EGL, carga/recarga (no executável)
   recomp_manual.c             defaults de ambiente (RECOMP_*), overrides, init dos hooks
@@ -107,6 +109,7 @@ scripts/triage.py <log>                          # resumo e veredito de um log
 scripts/regen.sh                                 # regenera src/recompiled/ (após mudar sementes)
 scripts/test_pad.sh                              # plugar/desplugar controle virtual (sem jogo, ~5 s)
 ./launcher.sh --selftest                         # launcher fora da tela
+./launcher.sh --screenshot 1 docs/launcher_graphics.png --lang en --size 1120x1000 --defaults   # imagens dos READMEs
 scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
 ```
 

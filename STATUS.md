@@ -224,7 +224,8 @@ em `PORT_NOTES.md` §7.0. Validado sem janela (2 reloads durante o cenário do l
 ## Resolução interna e widescreen ✅ (2026-11-24) — `src/hooks/render_opts.h`
 
 Launcher: Gráficos → **Imagem** → Resolução interna (480p original, 720p, 1080p, 1440p, 4K) e
-Proporção (4:3 original, 16:9, 16:10, 21:9). Sem launcher: `DW4_RES=1440 DW4_ASPECT=16:9`. Vale
+Proporção (4:3 original, 16:9, 21:9; **16:10 foi retirada em 2026-11-24**, decisão do usuário: não
+vamos dar suporte — uma configuração salva com 16:10 vira 16:9). Sem launcher: `DW4_RES=1440 DW4_ASPECT=16:9`. Vale
 para Vulkan e OpenGL. Em widescreen o cenário fica mais largo sem esticar; HUD, menus e vídeos
 ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
 
@@ -239,6 +240,11 @@ ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
   16:9, Vulkan e OpenGL). **Aguardando o usuário confirmar jogando.**
 - **Confirmado pelo usuário (2026-11-24):** a piscada com distorção sumiu no Vulkan; "jogo mais
   fluido, parecendo o original".
+- **Observação do usuário (2026-11-24, DW4R-2):** jogando, o chão que escurece aparece **menos no
+  OpenGL** e a imagem fica mais estável do que no Vulkan. Não foi medido nem explicado; é uma
+  pista nova para o defeito abaixo (os dois renderizadores diferem na apresentação — o Vulkan não
+  espera a GPU e não traz o quadro de volta — e não no desenho). O launcher passou a dizer isso
+  na descrição do OpenGL e em Suporte.
 - **Aberto: o chão escurece por alguns quadros** (Central Area, caverna; Vulkan e OpenGL).
   Acontece também em 480p 4:3 (não é do widescreen). Causa não determinada; tudo o que foi medido
   e descartado está em `PORT_NOTES.md` §7.8. **Defeito conhecido, não resolvido** (decisão do
@@ -255,8 +261,12 @@ ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
   o recorte de 120×120 do mapa não era aplicado (valia também em 4:3). Agora os dois
   renderizadores cortam, e em tela larga o minimapa fica ancorado no canto (`PORT_NOTES.md`
   §7.6, patch 4.15). Goldens iguais; o mapa em si só o usuário alcança.
-- **Aberto: o menu do START aparece esticado em 21:9** (em 16:9 está certo). Aguardando uma
-  captura F9 do usuário no OpenGL (`PORT_NOTES.md` §7.6).
+- **Menu do START em 21:9 — corrigido (2026-11-24); confirmado pelo usuário ("está perfeito agora"):** a regra da
+  faixa do HUD pegava a barra de ajuda do menu (`PORT_NOTES.md` §7.6). Verificado sem janela em
+  21:9 e 16:9.
+- **Launcher sem a API "CPU" (2026-11-24, decisão do usuário):** o seletor oferece só Vulkan e
+  OpenGL; uma configuração salva com "cpu" vira Vulkan. O rasterizador em CPU continua existindo
+  para desenvolvimento (`DW4_SW_RENDER=1 ./run.sh`, `soak.py --sw`): é o árbitro dos bugs de imagem.
 - **Launcher (2026-11-24, DW4R-2):** Gráficos na ordem API → Imagem → Janela → Desempenho; a
   janela abre maior (até 1120×940, limitada pelo monitor) e a barra de rolagem fica sempre à
   vista quando há mais conteúdo; só a descrição da API escolhida aparece.

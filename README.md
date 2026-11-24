@@ -25,12 +25,13 @@ Playable from boot through the first stage on the one machine it has been tested
 | Boot, intro movies (CRI Sofdec), title screen | ✅ |
 | Menus, Digimon creation, saving and loading | ✅ |
 | OpenGL 3.3 renderer with texture cache: 60 fps in the lobby (CPU renderer ~3 fps, kept as the reference) | ✅ |
-| Vulkan renderer, the default; OpenGL stays selectable in the launcher (Graphics → Graphics API) and draws the same picture | ✅ new |
+| Vulkan renderer, the default: presents straight from the graphics card (swapchain), 4K at 60 fps; OpenGL stays selectable in the launcher (Graphics → Graphics API) and draws the same picture | ✅ |
+| Low processor use: about a third of one core in the lobby (it was about two cores) | ✅ new |
 | Controller (XInput-style pads) and keyboard | ✅ |
 | Lobby, tutorial and first stage playable | ✅ |
 | Later stages, bosses, the rest of the game | ⬜ not tested yet |
 | Multiplayer (2–4 players) | ⬜ not tested yet |
-| Internal resolution up to 4K and widescreen (16:9, 16:10, 21:9: wider scenery, HUD and menus stay 4:3), in the launcher | ✅ new, checked up to the lobby |
+| Internal resolution up to 4K and widescreen (16:9, 21:9): wider scenery, player panel and minimap in the screen corners, menus and dialogue stay 4:3 | ✅ played in the first stages |
 | Launcher restyled after the game's menus; frame-rate limit (30 by default, the console's speed; 60 is smoother but the game runs twice as fast) | ✅ new |
 | Key remapping | ⬜ not implemented |
 | Windows and macOS | ⬜ planned, not started |
@@ -49,43 +50,49 @@ Everything in this README was tested on **one** computer. Nothing else has been 
 | Memory | 32 GB |
 | System | CachyOS Linux (Arch-based), kernel 7.3 |
 
-Frame rate, with the limiter off (the game then runs at up to 60 fps, twice the console's speed):
+Frame rate, with the limiter off (the game then runs at up to 60 fps, twice the console's speed),
+on Vulkan:
 
 | Where | Result |
 |---|---|
-| Menus, Digimon creation, lobby | 60 fps, at 480p and at 2560×1440 16:9, on Vulkan and on OpenGL |
-| Central Area (heaviest place tried, 32–38 thousand draw calls per frame) | 34–50 fps at 2560×1440 16:9 |
+| Menus, Digimon creation, lobby | 60 fps from 480p to 3840×2160 |
+| Central Area and the first stages (the heaviest places tried) | 60 fps at 2560×1440 and at 3840×2160, as played; these areas ran at 34–50 fps before the performance work |
 | CPU reference renderer | about 3 fps |
 
-In the one session played so far with the default 30 fps limit, the game held 30.
+Processor use on the same 92-second run (menus to the lobby, Vulkan, one run each):
 
-Cost of the two graphics APIs on the same 92-second run (menus to the lobby, no window, one run
-each):
-
-| | Processor | Graphics card |
+| | Before | Now |
 |---|---|---|
-| Vulkan, 480p 4:3 | 195% of one core | 5% |
-| OpenGL, 480p 4:3 | 200% of one core | 5% |
-| Vulkan, 2560×1440 16:9 | 182% of one core | 18% |
-| OpenGL, 2560×1440 16:9 | 199% of one core | 18% |
+| 480p 4:3, no window | 195% of one core | 28% of one core |
+| 3840×2160 16:9, in a window | 93% of one core, 49 fps | 34% of one core, 60 fps |
 
-The game is limited by the processor, not the graphics card: about two cores are busy with either
-API, and the card stays mostly idle even at 1440p.
+Two things changed. The game thread and the emulated-GPU thread used to spin while waiting for the
+vertical blank; they now sleep. And with Vulkan the finished frame goes straight from the graphics
+card to the window instead of being copied back through memory. OpenGL still copies every frame
+back, so it is slower at 1440p and above.
+
+An optional mode (launcher → Graphics → Performance, off by default) runs game logic and drawing
+on two cores at the same time instead of taking turns. On the test machine it makes no visible
+difference, because the game already holds 60 fps; it is meant for slower processors and has not
+been tried on one.
 
 Automated checks (no window, scripted input): the run from boot to the lobby matches the reference
-frames on both renderers; plugging a virtual controller in and out 400 times while the game reads
-it passes.
+frames on both renderers; the same run passes with a window and the Vulkan swapchain inside a
+headless compositor; plugging a virtual controller in and out 400 times while the game reads it
+passes.
 
 ### Known issues
 
-- Skipping the intro movie with START sometimes makes the game quit (about 1 run in 4 in automated
-  tests). Start it again; letting the movie play avoids it.
+- Skipping the intro movie with START can make the game quit. In automated runs without a window
+  it happened in 2 of 16; it has not been seen when playing in a window. Start the game again.
 - Automatic texture-coordinate generation (reflections, shine effects) is not implemented; some
   objects may look flat.
 - The floor sometimes darkens for a fraction of a second in some areas (Central Area, caves), on
-  both renderers. Cosmetic; the cause has not been found yet.
+  both renderers, less often with OpenGL. Cosmetic; the cause has not been found yet.
 - At 60 fps the game runs twice as fast as on the console, because its logic advances per frame.
   The default is 30.
+- In widescreen the loading screen is stretched to the full width, and the player panel has only
+  been checked with one player.
 - Tested on a single machine (above). Other GPUs, drivers and distributions are untested; AMD and
   Intel graphics have never been tried.
 
@@ -118,15 +125,17 @@ the file with a newer version keeps them.
 ./launcher.sh --play     # starts the game directly with the saved options
 ```
 
-![Launcher](docs/launcher.png)
+![Launcher, Play screen](docs/launcher.png)
+
+![Launcher, Graphics screen](docs/launcher_graphics.png)
 
 | Screen | What it does |
 |---|---|
 | Play | game files: pick a disc image (`.iso`) or a folder; detected graphics card, version, Play button |
-| Graphics | fullscreen, window size (1× to 4× of 640×480), vertical sync, GPU or CPU renderer |
+| Graphics | graphics API (Vulkan or OpenGL); internal resolution (480p to 4K), aspect ratio (4:3, 16:9, 21:9) and frame-rate limit (30 or 60); fullscreen and vertical sync; the experimental parallel mode |
 | Controls | keyboard as controller 1 on/off, the key table |
 | Saves & data | save folder, list of saves, backup, `.zip` export and import (the current saves are backed up first) |
-| Support | known issues, log folder, a problem report without your home folder's name |
+| Support | known issues, what to try if the game is slow, log folder, a problem report (system, processor, graphics card, options, frame-rate summary) without your home folder's name |
 
 The interface is in Portuguese (Brazil) or English, chosen from the system language; it can be
 changed in the sidebar. Every run through the launcher is logged to `logs/` (the last 10 are kept).
@@ -214,12 +223,16 @@ Run with a log and attach the file:
 - **Freeze:** wait about ten seconds before closing; after 5 s without a new frame the log records
   where every thread stopped (`[STALL]`).
 - **Picture problem:** press **F9** with the problem on screen (source builds). It writes a
-  screenshot and a list of every draw call to `build/shots/`.
+  screenshot to `build/shots/`; with the OpenGL renderer it also writes a list of every draw call,
+  which is what makes most picture bugs findable.
+- **Slow:** the launcher's report includes a frame-rate summary of the session.
 
 `DW4_RES=1440 DW4_ASPECT=16:9 ./run.sh` sets the internal resolution (image height) and the aspect
-ratio without the launcher. `DW4_RENDERER=opengl ./run.sh` (or `vulkan`, the default) picks the graphics API;
-if the one asked for is unavailable the game falls back to the other. `DW4_SW_RENDER=1 ./run.sh` runs
-the CPU reference renderer, to tell a renderer bug from a game bug.
+ratio (`16:9` or `21:9`) without the launcher. `DW4_RENDERER=opengl ./run.sh` (or `vulkan`, the
+default) picks the graphics API; if the one asked for is unavailable the game falls back to the
+other. `DW4_SW_RENDER=1 ./run.sh` runs the CPU reference renderer, to tell a renderer bug from a
+game bug. `RECOMP_KICK_AHEAD=1` turns the parallel mode on; `DW4_VSYNC=on|off` picks the
+presentation mode on Vulkan.
 
 ## For developers
 
@@ -228,8 +241,12 @@ the CPU reference renderer, to tell a renderer bug from a game bug.
 - [docs/REFERENCIAS.md](docs/REFERENCIAS.md): what other ports on the same toolkit do.
 - `scripts/soak.py` runs the game without a window from an input script and classifies the result;
   `scripts/golden.py` compares frames against references; `scripts/triage.py` summarises a log.
-- The renderer (`src/hooks/nv2a_gl_backend.c`) hot-reloads: run
-  `cmake --build build --target dw4_gl` while the game is open.
+- `scripts/soak.py --gamescope` runs the same scenario in a window inside a headless gamescope
+  (nothing appears on the display), which exercises the Vulkan swapchain.
+- CPU profile without `perf`: `scripts/soak.py -e DW4_PROF=/tmp/p.txt -e DW4_PROF_FROM=3900`, then
+  `scripts/prof_report.py /tmp/p.txt`.
+- The renderers (`src/hooks/nv2a_vk_backend.c`, `nv2a_gl_backend.c`) hot-reload: run
+  `cmake --build build --target dw4_vk` (or `dw4_gl`) while the game is open.
 - Toolkit changes live in `patches/xboxrecomp-dw4.patch` and are applied by `scripts/setup.sh`.
 
 These documents are in Portuguese for now.

@@ -332,7 +332,7 @@ ApplicationWindow {
                 Card {
                     Info { k: t.gpu; v: app.gpu }
                     Info { k: t.version; v: app.version }
-                    Info { k: t.renderer; v: app.opt("renderer") === "cpu" ? t.r_cpu : (app.opt("renderer") === "vulkan" ? t.r_vk : t.r_gl); property var dep: app.gameDir }
+                    Info { k: t.renderer; v: app.opt("renderer") === "vulkan" ? t.r_vk : t.r_gl; property var dep: app.gameDir }
                 }
                 Card {
                     RowLayout {
@@ -358,8 +358,8 @@ ApplicationWindow {
                     Combo {
                         Layout.fillWidth: true
                         id: apiCombo
-                        readonly property var apis: ["vulkan", "opengl", "cpu"]
-                        model: [t.r_vk, t.r_gl, t.r_cpu]
+                        readonly property var apis: ["vulkan", "opengl"]
+                        model: [t.r_vk, t.r_gl]
                         currentIndex: Math.max(0, apis.indexOf(app.opt("renderer")))
                         onActivated: i => app.setOpt("renderer", apis[i])
                     }
@@ -368,7 +368,7 @@ ApplicationWindow {
                             wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Label { text: t.renderer_d; color: win.ink; font.pixelSize: 13; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Repeater {
-                        model: [t.api_vk, t.api_gl, t.api_cpu]
+                        model: [t.api_vk, t.api_gl]
                         RowLayout {
                             required property int index
                             required property string modelData
@@ -411,8 +411,8 @@ ApplicationWindow {
                         }
                         Combo {
                             implicitWidth: 215
-                            readonly property var ratios: ["4:3", "16:9", "16:10", "21:9"]
-                            model: [t.aspect_orig, "16:9", "16:10", "21:9"]
+                            readonly property var ratios: ["4:3", "16:9", "21:9"]
+                            model: [t.aspect_orig, "16:9", "21:9"]
                             currentIndex: Math.max(0, ratios.indexOf(app.opt("aspect")))
                             onActivated: i => app.setOpt("aspect", ratios[i])
                         }
@@ -432,9 +432,6 @@ ApplicationWindow {
                             onActivated: i => app.setOpt("fps", rates[i])
                         }
                     }
-                    Label { visible: app.opt("renderer") === "cpu"; property var dep: app.gameDir
-                            text: t.image_cpu; color: "#ffb454"; font.pixelSize: 12
-                            wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 }
                 Card {
                     heading: t.window

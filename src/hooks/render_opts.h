@@ -7,7 +7,8 @@
  *                         1080, 1440, 2160... A escala e altura/480 e vale
  *                         para todas as superficies (alvos de render-to-
  *                         texture tambem).
- *   DW4_ASPECT=<L:A>      16:9, 16:10, 21:9, qualquer L:A; 4:3 = original.
+ *   DW4_ASPECT=<L:A>      16:9 ou 21:9 (as que o launcher oferece e que sao testadas);
+ *                         aceita qualquer L:A. 4:3 = original.
  *
  * Desenho (o mesmo do Amped 2 e do SSX 3, docs/REFERENCIAS.md; codigo nosso):
  *
@@ -290,8 +291,16 @@ static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, floa
             uint64_t frame = dw4_frame_count();
             float bh = by1 - by0;
 
-            if (bx0 <= 1.0f && bx1 >= guest_w - 1.0f && bh <= guest_h * 0.4f
-                    && (by1 >= guest_h - 1.0f || by0 <= 1.0f)) {
+            /* A faixa do HUD e reconhecida pela geometria exata dela neste
+             * jogo (-18..659 x 393..485, 640x480). Um criterio generico
+             * ("lote largo encostado na borda de baixo") tambem pegava a
+             * barra de ajuda do menu do START, que desliza e chega a
+             * -54..933 x 366..509: o menu saia esticado e com os paineis da
+             * esquerda arrancados para o canto (captura f9-015 do usuario,
+             * 21:9). */
+            if (fabsf(bx0 + 18.0f) <= 3.0f && fabsf(bx1 - 659.0f) <= 3.0f
+                    && fabsf(by0 - 393.0f) <= 3.0f && fabsf(by1 - 485.0f) <= 3.0f
+                    && guest_w == 640.0f) {
                 float m = bh * 0.5f;
 
                 if (band_frame != frame + 1) {  /* +1: 0 = nenhuma faixa ainda */
