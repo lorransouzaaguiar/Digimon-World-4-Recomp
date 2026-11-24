@@ -14,6 +14,9 @@ do jogo sem avisar.
   `build/shots/f9-NNN.bmp` e `f9-NNN.txt`: um frame A normal, um frame B sem os draws só de
   profundidade, pixels pintados por draw (`[Q]`), textura/alfa/UV (`[QX]`), sonda do pixel
   central (`[PROBE]`).
+- Defeito que dura um quadro ("a tela pisca"): a caixa-preta grava sozinha os últimos ~2 s em
+  `build/shots/flash-NNN/` quando detecta um clarão (linha `[FLASH]` no log), ou com **F12**.
+  Veja `info.txt` e o quadro marcado SUSPEITO (`PORT_NOTES.md` §7.7).
 - Se der para chegar à cena por roteiro, reproduza sem janela: cenário em `tests/scenarios/`
   com `shot:<nome>` e `scripts/soak.py --scenario <arquivo>`; `-e DW4_GL_F9_AT=<segundos>` dispara
   a captura F9 sem teclado.

@@ -8,4 +8,7 @@
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 export RECOMP_KEYBOARD="${RECOMP_KEYBOARD:-1}"
+# 30 quadros por segundo, a velocidade do jogo no Xbox (o launcher faz o mesmo).
+# DW4_FPS_LIMIT=60 ./run.sh roda a 60, com o jogo duas vezes mais rapido.
+export DW4_FPS_LIMIT="${DW4_FPS_LIMIT:-30}"
 exec "$ROOT/build/dw4_recomp" "$ROOT/game_data" "$@"

@@ -186,7 +186,9 @@ validado só sem janela.
 
 ## Back end Vulkan ✅ (2026-11-24, branch `DW4R-1`) — `src/hooks/nv2a_vk_backend.c`
 
-Segunda API gráfica, **ao lado** do OpenGL (que continua existindo e é o padrão). O jogador escolhe
+Segunda API gráfica, **ao lado** do OpenGL (que continua existindo). **Desde 2026-11-24 o Vulkan
+é o padrão** (launcher e binário; cai no OpenGL se não subir) — `soak.py` sem opção roda Vulkan,
+`--opengl` roda o outro. O jogador escolhe
 no launcher: Gráficos → **API gráfica** → OpenGL 3.3 / Vulkan / CPU. Sem launcher:
 `DW4_RENDERER=vulkan ./run.sh`. Se a API escolhida não sobe, o jogo abre com a outra (e, por último,
 com a CPU). Desenho e diferenças para os ports de referência em `PORT_NOTES.md` §7.5.
@@ -218,6 +220,40 @@ em `PORT_NOTES.md` §7.0. Validado sem janela (2 reloads durante o cenário do l
 
 - **Modelos 3D salpicados de preto na seleção de Digimon**: giro das tiras de triângulos + sentido
   de face no renderizador (`PORT_NOTES.md` §7.4). Validado sem janela e confirmado pelo usuário.
+
+## Resolução interna e widescreen ✅ (2026-11-24) — `src/hooks/render_opts.h`
+
+Launcher: Gráficos → **Imagem** → Resolução interna (480p original, 720p, 1080p, 1440p, 4K) e
+Proporção (4:3 original, 16:9, 16:10, 21:9). Sem launcher: `DW4_RES=1440 DW4_ASPECT=16:9`. Vale
+para Vulkan e OpenGL. Em widescreen o cenário fica mais largo sem esticar; HUD, menus e vídeos
+ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
+
+- **Verificado sem janela** em 2560×1440 16:9, nos dois renderizadores: seleção de Digimon, login
+  e lobby com imagem correta e 60 fps; `soak.py --golden` e `--vulkan --golden` continuam passando
+  na configuração original.
+- **Confirmado pelo usuário (2026-11-24):** jogando em 1440p 16:9, "rodando bem".
+- **A tela pisca distorcida por um quadro** (Vulkan; no OpenGL, "o chão pisca preto"), mais em
+  áreas pesadas. Causa achada com a caixa-preta de quadros (`PORT_NOTES.md` §7.7): a cada volta
+  do anel do pushbuffer o executor pulava os primeiros comandos (patch 4.11 no toolkit).
+  Verificado sem janela: nenhum clarão detectado e o estado misturado sumiu dos logs (1440p
+  16:9, Vulkan e OpenGL). **Aguardando o usuário confirmar jogando.**
+- **Confirmado pelo usuário (2026-11-24):** a piscada com distorção sumiu no Vulkan; "jogo mais
+  fluido, parecendo o original".
+- **Aberto: o chão escurece por alguns quadros** (Central Area, caverna; Vulkan e OpenGL).
+  Acontece também em 480p 4:3 (não é do widescreen). Causa não determinada; tudo o que foi medido
+  e descartado está em `PORT_NOTES.md` §7.8. **Defeito conhecido, não resolvido** (decisão do
+  usuário); cosmético.
+- **Launcher (2026-11-24):** visual novo inspirado nos menus do jogo, API gráfica como primeiro
+  item de Gráficos, limite de quadros **30 (padrão, a velocidade do jogo no Xbox segundo o
+  usuário)** / 60. A lógica do jogo anda por quadro: a 60 tudo roda no dobro da velocidade
+  (`PORT_NOTES.md` §7.9).
+- **Aberto: 60 → 34–47 fps em áreas pesadas** (32–38 mil draws por frame). Não investigado.
+- **Confirmado pelo usuário:** o popping nas laterais "melhorou bastante" com o gancho de descarte.
+- **Histórico:** objetos surgindo/sumindo nas laterais em widescreen — correção em
+  `src/hooks/widescreen.c` + gancho `sub_000BC050_enter` (alarga o teste de descarte do motor,
+  `PORT_NOTES.md` §7.6), compilada mas ainda não executada. A primeira tentativa (escala
+  `_outerFrustCullScale`) não resolveu.
+- **Não verificado:** 16:10 / 21:9 / 4K, fases além do que o usuário jogou.
 
 ## Plugar o controle com o jogo aberto fechava o jogo — RESOLVIDO (2026-11-24)
 

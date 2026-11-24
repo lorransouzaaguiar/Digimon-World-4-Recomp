@@ -58,6 +58,7 @@
 #include "xbox_memory_layout.h"
 #include "dw4_hooks.h"
 #include "gl_module.h"
+#include "render_opts.h"
 
 #define CONTIG_BASE 0x80000000u
 #define CONTIG_SIZE (64u * 1024u * 1024u)
@@ -118,6 +119,17 @@ static int s_cull_mode = 1;                 /* 0 off, 1 normal, 2 invertido */
 static int s_stats, s_dbg, s_skip_depth_only, s_no_poly_offset;
 static uint32_t s_frame;
 static unsigned long s_n_decode, s_n_draw, s_n_tris, s_n_flush, s_n_submit;
+/* Onde vai o tempo da thread do executor (DW4_VK_STATS): total dentro do back
+ * end, espera pela GPU (envio + fence) e copia do frame para a janela. */
+static double s_t_backend, s_t_gpu, s_t_copy;
+static unsigned long s_n_odd_present;       /* frames exibidos de superficie nao-tela */
+
+static double now_s(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
 
 #define VKCHECK(call) do {                                              \
         VkResult _r = (call);                                           \
@@ -153,6 +165,8 @@ static uint32_t mem_type(uint32_t bits, VkMemoryPropertyFlags want)
     return UINT32_MAX;
 }
 
+static int s_buf_cached;                /* proximo buffer: memoria boa de LER na CPU */
+
 static int buf_create(Buf *b, VkDeviceSize size, VkBufferUsageFlags usage)
 {
     VkBufferCreateInfo bi = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -165,8 +179,15 @@ static int buf_create(Buf *b, VkDeviceSize size, VkBufferUsageFlags usage)
         return 0;
     vkGetBufferMemoryRequirements(s_dev, b->buf, &mr);
     ai.allocationSize = mr.size;
-    ai.memoryTypeIndex = mem_type(mr.memoryTypeBits,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    ai.memoryTypeIndex = UINT32_MAX;
+    if (s_buf_cached)                   /* leitura de volta: sem write-combining */
+        ai.memoryTypeIndex = mem_type(mr.memoryTypeBits,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+            | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+    s_buf_cached = 0;
+    if (ai.memoryTypeIndex == UINT32_MAX)
+        ai.memoryTypeIndex = mem_type(mr.memoryTypeBits,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     if (ai.memoryTypeIndex == UINT32_MAX
             || vkAllocateMemory(s_dev, &ai, NULL, &b->mem) != VK_SUCCESS
             || vkBindBufferMemory(s_dev, b->buf, b->mem, 0) != VK_SUCCESS
@@ -306,24 +327,31 @@ static void frame_submit(void)
     s_recording = 0;
     if (s_lost)
         return;
-    VKCHECK(vkQueueSubmit(s_queue, 1, &si, s_fence));
-    if (s_lost)
-        return;
-    VKCHECK(vkWaitForFences(s_dev, 1, &s_fence, VK_TRUE, UINT64_MAX));
-    VKCHECK(vkResetFences(s_dev, 1, &s_fence));
+    {
+        double t0 = now_s();
+
+        VKCHECK(vkQueueSubmit(s_queue, 1, &si, s_fence));
+        if (s_lost)
+            return;
+        VKCHECK(vkWaitForFences(s_dev, 1, &s_fence, VK_TRUE, UINT64_MAX));
+        VKCHECK(vkResetFences(s_dev, 1, &s_fence));
+        s_t_gpu += now_s() - t0;
+    }
     s_n_submit++;
 }
 
 /* ── Superficies ───────────────────────────────────────────────────────────── */
 
 struct Surface {
-    uint32_t va, w, h, pitch, bpp, clip_h;
+    uint32_t va, w, h, pitch, bpp, clip_h;  /* do guest */
+    uint32_t pw, ph;                    /* imagem da GPU (render_opts.h) */
+    int wide;                           /* superficie de tela alargada */
     Img color;
     int dirty;                          /* desenhada desde a ultima barreira de leitura */
 };
 
 struct Zeta {
-    uint32_t va, w, h;
+    uint32_t va, w, h;                  /* w, h: pixels da imagem */
     Img img;
 };
 
@@ -412,7 +440,12 @@ static Surface *surface_get(const Nv2aSurface *s)
         static const VkImageSubresourceRange range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
 
         e->va = s->color_va; e->w = w; e->h = h; e->dirty = 0;
-        if (!img_create(&e->color, w, h, COLOR_FMT,
+        e->wide = ro_is_screen(w, h);
+        ro_extent(w, h, e->wide, &e->pw, &e->ph);
+        if (ro_enhanced())
+            fprintf(stderr, "[VK] superficie %08X %ux%u (clip %ux%u) -> imagem %ux%u%s\n",
+                    e->va, w, h, s->width, s->height, e->pw, e->ph, e->wide ? " (tela)" : "");
+        if (!img_create(&e->color, e->pw, e->ph, COLOR_FMT,
                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
                         | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                         VK_IMAGE_ASPECT_COLOR_BIT))
@@ -435,7 +468,7 @@ static Zeta *zeta_get(uint32_t va, const Surface *e)
     Zeta *z = NULL;
 
     for (int i = 0; i < s_nzeta; i++)
-        if (s_zeta[i].va == va && s_zeta[i].w == e->w && s_zeta[i].h == e->h)
+        if (s_zeta[i].va == va && s_zeta[i].w == e->pw && s_zeta[i].h == e->ph)
             return &s_zeta[i];
     if (s_nzeta == MAX_SURF) {
         z = &s_zeta[0];
@@ -446,8 +479,8 @@ static Zeta *zeta_get(uint32_t va, const Surface *e)
     } else {
         z = &s_zeta[s_nzeta++];
     }
-    z->va = va; z->w = e->w; z->h = e->h;
-    if (!img_create(&z->img, e->w, e->h, s_depth_fmt,
+    z->va = va; z->w = e->pw; z->h = e->ph;
+    if (!img_create(&z->img, e->pw, e->ph, s_depth_fmt,
                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                     range.aspectMask)) {
         z->va = 0; z->w = 0;
@@ -472,8 +505,8 @@ static int begin_pass(Surface *e, Zeta *z)
 {
     VkFramebuffer fb = VK_NULL_HANDLE;
     VkRenderPassBeginInfo bi = { .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = s_rp[z != NULL], .renderArea = { { 0, 0 }, { e->w, e->h } } };
-    VkViewport vp = { 0, 0, (float)e->w, (float)e->h, 0.0f, 1.0f };
+        .renderPass = s_rp[z != NULL], .renderArea = { { 0, 0 }, { e->pw, e->ph } } };
+    VkViewport vp = { 0, 0, (float)e->pw, (float)e->ph, 0.0f, 1.0f };
 
     for (int i = 0; i < s_nfb; i++)
         if (s_fb[i].surf == e && s_fb[i].zeta == z) { fb = s_fb[i].fb; break; }
@@ -481,7 +514,7 @@ static int begin_pass(Surface *e, Zeta *z)
         VkImageView att[2] = { e->color.view, z ? z->img.view : VK_NULL_HANDLE };
         VkFramebufferCreateInfo ci = { .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .renderPass = s_rp[z != NULL], .attachmentCount = z ? 2 : 1,
-            .pAttachments = att, .width = e->w, .height = e->h, .layers = 1 };
+            .pAttachments = att, .width = e->pw, .height = e->ph, .layers = 1 };
 
         if (s_nfb == MAX_FB) {                /* nunca visto; recomeca o cache */
             frame_submit();
@@ -509,7 +542,11 @@ static int begin_pass(Surface *e, Zeta *z)
 
 static void note_shown(Surface *e)
 {
-    if (!s_shown_stale && s_shown && e->w * e->clip_h < s_shown->w * s_shown->clip_h)
+    /* Pela area da superficie, nao pelo recorte do ultimo draw: com o recorte
+     * (um modelo num sub-viewport de 150x105 deixa clip_h = 105) um alvo de
+     * render-to-texture 512x512 desenhado depois "ganhava" da tela e era
+     * exibido esticado por um frame -- a tela piscava distorcida. */
+    if (!s_shown_stale && s_shown && e->w * e->h < s_shown->w * s_shown->h)
         return;
     s_shown_stale = 0;
     s_shown = e;
@@ -640,7 +677,10 @@ static VkImageView texture_get(const Nv2aTexture *t, const Surface *target,
     *from_surf = NULL;
     /* Paleta: identificada pelo CONTEUDO, conferido a cada uso (o jogo troca
      * so a paleta entre draws do mesmo frame). Ver nv2a_gl_backend.c. */
-    if (t->palette) {
+    /* So para formato paletizado (P8, 0x0B): o campo palette fica com o valor
+     * da ultima paleta ligada, e uma textura DXT ganhava uma copia nova no
+     * cache toda vez que aquela paleta (que ela nem usa) mudava. */
+    if (t->palette && t->color == 0x0B) {
         const uint8_t *pal = guest_bytes(t->palette, 1024);
         uint64_t ph = pal ? hash_bytes(pal, 1024) : t->palette;
         pal_key = (uint32_t)(ph ^ (ph >> 32)) | 1u;
@@ -724,6 +764,13 @@ static VkImageView texture_get(const Nv2aTexture *t, const Surface *target,
         fresh = 1;
     }
     {
+        /* Caixa-preta: toda textura criada ou cujo conteudo mudou neste quadro. */
+        char ev[160];
+
+        snprintf(ev, sizeof ev, "TEX %s va=%08X %ux%u f%02X pal=%08X:%08X hash %08X -> %08X",
+                 fresh ? "NOVA" : "MUDOU", va, t->width, t->height, t->color, t->palette,
+                 pal_key, (uint32_t)e->hash, (uint32_t)h);
+        dw4_frame_detail(ev);
         /* tex_upload pode enviar o frame (anel cheio), mas nunca esvazia o
          * cache: `e` continua valido. */
         tex_upload(&e->img, s_decode, t->width, t->height, fresh);
@@ -941,6 +988,10 @@ typedef struct {
     int has_ext;
     VkImageView view[4];
     Surface *tsurf[4];                  /* estagio amostra uma superficie */
+    uint32_t tva[4];                    /* endereco da textura no guest (diagnostico) */
+    uint32_t tpal[4];                   /* endereco da paleta e resumo do conteudo dela */
+    uint32_t tpalh[4];
+    uint32_t tfmt[4];
     int wrap_s[4], wrap_t[4], filter[4];
     float tscale[4][2];
     float texsize[2];                   /* caminho simples */
@@ -954,6 +1005,70 @@ static int s_key_valid;
 static Nv2aVertex *s_pv;
 static Nv2aVertexExt *s_pe;
 static uint32_t s_pcount, s_pcap;
+
+/* Sequencia de operacoes do quadro, para a caixa-preta: "c2" = clear na
+ * superficie 2, "d0x3200" = 3200 draws seguidos na superficie 0, "t2" depois
+ * de um draw = ele amostra a superficie 2 (render-to-texture). Comparar o
+ * quadro defeituoso com os vizinhos mostra o que faltou ou trocou de ordem. */
+/* Diagnostico por lote: matriz de textura do estagio 0 (registradores do
+ * executor no momento de cada draw) -- hash combinado e faixa da translacao. */
+extern const uint32_t *nv2a_pb_exec_reg_mirror(void);
+static uint32_t s_tm_hash, s_tm_n;
+static float s_tm_min[2], s_tm_max[2];
+
+static void tm_note(void)
+{
+    const uint32_t *reg = nv2a_pb_exec_reg_mirror();
+    float m[16];
+    uint32_t h = 0;
+
+    if (!reg[0x0420 / 4])
+        return;
+    memcpy(m, &reg[0x06C0 / 4], sizeof m);
+    for (int i = 0; i < 16; i++)
+        h = h * 31u + reg[0x06C0 / 4 + i];
+    s_tm_hash = (s_tm_hash << 5 | s_tm_hash >> 27) ^ h;
+    for (int a = 0; a < 2; a++) {
+        float t = m[a * 4 + 3];
+        if (!s_tm_n || t < s_tm_min[a]) s_tm_min[a] = t;
+        if (!s_tm_n || t > s_tm_max[a]) s_tm_max[a] = t;
+    }
+    s_tm_n++;
+}
+
+static char s_seq[224];
+static int s_seq_len, s_seq_surf = -1, s_seq_run, s_seq_tex = -1;
+
+static void seq_flush_run(void)
+{
+    if (s_seq_run && s_seq_len < (int)sizeof s_seq - 24) {
+        s_seq_len += snprintf(s_seq + s_seq_len, sizeof s_seq - (size_t)s_seq_len,
+                              s_seq_tex >= 0 ? "d%dx%dt%d " : "d%dx%d ",
+                              s_seq_surf, s_seq_run, s_seq_tex);
+    }
+    s_seq_run = 0;
+}
+
+static void seq_clear(const Surface *e, uint32_t flags, uint32_t argb)
+{
+    seq_flush_run();
+    if (s_seq_len < (int)sizeof s_seq - 24)
+        s_seq_len += snprintf(s_seq + s_seq_len, sizeof s_seq - (size_t)s_seq_len,
+                              "c%d:%02X:%06X ", (int)(e - s_surf), flags, argb & 0xFFFFFF);
+    s_seq_surf = -1;
+}
+
+static void seq_draw(const Surface *e, const Surface *sampled)
+{
+    int si = (int)(e - s_surf), ti = sampled ? (int)(sampled - s_surf) : -1;
+
+    if (si != s_seq_surf || ti != s_seq_tex) {
+        seq_flush_run();
+        s_seq_surf = si;
+        s_seq_tex = ti;
+    }
+    s_seq_run++;
+}
 
 static float zmax_of(const Nv2aRenderState *rs)
 {
@@ -1173,6 +1288,60 @@ static void flush_pending(void)
         vkCmdBindVertexBuffers(s_cmd, 1, 1, k->has_ext ? &s_vbe.buf : &s_dummy.buf, &zero);
         s_bound_ext = k->has_ext;
     }
+    {
+        /* Caixa-preta: o que este lote e, para comparar quadro a quadro. */
+        char line[480];
+        uint32_t rch = 0;
+
+        for (size_t i = 0; i < sizeof k->rc / 4; i++)
+            rch = rch * 31u + ((const uint32_t *)&k->rc)[i];
+        uint32_t sum = 0, shash = 0, thash = 0;
+        float x0 = 1e9f, x1 = -1e9f, y0 = 1e9f, y1 = -1e9f;
+        double fog = 0.0, fmin = 1e9, fmax = -1e9;
+
+        if (k->has_ext) {               /* neblina, especular e coordenadas de textura */
+            for (uint32_t i = 0; i < s_pcount; i++) {
+                const Nv2aVertexExt *x = &s_pe[i];
+                uint32_t w[2];
+
+                fog += x->fog;
+                if (x->fog < fmin) fmin = x->fog;
+                if (x->fog > fmax) fmax = x->fog;
+                memcpy(w, x->specular, 8);
+                shash = shash * 31u + w[0] + w[1];
+                memcpy(w, x->tex[0], 8);
+                thash = thash * 31u + w[0] + w[1];
+            }
+            fog /= s_pcount;
+        }
+
+        for (uint32_t i = 0; i < s_pcount; i++) {
+            const Nv2aVertex *v = &s_pv[i];
+            sum = sum * 31u + v->diffuse;
+            if (v->x < x0) x0 = v->x;
+            if (v->x > x1) x1 = v->x;
+            if (v->y < y0) y0 = v->y;
+            if (v->y > y1) y1 = v->y;
+        }
+        snprintf(line, sizeof line, "s%d v=%u ext=%d bl=%u(%X,%X) at=%u(%X,%u) z=%u/%u cm=%08X "
+                 "t=%08X,%08X f%02X pal=%08X:%08X ts=%d rc=%05X f0=%08X fin=%X,%X fogc=%.2f,%.2f,%.2f "
+                 "fog=%.3f[%.2f..%.2f] spec=%08X uv=%08X col=%08X bb=%.0f,%.0f-%.0f,%.0f "
+                 "rch=%08X f1=%08X fc=%08X,%08X bc=%08X tm=%u:%08X[%.3f..%.3f,%.3f..%.3f]",
+                 (int)(k->surf - s_surf), s_pcount, k->has_ext, rs->blend_enable, rs->blend_src,
+                 rs->blend_dst, rs->alpha_test_enable, rs->alpha_func, rs->alpha_ref,
+                 rs->depth_test_enable, rs->depth_write, rs->color_mask, k->tva[0], k->tva[1],
+                 k->tfmt[0], k->tpal[0], k->tpalh[0],
+                 k->tsurf[0] ? (int)(k->tsurf[0] - s_surf) : -1, k->rc.stage_program,
+                 k->rc.factor0[0], k->rc.final0, k->rc.final1, (double)k->fogc[0],
+                 (double)k->fogc[1], (double)k->fogc[2], fog, k->has_ext ? fmin : 0.0,
+                 k->has_ext ? fmax : 0.0, shash, thash, sum,
+                 (double)x0, (double)y0, (double)x1, (double)y1,
+                 rch, k->rc.factor1[0], k->rc.final_c0, k->rc.final_c1, rs->blend_color,
+                 s_tm_n, s_tm_hash, (double)s_tm_min[0], (double)s_tm_max[0],
+                 (double)s_tm_min[1], (double)s_tm_max[1]);
+        s_tm_hash = 0; s_tm_n = 0;
+        dw4_frame_detail(line);
+    }
     vkCmdDraw(s_cmd, s_pcount, 1, s_vtx_used, 0);
     s_vtx_used += s_pcount;
     s_n_flush++;
@@ -1204,6 +1373,9 @@ static void enqueue(const DrawKey *key, const Nv2aVertex *v, const Nv2aVertexExt
         }
     }
     memcpy(s_pv + s_pcount, v, count * sizeof *s_pv);
+    if (key->surf->wide)                /* 16:9: comprime em x (render_opts.h) */
+        ro_squeeze(s_pv + s_pcount, count, (float)key->surf->w,
+                   (float)ro_display_rows(key->surf->h));
     if (x)
         memcpy(s_pe + s_pcount, x, count * sizeof *s_pe);
     s_pcount += count;
@@ -1241,8 +1413,9 @@ static void be_clear(const Nv2aSurface *s, const Nv2aRenderState *rs,
         return;
     if (rs->zeta_va)
         zeta = zeta_get(rs->zeta_va, e);
-    rect.rect.extent.width = e->w;
-    rect.rect.extent.height = e->h;
+    rect.rect.extent.width = e->pw;
+    rect.rect.extent.height = e->ph;
+    seq_clear(e, flags, argb);
 
     if ((flags & 0xF0) == 0xF0) {
         att[n].aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1330,6 +1503,14 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
                 key.view[i] = texture_get(t, e, &key.tsurf[i]);
                 if (key.view[i] == s_white.view)
                     continue;
+                key.tva[i] = tex_va(t->offset);
+                key.tfmt[i] = t->color;
+                key.tpal[i] = t->palette;
+                if (t->palette) {
+                    const uint8_t *pal = guest_bytes(t->palette, 1024);
+                    uint64_t ph = pal ? hash_bytes(pal, 1024) : 0;
+                    key.tpalh[i] = (uint32_t)(ph ^ (ph >> 32));
+                }
                 key.wrap_s[i] = wrap_index(t->addr_u);
                 key.wrap_t[i] = wrap_index(t->addr_v);
                 key.filter[i] = filter_index(t->filter);
@@ -1341,6 +1522,9 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
         } else if (b->texture) {
             key.view[0] = texture_get(b->texture, e, &key.tsurf[0]);
             if (key.view[0] != s_white.view) {
+                key.tva[0] = tex_va(b->texture->offset);
+                key.tfmt[0] = b->texture->color;
+                key.tpal[0] = b->texture->palette;
                 key.texsize[0] = (float)b->texture->width;
                 key.texsize[1] = (float)b->texture->height;
                 key.wrap_s[0] = wrap_index(b->texture->addr_u);
@@ -1353,12 +1537,20 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
         return;
 
     enqueue(&key, b->vertices, b->ext ? b->ext->vertices : NULL, b->count);
+    if (b->ext)
+        tm_note();
+    seq_draw(e, key.tsurf[0] ? key.tsurf[0] : key.tsurf[1] ? key.tsurf[1]
+                : key.tsurf[2] ? key.tsurf[2] : key.tsurf[3]);
     note_shown(e);
     s_n_draw++;
     s_n_tris += b->count / 3;
 }
 
 static uint32_t s_last_va, s_last_pitch;    /* ultimo frame trazido ao guest */
+
+/* Janela do toolkit: recebe um frame de qualquer tamanho (patch 4.10). */
+extern void xbox_FramebufferWindowPresentPixels(const void *pixels, uint32_t w,
+                                                uint32_t h, uint32_t pitch);
 
 /* Antes do snapshot da janela: traz o frame pronto para a memoria do guest. */
 static void be_present_sync(void)
@@ -1379,6 +1571,54 @@ static void be_present_sync(void)
         return;
     }
     rows = e->clip_h && e->clip_h < e->h ? e->clip_h : e->h;
+    if (ro_enhanced()) {
+        /* Resolucao interna / widescreen: o frame nao cabe nos 640x480 do
+         * guest. Vai direto para a janela e para as capturas. */
+        uint32_t prow = (uint32_t)((float)ro_display_rows(e->h) * ro_scale + 0.5f);
+
+        if (prow > e->ph) prow = e->ph;
+        need = (VkDeviceSize)e->pw * prow * 4;
+        if (need > s_rb.size) {
+            frame_submit();
+            dw4_frame_note_host(NULL, 0, 0, 0);
+            buf_destroy(&s_rb);
+            s_buf_cached = 1;
+            if (!buf_create(&s_rb, need, VK_BUFFER_USAGE_TRANSFER_DST_BIT)) {
+                s_lost = 1;
+                return;
+            }
+        }
+        frame_begin();
+        end_pass();
+        barrier(s_cmd, e->color.img, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                VK_IMAGE_LAYOUT_GENERAL,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_ACCESS_TRANSFER_READ_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT);
+        region.imageExtent = (VkExtent3D){ e->pw, prow, 1 };
+        vkCmdCopyImageToBuffer(s_cmd, e->color.img, VK_IMAGE_LAYOUT_GENERAL, s_rb.buf, 1,
+                               &region);
+        frame_submit();
+        if (s_lost)
+            return;
+        {
+            double t0 = now_s();
+
+            xbox_FramebufferWindowPresentPixels(s_rb.map, e->pw, prow, e->pw * 4);
+            dw4_frame_note_host(s_rb.map, e->pw, prow, e->pw * 4);
+            s_t_copy += now_s() - t0;
+        }
+        if (e->w != 640) {
+            static int n;
+            s_n_odd_present++;
+            if (n++ < 20)
+                fprintf(stderr, "[VK] f%u: exibida a superficie %08X %ux%u (nao e a tela)\n",
+                        s_frame, e->va, e->w, e->h);
+        }
+        s_last_va = 0;
+        return;
+    }
     if (e->va >= CONTIG_BASE) {
         if ((uint64_t)e->va + (uint64_t)e->pitch * rows
                 > (uint64_t)CONTIG_BASE + CONTIG_SIZE)
@@ -1438,10 +1678,10 @@ extern int xbox_FramebufferKeyDown(int vk);
 
 static void hotkeys_poll(void)
 {
-    static int prev[7];
+    static int prev[8];
     static const char *cull_name[3] = { "DESLIGADO", "normal", "INVERTIDO" };
 
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
         int down = xbox_FramebufferKeyDown(0x74 + i);      /* VK_F5.. */
         int edge = down && !prev[i];
 
@@ -1465,8 +1705,28 @@ static void hotkeys_poll(void)
             s_dbg ^= 8;
             fprintf(stderr, "[VK] F8: combiners %s\n", (s_dbg & 8) ? "DESLIGADOS" : "normais");
             break;
-        case 4:
-            fprintf(stderr, "[VK] F9: a captura com rastreio existe so no back end OpenGL\n");
+        case 4: {
+            /* So a imagem; o rastreio de draws existe so no back end OpenGL. */
+            const char *dir = getenv("DW4_SHOT_DIR");
+            char path[512];
+            int seq = 0;
+
+            if (!dir || !*dir)
+                dir = "build/shots";
+            for (; seq < 1000; seq++) {
+                FILE *t;
+                snprintf(path, sizeof path, "%s/f9-%03d.bmp", dir, seq);
+                t = fopen(path, "r");
+                if (!t)
+                    break;
+                fclose(t);
+            }
+            fprintf(stderr, "[VK] F9: %s %s (rastreio de draws: so no OpenGL)\n",
+                    dw4_screenshot_save(path) ? "captura em" : "NAO gravou", path);
+            break;
+        }
+        case 7:
+            dw4_frame_ring_dump();      /* F12: os ultimos ~2 s de quadros */
             break;
         case 5:
             s_skip_depth_only ^= 1;
@@ -1484,11 +1744,23 @@ static void hotkeys_poll(void)
 
 static void be_flip(void)
 {
+    static unsigned long tag_draw, tag_tris, tag_flush;
+    char tag[320];
+
     if (s_ok && !s_lost) {
         flush_pending();
         frame_submit();                 /* o que sobrou depois do present_sync */
     }
+    /* Etiqueta do quadro na caixa-preta: o que ele teve de diferente. */
+    seq_flush_run();
+    snprintf(tag, sizeof tag, "sup=%d draws=%lu lotes=%lu tris=%lu tex=%d | %s",
+             s_shown ? (int)(s_shown - s_surf) : -1,
+             s_n_draw - tag_draw, s_n_flush - tag_flush, s_n_tris - tag_tris, s_tex_count,
+             s_seq);
+    dw4_frame_tag(tag);
+    s_seq_len = 0; s_seq[0] = '\0'; s_seq_surf = -1; s_seq_tex = -1;
     dw4_frame_note(s_last_va, s_last_pitch);
+    tag_draw = s_n_draw; tag_tris = s_n_tris; tag_flush = s_n_flush;
     s_shown_stale = 1;
     s_frame++;
     hotkeys_poll();
@@ -1502,13 +1774,30 @@ static void be_flip(void)
             uint32_t nf = s_frame - frame0 ? s_frame - frame0 : 1;
             fprintf(stderr, "[VK] %.1f fps | por frame: %lu draws -> %lu lotes, %lu tris, "
                             "%.1f envios | %lu decodes em %lds | %d texturas, %d superficies, "
-                            "%d pipelines\n",
+                            "%d pipelines | ms/frame: back end %.1f (GPU %.1f, copia p/ janela "
+                            "%.1f)%s\n",
                     (double)(s_frame - frame0) / (double)(now - last),
                     s_n_draw / nf, s_n_flush / nf, s_n_tris / nf,
                     (double)s_n_submit / nf, s_n_decode, (long)(now - last),
-                    s_tex_count, s_nsurf, s_npipes);
+                    s_tex_count, s_nsurf, s_npipes,
+                    s_t_backend * 1e3 / nf, s_t_gpu * 1e3 / nf, s_t_copy * 1e3 / nf,
+                    s_n_odd_present ? " | FRAMES DE SUPERFICIE NAO-TELA" : "");
+            {
+                /* metodos do pushbuffer cortados por um kick e retomados (patch 4.12) */
+                extern unsigned long nv2a_pb_scan_segment_splits(void);
+                static unsigned long last_splits;
+                unsigned long sp = nv2a_pb_scan_segment_splits();
+
+                if (sp != last_splits)
+                    fprintf(stderr, "[VK] pushbuffer: %lu metodos cortados por um kick e "
+                            "retomados em 5 s (total %lu)\n", sp - last_splits, sp);
+                last_splits = sp;
+            }
             last = now; frame0 = s_frame;
             s_n_draw = s_n_tris = s_n_decode = s_n_flush = s_n_submit = 0;
+            tag_draw = tag_tris = tag_flush = 0;
+            s_t_backend = s_t_gpu = s_t_copy = 0.0;
+            s_n_odd_present = 0;
         }
     }
 }
@@ -1517,6 +1806,7 @@ static void be_flip(void)
 
 static void be_shutdown(void)
 {
+    dw4_frame_note_host(NULL, 0, 0, 0);     /* o buffer de leitura vai embora */
     if (s_dev) {
         vkDeviceWaitIdle(s_dev);
         for (int i = 0; i < s_nfb; i++)
@@ -1700,6 +1990,7 @@ static int be_init(void)
     s_stats = getenv("DW4_VK_STATS") != NULL || getenv("DW4_GL_STATS") != NULL;
     if (getenv("DW4_VK_DBG"))
         s_dbg = atoi(getenv("DW4_VK_DBG"));
+    ro_init("VK");
 
     r = vkCreateInstance(&ici, NULL, &s_inst);
     if (r != VK_SUCCESS) {
@@ -1774,7 +2065,8 @@ static int be_init(void)
             || !buf_create(&s_dummy, sizeof(Nv2aVertexExt), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
             || !buf_create(&s_ubo, UBO_CAP, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
             || !buf_create(&s_stage, 16u * 1024u * 1024u, VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
-            || !buf_create(&s_rb, 640u * 480u * 4u, VK_BUFFER_USAGE_TRANSFER_DST_BIT))
+            || (s_buf_cached = 1,
+                !buf_create(&s_rb, 640u * 480u * 4u, VK_BUFFER_USAGE_TRANSFER_DST_BIT)))
         goto fail;
     memset(s_dummy.map, 0, sizeof(Nv2aVertexExt));
 
@@ -1803,10 +2095,39 @@ fail:
 }
 
 /* O que o host (gl_host.c) chama. Mude DW4_GL_MODULE_ABI se a struct mudar. */
+static void tm_clear(const Nv2aSurface *s, const Nv2aRenderState *rs,
+                     uint32_t flags, uint32_t argb, uint32_t zstencil)
+{
+    double t0 = now_s();
+    be_clear(s, rs, flags, argb, zstencil);
+    s_t_backend += now_s() - t0;
+}
+
+static void tm_draw(const Nv2aSurface *s, const Nv2aBatch *b)
+{
+    double t0 = now_s();
+    be_draw(s, b);
+    s_t_backend += now_s() - t0;
+}
+
+static void tm_present_sync(void)
+{
+    double t0 = now_s();
+    be_present_sync();
+    s_t_backend += now_s() - t0;
+}
+
+static void tm_flip(void)
+{
+    double t0 = now_s();
+    be_flip();
+    s_t_backend += now_s() - t0;
+}
+
 static const Dw4GlModule s_module = {
     .abi = DW4_GL_MODULE_ABI, .name = "Vulkan", .needs_gl = 0,
     .init = be_init, .shutdown = be_shutdown,
-    .clear = be_clear, .draw = be_draw, .flip = be_flip, .present_sync = be_present_sync
+    .clear = tm_clear, .draw = tm_draw, .flip = tm_flip, .present_sync = tm_present_sync
 };
 
 __attribute__((visibility("default")))

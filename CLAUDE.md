@@ -7,7 +7,7 @@ do toolkit, com renderizador próprio. Responda em português.
 
 **Objetivo: rodar em Linux, macOS e Windows.** Hoje só o Linux funciona; os outros dois ainda
 não foram começados. Há **dois renderizadores, OpenGL 3.3 e Vulkan**, e o jogador escolhe entre
-eles no launcher (Gráficos → API gráfica). O OpenGL é o padrão; o Vulkan (1.0, sem extensões) é o
+eles no launcher (Gráficos → API gráfica). O Vulkan (1.0, sem extensões) é o padrão desde 2026-11-24, com o OpenGL de reserva; ele é o
 caminho para as três plataformas (macOS via MoltenVK).
 
 ## Estado (atualize ao mudar)
@@ -20,7 +20,8 @@ caminho para as três plataformas (macOS via MoltenVK).
   referência do OpenGL sem janela, até o lobby, a 60 fps, e o usuário jogou com janela em
   2026-11-24 sem problemas. Não testado fora de NVIDIA — veja `STATUS.md` antes de afirmar mais que isso.
 - **Aberto:** crash intermitente ao pular o vídeo de abertura com START (assinatura no
-  `STATUS.md`); texgen não implementado; sem resolução interna maior nem widescreen; licença do
+  `STATUS.md`); texgen não implementado; resolução interna e widescreen (`src/hooks/render_opts.h`) ainda não
+  foram jogados com janela; licença do
   projeto ainda não escolhida.
 
 ## Onde ler antes de mexer
@@ -66,6 +67,8 @@ src/hooks/                    todo o código próprio do runtime
   nv2a_vk_backend.c           renderizador Vulkan  -> build/libdw4_vk.so (recarrega a quente)
   shaders/                    GLSL do Vulkan (glslc -> SPIR-V embutido); porte do shader do OpenGL
   gl_module.h                 interface comum aos dois renderizadores (ABI)
+  render_opts.h               resolução interna e proporção, comum aos dois (DW4_RES, DW4_ASPECT)
+  widescreen.c                alarga o culling do jogo em widescreen (gancho sub_000BC050_enter)
   gl_host.c                   escolhe a API (DW4_RENDERER), contexto EGL, carga/recarga (no executável)
   recomp_manual.c             defaults de ambiente (RECOMP_*), overrides, init dos hooks
   d3d_fence.c  input_script.c  screenshot.c  stall_watch.c
@@ -87,9 +90,10 @@ export PATH=$PWD/.venv/bin:$PATH                 # ninja e capstone ficam no .ve
 cmake --build build -j$(nproc)                   # tudo
 cmake --build build --target dw4_gl              # só o renderizador OpenGL (jogo aberto recarrega sozinho)
 cmake --build build --target dw4_vk              # só o renderizador Vulkan (idem)
-scripts/soak.py --golden                         # teste sem janela + frames de referência (~95 s), OpenGL
-scripts/soak.py --vulkan --golden                # o mesmo com o renderizador Vulkan
-DW4_RENDERER=vulkan ./run.sh                     # escolhe a API sem o launcher: opengl | vulkan | cpu
+scripts/soak.py --golden                         # teste sem janela + frames de referência (~95 s), Vulkan (padrão)
+scripts/soak.py --opengl --golden                # o mesmo com o renderizador OpenGL
+DW4_RENDERER=opengl ./run.sh                     # escolhe a API sem o launcher: vulkan | opengl | cpu
+DW4_RES=1440 DW4_ASPECT=16:9 ./run.sh            # resolução interna e proporção (vale em soak.py com -e)
 scripts/soak.py --scenario <arquivo> --runs N    # outro roteiro / repetir
 scripts/triage.py <log>                          # resumo e veredito de um log
 scripts/regen.sh                                 # regenera src/recompiled/ (após mudar sementes)
@@ -114,11 +118,13 @@ scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
 3a. **Dois renderizadores, um shader, os dois ficam:** o jogador escolhe a API no launcher; nunca
    remova uma para implementar a outra. O fragment shader Vulkan é porte do OpenGL: uma correção
    de imagem (estado, shader, textura) feita em um tem de ser repetida no outro e testada com
-   `soak.py --golden` **e** `soak.py --vulkan --golden`. O OpenGL continua sendo o padrão até o
-   Vulkan ser jogado com janela pelo usuário; o de CPU (`DW4_SW_RENDER=1`) segue como árbitro.
+   `soak.py --golden` **e** `soak.py --opengl --golden`. O Vulkan é o padrão (jogado pelo usuário
+   em 2026-11-24); o de CPU (`DW4_SW_RENDER=1`) segue como árbitro.
    O Vulkan fica no 1.0 sem extensões (MoltenVK, drivers antigos).
 4. **Código próprio em `src/hooks/`.** Não edite `src/recompiled/` à mão (é regenerado): corrija
-   com override em `recomp_manual.c`, semente em `config/` ou patch no toolkit.
+   com override em `recomp_manual.c`, semente em `config/` ou patch no toolkit. Gancho de entrada
+   (`void sub_XXXXXXXX_enter(void)` em `recomp_manual.c`) só vale depois de
+   `scripts/regen.sh --lift` + build completo.
 5. **Mudou algo em `xboxrecomp/`?** Atualize o patch
    (`git -C xboxrecomp diff > patches/xboxrecomp-dw4.patch`) e descreva em `PORT_NOTES.md` §4.
 6. **Reiniciar ou não:** mudança em `nv2a_gl_backend.c` / `nv2a_vk_backend.c` (e `shaders/`) chega
@@ -133,7 +139,7 @@ scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
 
 ## Ao terminar uma tarefa
 
-- Rode `scripts/soak.py --golden` (e `--vulkan --golden` se mexeu em renderização); se a imagem mudou de propósito, confira e atualize as
+- Rode `scripts/soak.py --golden` (e `--opengl --golden` se mexeu em renderização); se a imagem mudou de propósito, confira e atualize as
   referências (`scripts/golden.py <shots> --update`).
 - Atualize `STATUS.md`; em `PORT_NOTES.md` registre causa de bug, patch ou endereço novo.
 - Diga o que foi verificado e o que não foi.

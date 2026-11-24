@@ -2,8 +2,8 @@
  * Host dos renderizadores: escolhe a API grafica, carrega o modulo dela e o
  * RECARREGA A QUENTE.
  *
- *     DW4_RENDERER=opengl   libdw4_gl.so (nv2a_gl_backend.c) -- padrao
- *     DW4_RENDERER=vulkan   libdw4_vk.so (nv2a_vk_backend.c)
+ *     DW4_RENDERER=vulkan   libdw4_vk.so (nv2a_vk_backend.c) -- padrao
+ *     DW4_RENDERER=opengl   libdw4_gl.so (nv2a_gl_backend.c)
  *     DW4_RENDERER=cpu      rasterizador em CPU do toolkit (= DW4_SW_RENDER=1)
  *
  * E o que o launcher grava quando o jogador escolhe a API em "Graficos". Se a
@@ -363,6 +363,7 @@ static void host_flip(void)
         s_mod->flip();
     else
         dw4_frame_note(0, 0);
+    dw4_fps_limit_tick();
     reload_check();                     /* entre dois frames: nada pendente */
 }
 
@@ -371,7 +372,7 @@ static const Nv2aBackend s_backend = { host_clear, host_draw, host_flip };
 /* Rasterizador em CPU: um back end so com flip nao desvia o desenho (o
  * executor so entrega clear/draw se os ponteiros existirem), mas mantem a
  * contagem de frames para o amostrador de travamento e o roteiro. */
-static void sw_flip(void) { dw4_frame_note(0, 0); }
+static void sw_flip(void) { dw4_frame_note(0, 0); dw4_fps_limit_tick(); }
 static const Nv2aBackend s_sw_backend = { NULL, NULL, sw_flip };
 
 /* Carrega e inicia um renderizador. 0 se ele nao sobe nesta maquina. */
@@ -400,7 +401,7 @@ void dw4_gl_backend_init(void)
     char exe[PATH_MAX];
     ssize_t len = readlink("/proc/self/exe", exe, sizeof exe - 1);
     char *slash;
-    int vulkan = 0;
+    int vulkan = 1;                     /* padrao desde 2026-11-24; cai no OpenGL se nao subir */
 
     if ((r && *r && *r != '0') || (api && (!strcmp(api, "cpu") || !strcmp(api, "sw")))) {
         fprintf(stderr, "[GL] rasterizador em CPU do toolkit (DW4_SW_RENDER / "
@@ -409,11 +410,11 @@ void dw4_gl_backend_init(void)
         return;
     }
     if (api && *api) {
-        if (!strcmp(api, "vulkan") || !strcmp(api, "vk"))
-            vulkan = 1;
-        else if (strcmp(api, "opengl") && strcmp(api, "gl"))
-            fprintf(stderr, "[GL] DW4_RENDERER=%s desconhecido (opengl, vulkan, cpu); "
-                            "usando opengl\n", api);
+        if (!strcmp(api, "opengl") || !strcmp(api, "gl"))
+            vulkan = 0;
+        else if (strcmp(api, "vulkan") && strcmp(api, "vk"))
+            fprintf(stderr, "[GL] DW4_RENDERER=%s desconhecido (vulkan, opengl, cpu); "
+                            "usando vulkan\n", api);
     }
     s_allow_sw = getenv("DW4_GL_ALLOW_SW") != NULL;
     s_no_reload = getenv("DW4_GL_NO_RELOAD") != NULL;

@@ -168,6 +168,81 @@ roteiro). **Não verificado com controle de verdade** — só o usuário pode co
 O pacote de release leva a SDL2 "de verdade" (`pysdl2-dll`), não o sdl2-compat; se ela tem a mesma
 corrida não foi verificado, mas a correção vale para as duas.
 
+### 4.10 `src/video/fb_present_sdl.c` — frames de qualquer tamanho na janela (2026-11-24)
+
+`xbox_FramebufferWindowPresentPixels(pixels, w, h, pitch)`: o renderizador entrega o frame pronto
+(B,G,R,X) em vez de a janela ler os 640×480 da memória do guest. Os três slots de troca guardam
+largura/altura; a textura e o `SDL_RenderSetLogicalSize` acompanham (letterbox na forma do frame),
+a janela não-tela-cheia assume a proporção do frame mantendo a altura, e um frame que não é
+640×480 é escalado com filtro linear. Depois da primeira chamada o present do flip (superfície do
+guest) é ignorado. Usado pela resolução interna / widescreen (§7.6).
+
+### 4.11 `src/kernel/xbox_memory_layout.c`, `nv2a_pb_scan.c` — a volta do anel do pushbuffer perdia comandos (2026-11-24)
+
+**Sintoma:** "a tela pisca distorcida" por um quadro; mais frequente em 16:9 e em áreas pesadas
+(usuário, Vulkan). No OpenGL o mesmo evento aparecia como "o chão pisca preto".
+
+**Evidência** (caixa-preta, §7.7, `build/shots/flash-000..005`): no quadro suspeito o número de
+draws é o mesmo dos vizinhos, mas o fundo sai com a textura errada (o atlas dos botões) e o log
+mostra, no mesmo instante, um alvo de render-to-texture recriado com o estado da tela
+(`superficie 81436000 640x480 ... (tela)` e logo depois de volta a `512x512`): o draw foi
+executado com o endereço de cor de um alvo e o pitch/recorte de outro. Estado misturado =
+comandos que não foram executados.
+
+**Causa:** no modo padrão (varredura por segmento; `RECOMP_PB_WALK=dma` não serve aqui, §3.8) o
+pushbuffer é um anel e, quando o PUT voltava para trás, o laço varria `[last_put, put_hi)` e
+depois `[put_lo, put)`, com `put_hi`/`put_lo` = maior e menor PUT já vistos. Só que a volta
+termina onde o jogo escreveu o JUMP e a seguinte começa no **alvo do JUMP**, o primeiro byte do
+anel, que fica abaixo de qualquer PUT: tudo o que o jogo escreveu antes do primeiro kick da volta
+(`[alvo, put_lo)`) nunca era executado, nem o fim de uma volta que passasse de `put_hi`. Cada
+volta perdia alguns comandos (uma troca de alvo, um bind de textura) e um quadro saía com estado
+velho. Mais draws por quadro = mais voltas por segundo.
+
+**Correção:** na volta, varre a partir de `last_put` até achar o JUMP (a varredura para nele) e
+continua do alvo do JUMP até o PUT, como o motor de DMA do hardware. Se o jogo reiniciou o anel
+(escreve GET junto com o PUT), não há JUMP: recomeça do GET dele. Sem JUMP utilizável, cai no
+comportamento antigo e loga `[PB] wrap without a usable JUMP`.
+
+**Verificado sem janela (2026-11-24):** `soak.py --golden` e `--vulkan --golden` passam; em
+1440p 16:9 (Vulkan e OpenGL, 3 execuções do cenário do lobby) a caixa-preta não registra nenhum
+clarão e — o sinal mais direto — **sumiram as recriações transitórias de superfície**
+(`806AC000 640x512 (clip 512x512)` ao entrar no lobby, que antes apareciam em toda execução):
+o estado misturado não acontece mais. Nenhum `[PB] wrap without a usable JUMP`.
+O cenário `title.txt` caiu em 2 de 4 execuções, com a assinatura do crash intermitente já
+conhecido de pular a abertura (`[ICALL] alvo 0x00000000 ... ret guest 0x0026A1BE`); a taxa
+histórica é 2/8, 2/3, 0/6 — não dá para dizer que mudou. **Falta o usuário confirmar jogando.**
+Hipóteses descartadas
+antes: shaders/pipelines; recriação de superfície como causa (é consequência); escolha da
+superfície exibida; algo específico do renderizador Vulkan.
+
+### 4.12 `src/kernel/nv2a_pb_scan.c` — método cortado por um kick (2026-11-24)
+
+**Sintoma:** um pedaço do chão fica preto/escuro por um quadro, sutil (usuário, Vulkan e OpenGL).
+Captura: `build/shots/flash-007` (F12), quadro 061 — um trecho do piso escurece e volta, com o
+mesmo número de draws e triângulos dos vizinhos.
+
+**Suspeita (não provada):** o D3D manda arrays grandes em vários kicks, então o PUT cai no meio
+dos parâmetros de um método. A varredura por segmento largava o método no fim do segmento e lia o
+resto dos parâmetros, no início do segmento seguinte, como cabeçalhos de comando (o modo `dma` já
+tratava isso, `s_pend_*`). Resultado possível: uma malha desenhada pela metade ou com estado
+errado. **Correção:** o segmento de topo guarda o método em que parou e o seguinte, se começa
+exatamente onde aquele terminou, termina-o antes de continuar. O Vulkan loga
+`[VK] pushbuffer: N metodos cortados por um kick e retomados` quando acontece.
+
+**Estado (2026-11-24):** `soak.py --golden` passa nos dois renderizadores com o patch, mas no
+cenário do lobby o contador ficou em **zero** — ali o D3D não corta métodos. A correção fica
+(é o comportamento certo), mas provavelmente **não é a causa do chão**.
+
+**O que a captura mostra de fato** (zoom e diferença entre os quadros 060/061/062 de
+`flash-007`): vários ladrilhos inteiros em volta do personagem escurecem juntos por um quadro,
+com a câmera parada e 0 decodes de textura. É o padrão do passe que multiplica o chão pela
+textura de sombra projetada (alvo 512×512, limpo de branco e redesenhado todo quadro; no lobby:
+`c5:F0:FFFFFF d5x77 d0x320t5`). Hipótese de trabalho: nesse quadro o alvo de sombra é amostrado
+com conteúdo errado/escuro. Para confirmar, a etiqueta de cada quadro na caixa-preta agora traz a
+sequência de operações (`cN` clear, `dNxM` M draws na superfície N, `tK` amostrando a superfície
+K): comparar o quadro ruim com os vizinhos. Outra hipótese anotada: Outra hipótese anotada: passes coplanares com `LEQUAL` / z-bias dependente da resolução
+(o termo de inclinação do polygon offset encolhe com a escala da imagem).
+
 ## 5. Hooks (`src/hooks/`)
 
 | Arquivo | Função |
@@ -345,6 +420,160 @@ Segunda API gráfica, ao lado do OpenGL (que continua o padrão). O jogador esco
   fallback Vulkan → OpenGL (`DW4_VK_DEVICE=99`); recarga a quente.
 - **Não verificado:** jogar com janela; AMD/Intel (lá o depth é `D32F+S8`, o que muda a
   resolução do z-bias); camadas de validação (`vulkan-validation-layers` não está instalado).
+
+### 7.6 Resolução interna e widescreen (2026-11-24) — `src/hooks/render_opts.h`
+
+`DW4_RES=<altura>` (480, 720, 1080, 1440, 2160) e `DW4_ASPECT=<L:A>` (16:9, 16:10, 21:9; 4:3 =
+original); no launcher, Gráficos → Imagem. Vale para os **dois** renderizadores (o cabeçalho é
+comum). Desenho tirado do Amped 2 e dos dois SSX 3 (`docs/REFERENCIAS.md`), código nosso.
+
+- **Resolução:** a imagem da GPU tem o tamanho da superfície do guest × (altura/480), para todas
+  as superfícies (alvos de render-to-texture também). Os vértices continuam em pixels do guest e o
+  shader divide pelo tamanho do guest: só mudam tamanho de imagem, viewport e área de clear.
+- **Proporção:** superfícies "de tela" (640 de largura, ≥ 400 de altura) ficam `wide` vezes mais
+  largas, e todo vértice desenhado nelas tem o x comprimido em torno do centro por 1/`wide`
+  (`ro_squeeze`, na CPU, ao copiar o lote). O que o jogo desenhava além das bordas aparece nas
+  laterais (Hor+, sem patch no jogo: o executor só recorta no near plane). O 2D (rhw = 1: HUD,
+  menus, vídeos) fica em 4:3 no meio. Exceção: triângulo 2D que cobre a tela inteira (fade,
+  clarão) continua cobrindo tudo.
+- **Apresentação:** nesses modos o frame não cabe nos 640×480 do guest; vai direto para a janela
+  (patch 4.10) e para as capturas (`dw4_frame_note_host`, `screenshot.c`). **A memória do guest
+  não recebe mais o frame** — se algo no jogo ler o próprio framebuffer, vai ler lixo (não visto).
+  Com 480 + 4:3 nada muda: caminho antigo, goldens iguais.
+- **Armadilha achada:** ao entrar no lobby o jogo faz uma passada com recorte 512×512 ainda
+  apontando para o back buffer; a superfície vira 640×512 para sempre. Com "tela = altura ≤ 480"
+  ela deixava de ser alargada e a imagem saía 4:3 ou 16:9 conforme o buffer da vez. Por isso não
+  há limite superior, e a tela exibida é `min(altura, 480)` linhas.
+- **Custo:** a leitura de volta passa de 1,2 MB para 14,7 MB por frame em 1440p 16:9 (GPU → CPU →
+  janela). Sem janela: 60 fps no lobby nos dois renderizadores (RTX 5070). Um swapchain próprio
+  eliminaria as cópias; não foi feito para manter um caminho só para as duas APIs.
+- **Culling do jogo (`src/hooks/widescreen.c` + gancho em `recomp_manual.c`):** o jogo só manda
+  desenhar o que cabe no campo de visão de 4:3; objetos inteiros dentro da faixa lateral nova
+  sumiam e surgiam conforme a câmera andava (usuário, 1440p 16:9; capturas `f9-011`/`f9-012`: o
+  piso da plataforma à direita some, o anel da mesma plataforma — maior — fica).
+  - O teste é **`sub_000BC050`** (igFrustCullTraversal): `ecx` = 8 cantos da caixa em espaço de
+    clip (x, y, z, w; 16 bytes cada); devolve 2 = fora, 1 = dentro, 3/5 = parcial. Chamado por
+    `sub_000BCC80` e `sub_000D7EC0`, com os cantos num temporário da pilha.
+  - Correção: **gancho de entrada** `sub_000BC050_enter` multiplica o x dos 8 cantos por
+    1/(`wide` × 1,05) antes do teste. Projeção e desenho não mudam; serve também às câmeras de
+    sub-viewport. `DW4_CULL_SCALE=<f>` força outro alargamento (1 = original).
+  - Gancho de entrada = recurso do recompilador: `scripts/regen.sh` agora passa
+    `--exclude-manual src/hooks/recomp_manual.c`; criar/remover um gancho exige
+    `scripts/regen.sh --lift` (~75 s) e build completo.
+  - **Hipótese descartada:** `igFrustCullTraversal::_outerFrustCullScale` (campo +0x228; o setter
+    em 0x000BCC2x grava o inverso no global 0x00397A90). Achado pelas tabelas de nomes de campo do
+    Alchemy (`.data` 0x0039AA80, offsets em 0x0039AAB8). Gravar ali não resolveu: no fim de
+    `sub_000BC050` a escala só reclassifica o caso parcial (3 → 5); quem está fora do campo de
+    visão real continua fora (testado com o usuário, x1,373, o objeto continuou sumindo).
+  - Os SSX 3 resolvem com hook na projeção da câmera; aqui só o descarte alarga.
+  - **Compilado; ainda não executado nem confirmado pelo usuário.**
+- **Limites conhecidos:** menus e vídeos ficam com faixas laterais; a sonda de pixel do F9 só
+  funciona em 480 + 4:3; os frames de referência (`tests/golden`) só valem para 480 + 4:3.
+- **Verificado sem janela:** 1440 + 16:9 nos dois renderizadores (seleção de Digimon, login,
+  lobby); `--window` com `SDL_VIDEODRIVER=dummy` exercita o caminho da janela. **Não verificado:**
+  janela/tela cheia de verdade (só o usuário), 16:10, 21:9, 2160, fases além do lobby.
+
+### 7.7 Caixa-preta de quadros: defeito que dura um quadro (2026-11-24) — `screenshot.c`
+
+Para "a tela pisca" (não dá tempo de apertar F9). Cada quadro apresentado é guardado reduzido
+(até 640 de largura) num anel de 120 quadros (~2 s) e o anel é gravado em
+`build/shots/flash-NNN/` (um BMP por quadro + `info.txt`):
+
+- **sozinho**, quando um quadro difere muito do anterior (média > 14 na grade 16×12 de
+  luminância) **e** o seguinte volta a parecer com o anterior — um clarão; corte de cena não
+  volta. No máximo 6 por sessão (`DW4_FLASH_MAX`). Linha `[FLASH] flip N: ...` no log;
+- **a pedido:** F12 na janela (Vulkan) ou o passo `ringdump` do roteiro.
+
+`info.txt` traz, por quadro, o flip, a diferença para o anterior e a etiqueta do renderizador
+(superfície exibida, draws, lotes, triângulos, texturas) — o quadro suspeito vem marcado.
+`DW4_FRAME_RING=0` desliga. Custo: ~110 MB de RAM e uma cópia reduzida por quadro.
+
+Também: o launcher liga `DW4_VK_STATS`/`DW4_GL_STATS` (uma linha a cada 5 s no log); no Vulkan a
+linha traz `ms/frame: back end X (GPU Y, copia p/ janela Z)` e avisa se algum quadro exibido veio
+de uma superfície que não é a tela. A escolha da superfície exibida passou a ser pela área da
+superfície, não pelo recorte do último draw (um alvo 512×512 podia "ganhar" da tela por um quadro).
+
+**Primeiro uso (2026-11-24):** 6 capturas automáticas numa sessão do usuário; levaram à causa da
+piscada (patch 4.11: a volta do anel do pushbuffer perdia comandos).
+
+### 7.8 ABERTO: o chão escurece por alguns quadros (2026-11-24)
+
+Sintoma: na Central Area (e na caverna), o piso de ladrilhos escurece em padrão listrado por 1–7
+quadros e volta; Vulkan e OpenGL; às vezes com o personagem andando. Capturas com detalhe por
+lote: `build/shots/flash-016`, `-018`, `-020` (`lotes.txt`).
+
+**O que as capturas provam** — nos quadros escuros, comparados com os vizinhos, é idêntico:
+sequência de operações (clears, draws por superfície, uso do alvo de sombra), lotes, estado de
+blend/alpha/depth, endereços de textura, paleta (endereço e conteúdo), cores de vértice,
+especular, neblina (1,000 = sem neblina), cor de neblina, combiners finais, intervalo entre
+flips (15,6–18,9 ms) e nenhuma textura criada ou alterada no quadro.
+
+**Descartado, com evidência:** comandos perdidos (sequência idêntica), cadência de quadros, alvo
+de sombra com conteúdo errado (lotes do alvo idênticos), neblina, paleta trocada, textura
+recarregada, shaders/pipelines.
+
+**O que sobra:** as coordenadas de textura. O resumo `uv=` dos lotes do piso muda a cada quadro
+(animação por matriz de textura, patch 4.8 — os ladrilhos "pulsam"), então não dá para isolar o
+quadro ruim por ele. Hipótese: nesses quadros a matriz de textura de alguns ladrilhos tem um
+valor fora da sequência e eles amostram a parte escura da textura. Não se sabe se vem do jogo
+(animação) ou do port. Coincide, em todas as capturas, com a mudança do número de draws
+(conjunto de objetos visíveis mudando) um quadro antes ou depois.
+
+**Também descartado depois** (`flash-021`, `flash-022`, em 480p 4:3, Vulkan; o usuário viu o
+mesmo em OpenGL): não depende de widescreen, resolução interna nem do descarte alargado (nada
+disso estava ativo); constantes do combinador (hash de todo o `Nv2aCombiner`, fatores, cores
+finais, cor de blend) idênticas; matriz de textura do estágio 0 avança suave e monotônica pelos
+quadros escuros, sem valor fora da sequência.
+
+**O que ainda não foi medido:** profundidade (z dos vértices, valor do clear de depth, disputa
+entre passes coplanares com `LEQUAL`) e o conteúdo real das texturas/alvos (só endereços e
+hashes). **Padrão que se repete em todas as capturas:** o escurecimento vem 1–4 quadros antes
+de um grupo novo de objetos entrar (+300 draws) — troca de setor do mapa.
+
+**Decisão do usuário (2026-11-24): fica como defeito conhecido não resolvido.** Para retomar:
+registrar z mínimo/máximo por lote e o valor do clear de depth na caixa-preta; comparar com o
+rasterizador em CPU (`--sw`) num cenário que chegue à Central Area.
+
+Achado lateral corrigido: texturas não paletizadas eram chaveadas no cache pela paleta "ligada"
+no momento (campo `palette` velho) e ganhavam cópias novas quando ela mudava; agora só P8.
+
+### 7.9 Limitador de quadros (2026-11-24) — `src/hooks/fps_limit.c`
+
+`DW4_FPS_LIMIT=30` segura cada flip até 1/30 s do anterior. Launcher: Gráficos → Imagem → Limite
+de quadros, **padrão 30**; `run.sh` também usa 30. O binário sem a variável roda a 60 (é como o
+`soak.py` roda).
+
+- **A lógica do jogo anda por quadro, não por tempo.** Medido: com o limite em 30,
+  `soak.py --vulkan --golden` mostra as mesmas telas nos mesmos flips e leva 171 s em vez de 92 s.
+  A 60 fps tudo anda duas vezes mais rápido que a 30.
+- **Por que 30 é o padrão:** o usuário, que conhece o jogo no console, afirma que no Xbox ele
+  rodava a 30 (2026-11-24). O binário pede intervalo de swap ONE (um flip por vblank — contador
+  `iv1` em `[GPU] flip hold`), mas com vsync um quadro atrasado espera o vblank seguinte, então
+  um jogo pesado para o console fica em 30. **Não foi medido em hardware real.**
+- Até aqui todo o port foi testado e jogado a 60, ou seja, no dobro da velocidade do console.
+- Observação do usuário: a 30 fps o defeito do chão (§7.8) fica menos brusco e demora mais a
+  aparecer. Compatível com o defeito durar um tempo real fixo (carga do setor) e não um número
+  de quadros; não investigado.
+
+### 7.10 Vulkan × OpenGL: custo medido (2026-11-24)
+
+Mesmo cenário (`soak.py`, menus → lobby, 92 s, sem janela), RTX 5070; CPU = tempo de processo
+(user + sys), GPU = média do `nvidia-smi`:
+
+| | CPU | GPU |
+|---|---|---|
+| Vulkan 480p 4:3 | 178,8 s (195% de um núcleo) | 5%, 21 W |
+| OpenGL 480p 4:3 | 183,5 s (200%) | 5%, 20 W |
+| Vulkan 1440p 16:9 | 167,2 s (182%) | 18%, 36 W |
+| OpenGL 1440p 16:9 | 183,3 s (199%) | 18%, 41 W |
+
+Uma execução de cada: a diferença de 3% em 480p está dentro do ruído; os 9% em 1440p
+provavelmente não. O custo é de CPU (jogo + executor, ~2 núcleos) e quase independe da API. É
+daí que vêm os textos da tela Gráficos do launcher. Vulkan virou o padrão por decisão do usuário.
+
+Janela: o launcher não oferece mais "tamanho da janela"; passa `RECOMP_WINDOW_SIZE=LxA` (patch
+no toolkit) com a resolução interna (dobrada em 480p/720p), e a janela é reduzida se não couber
+na área útil do monitor.
 
 ### 7.1 Opções de depuração do renderizador
 
