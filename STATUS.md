@@ -247,6 +247,9 @@ ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
   item de Gráficos, limite de quadros **30 (padrão, a velocidade do jogo no Xbox segundo o
   usuário)** / 60. A lógica do jogo anda por quadro: a 60 tudo roda no dobro da velocidade
   (`PORT_NOTES.md` §7.9).
+- **4K (3840×2160) a 60: 30–48 fps na Central Area** (usuário, Vulkan). Causa medida: a cópia
+  do quadro da GPU para a janela custa ~15 ms por quadro em 4K (`PORT_NOTES.md` §7.6). Solução
+  conhecida e não feita: apresentar direto pela GPU (swapchain).
 - **Aberto: 60 → 34–47 fps em áreas pesadas** (32–38 mil draws por frame). Não investigado.
 - **Confirmado pelo usuário:** o popping nas laterais "melhorou bastante" com o gancho de descarte.
 - **Histórico:** objetos surgindo/sumindo nas laterais em widescreen — correção em
