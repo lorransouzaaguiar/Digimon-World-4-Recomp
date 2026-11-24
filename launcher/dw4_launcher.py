@@ -264,6 +264,11 @@ class Backend(QObject):
     def log_dir(self) -> Path:
         return DATA / "logs"
 
+    def shot_dir(self) -> Path:
+        """Capturas (F9) e caixa-preta de quadros (F12): no pacote ficam na pasta
+        de dados do usuario; a partir do codigo, em build/shots como sempre."""
+        return DATA / "shots" if FROZEN else ROOT / "build" / "shots"
+
     def missing_files(self):
         d = self.game_dir()
         return [n for n in GAME_FILES if not find_ci(d, n)]
@@ -469,6 +474,9 @@ class Backend(QObject):
         env["RECOMP_WINDOW_SIZE"] = "%dx%d" % (round(h * aw / ah), h)
         env.pop("RECOMP_WINDOW_SCALE", None)
         env["DW4_GL_NO_RELOAD"] = env.get("DW4_GL_NO_RELOAD", "1")
+        if "DW4_SHOT_DIR" not in env:
+            self.shot_dir().mkdir(parents=True, exist_ok=True)
+            env["DW4_SHOT_DIR"] = str(self.shot_dir())
         # Uma linha a cada 5 s no log com fps, draws e onde vai o tempo: e o que
         # permite investigar uma queda de quadros depois, pelo relatorio.
         env.setdefault("DW4_VK_STATS", "1")

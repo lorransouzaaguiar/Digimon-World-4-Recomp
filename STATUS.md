@@ -279,6 +279,13 @@ camada de entrada). É candidato a ser também a "corrida que corrompe o heap" n
 
 ## Launcher e pacote de release
 
+**Release v0.2.0 (2026-11-24):** gerado a partir da `main` depois do merge do PR #1. Primeiro
+pacote com `libdw4_vk.so`. Conferido fora do projeto: AppImage `--selftest`; jogo sem janela até a
+tela título com o Vulkan carregado de dentro do pacote, limite de 30 fps, saves e capturas na
+pasta de dados de teste. No pacote, F9/F12 gravam em `~/.local/share/dw4-recomp/shots/`
+(`DW4_SHOT_DIR`, definido pelo launcher). Não conferido: janela, som e controle com as
+bibliotecas do pacote; outra distribuição.
+
 - **Launcher** (`./launcher.sh`, PySide6 + QML, `launcher/`): telas Jogar, Gráficos, Controles,
   Saves e dados, Suporte; pt-BR/en. Lê a imagem do disco direto (`launcher/xiso.py`) ou uma pasta.
   `--play`, `--selftest`, `--screenshot`.
