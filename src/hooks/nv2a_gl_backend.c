@@ -547,6 +547,17 @@ static uint64_t hash_bytes(const uint8_t *p, size_t n)
     return h;
 }
 
+/* A textura e a imagem de uma superficie de tela alargada (render_opts.h)? */
+static int tex_is_wide_surface(GLuint tex)
+{
+    if (tex == s_white)
+        return 0;
+    for (int i = 0; i < s_nsurf; i++)
+        if (s_surf[i].color == tex && s_surf[i].fbo)
+            return s_surf[i].wide;
+    return 0;
+}
+
 static GLuint texture_get(const Nv2aTexture *t, const Surface *target)
 {
     uint32_t va = tex_va(t->offset);
@@ -777,6 +788,7 @@ typedef struct {
     Nv2aCombiner rc;
     float fogc[4];
     uint32_t clip_mode;
+    uint32_t sc[4];                     /* recorte do guest (x, y, l, a); zeros = inteira */
 } DrawKey;
 
 static double s_trace_at = -1.0;
@@ -807,6 +819,14 @@ static void flush_pending(void)
         s_pcount = 0;
         return;
     }
+    /* 16:9: comprime em x, com o lote inteiro a vista (render_opts.h). */
+    if (k->surf->wide)
+        ro_squeeze(s_pv, s_pcount, (float)k->surf->w, (float)ro_display_rows(k->surf->h),
+                   k->tex[0] != s_white || k->tex[1] != s_white
+                   || k->tex[2] != s_white || k->tex[3] != s_white,
+                   tex_is_wide_surface(k->tex[0]) || tex_is_wide_surface(k->tex[1])
+                   || tex_is_wide_surface(k->tex[2]) || tex_is_wide_surface(k->tex[3]),
+                   k->sc);
     surface_bind(k->surf, rs->zeta_va);
     glUseProgram(s_prog);
     glUniform3f(u_surf, (float)k->surf->w, (float)k->surf->h, zmax_of(rs));
@@ -938,7 +958,21 @@ static void flush_pending(void)
         for (GLuint i = 3; i <= 8; i++)
             glDisableVertexAttribArray(i);
     }
+    {
+        /* Recorte do guest (sub-viewport: o minimapa). A linha 0 do FBO e a
+         * linha 0 da superficie, entao o y vale direto. */
+        GLint r[4];
+
+        if (ro_scissor(k->sc, k->surf->wide, k->surf->w, k->surf->h, k->surf->pw,
+                       k->surf->ph, r)) {
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(r[0], r[1], r[2], r[3]);
+        } else {
+            glDisable(GL_SCISSOR_TEST);
+        }
+    }
     glDrawArrays(GL_TRIANGLES, 0, (GLsizei)s_pcount);
+    glDisable(GL_SCISSOR_TEST);
     s_n_flush++;
     s_pcount = 0;
 }
@@ -999,6 +1033,11 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
     memset(&key, 0, sizeof key);
     key.surf = e;
     key.rs = *b->state;
+    /* Recorte menor que a superficie (sub-viewport: o minimapa). */
+    if (s->width && s->height && (s->width < e->w || s->height < e->h)) {
+        key.sc[0] = s->clip_x; key.sc[1] = s->clip_y;
+        key.sc[2] = s->width;  key.sc[3] = s->height;
+    }
     key.texsize[0] = key.texsize[1] = 1.0f;
     for (int i = 0; i < 4; i++) {
         key.tex[i] = s_white;
@@ -1147,9 +1186,6 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
         }
     }
     memcpy(s_pv + s_pcount, b->vertices, b->count * sizeof *s_pv);
-    if (e->wide)                        /* 16:9: comprime em x (render_opts.h) */
-        ro_squeeze(s_pv + s_pcount, b->count, (float)e->w,
-                   (float)ro_display_rows(e->h));
     if (b->ext)
         memcpy(s_pe + s_pcount, b->ext->vertices, b->count * sizeof *s_pe);
     s_pcount += b->count;

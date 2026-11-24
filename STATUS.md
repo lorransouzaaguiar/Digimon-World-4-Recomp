@@ -224,7 +224,8 @@ em `PORT_NOTES.md` §7.0. Validado sem janela (2 reloads durante o cenário do l
 ## Resolução interna e widescreen ✅ (2026-11-24) — `src/hooks/render_opts.h`
 
 Launcher: Gráficos → **Imagem** → Resolução interna (480p original, 720p, 1080p, 1440p, 4K) e
-Proporção (4:3 original, 16:9, 16:10, 21:9). Sem launcher: `DW4_RES=1440 DW4_ASPECT=16:9`. Vale
+Proporção (4:3 original, 16:9, 21:9; **16:10 foi retirada em 2026-11-24**, decisão do usuário: não
+vamos dar suporte — uma configuração salva com 16:10 vira 16:9). Sem launcher: `DW4_RES=1440 DW4_ASPECT=16:9`. Vale
 para Vulkan e OpenGL. Em widescreen o cenário fica mais largo sem esticar; HUD, menus e vídeos
 ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
 
@@ -239,10 +240,36 @@ ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
   16:9, Vulkan e OpenGL). **Aguardando o usuário confirmar jogando.**
 - **Confirmado pelo usuário (2026-11-24):** a piscada com distorção sumiu no Vulkan; "jogo mais
   fluido, parecendo o original".
+- **Observação do usuário (2026-11-24, DW4R-2):** jogando, o chão que escurece aparece **menos no
+  OpenGL** e a imagem fica mais estável do que no Vulkan. Não foi medido nem explicado; é uma
+  pista nova para o defeito abaixo (os dois renderizadores diferem na apresentação — o Vulkan não
+  espera a GPU e não traz o quadro de volta — e não no desenho). O launcher passou a dizer isso
+  na descrição do OpenGL e em Suporte.
 - **Aberto: o chão escurece por alguns quadros** (Central Area, caverna; Vulkan e OpenGL).
   Acontece também em 480p 4:3 (não é do widescreen). Causa não determinada; tudo o que foi medido
   e descartado está em `PORT_NOTES.md` §7.8. **Defeito conhecido, não resolvido** (decisão do
   usuário); cosmético.
+- **Fade / escurecimento em 4:3 no widescreen — corrigido (2026-11-24, DW4R-2); confirmado pelo
+  usuário jogando ("melhorou muito os efeitos"):** o fade de troca de cenário e o escurecimento atrás de menus cobriam só o
+  meio da tela (`PORT_NOTES.md` §7.6). Verificado sem janela na transição login → lobby, Vulkan e
+  OpenGL. A tela de loading agora ocupa a tela larga, esticada.
+- **HUD em widescreen (2026-11-24, DW4R-2), aguardando o usuário confirmar:** a faixa do HUD vai
+  de borda a borda e o retrato/HP/MP ficam ancorados no canto, com a proporção certa
+  (`PORT_NOTES.md` §7.6). Verificado sem janela em 16:9, 21:9 e 16:10, 1 jogador.
+- **Minimapa das fases enorme — corrigido (2026-11-24, DW4R-2); confirmado pelo usuário em 4:3,
+  16:9 e 21:9 no OpenGL, e em 21:9 no Vulkan:**
+  o recorte de 120×120 do mapa não era aplicado (valia também em 4:3). Agora os dois
+  renderizadores cortam, e em tela larga o minimapa fica ancorado no canto (`PORT_NOTES.md`
+  §7.6, patch 4.15). Goldens iguais; o mapa em si só o usuário alcança.
+- **Menu do START em 21:9 — corrigido (2026-11-24); confirmado pelo usuário ("está perfeito agora"):** a regra da
+  faixa do HUD pegava a barra de ajuda do menu (`PORT_NOTES.md` §7.6). Verificado sem janela em
+  21:9 e 16:9.
+- **Launcher sem a API "CPU" (2026-11-24, decisão do usuário):** o seletor oferece só Vulkan e
+  OpenGL; uma configuração salva com "cpu" vira Vulkan. O rasterizador em CPU continua existindo
+  para desenvolvimento (`DW4_SW_RENDER=1 ./run.sh`, `soak.py --sw`): é o árbitro dos bugs de imagem.
+- **Launcher (2026-11-24, DW4R-2):** Gráficos na ordem API → Imagem → Janela → Desempenho; a
+  janela abre maior (até 1120×940, limitada pelo monitor) e a barra de rolagem fica sempre à
+  vista quando há mais conteúdo; só a descrição da API escolhida aparece.
 - **Launcher (2026-11-24):** visual novo inspirado nos menus do jogo, API gráfica como primeiro
   item de Gráficos, limite de quadros **30 (padrão, a velocidade do jogo no Xbox segundo o
   usuário)** / 60. A lógica do jogo anda por quadro: a 60 tudo roda no dobro da velocidade
@@ -257,6 +284,41 @@ ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
   `PORT_NOTES.md` §7.6), compilada mas ainda não executada. A primeira tentativa (escala
   `_outerFrustCullScale`) não resolveu.
 - **Não verificado:** 16:10 / 21:9 / 4K, fases além do que o usuário jogou.
+
+## Até onde o jogo foi testado (informado pelo usuário, 2026-11-24)
+
+Terminal Area (lobby), Central Area, Death Valley e Humid Cave — a parte inicial do jogo. Nada
+depois disso foi executado. É o que os READMEs passam a dizer.
+
+## Desempenho: CPU, núcleos e GPU (2026-11-24, branch `DW4R-2`)
+
+Detalhes e medições em `PORT_NOTES.md` §4.13, §4.14, §7.5b e §8.x.
+
+- **Uso de CPU: de ~195% para ~28% de um núcleo no lobby.** Duas threads giravam à espera do
+  vblank (a do jogo e a da GPU emulada); agora dormem e acordam por evento. Pesa sobretudo em
+  máquinas de 2–4 núcleos e notebooks. Verificado sem janela, goldens iguais.
+- **Vulkan apresenta direto pela GPU** (swapchain na janela, quadros em voo): o frame não é mais
+  copiado GPU → CPU → janela. Lobby em 4K 16:9 com janela (dentro de um gamescope sem tela):
+  49 → 60 fps, 15,9 → 1,2 ms por frame no renderizador. Sem janela, ou se o swapchain não sobe,
+  vale o caminho antigo. O OpenGL não mudou.
+- **Modo paralelo (experimental, desligado):** launcher → Gráficos → Desempenho, ou
+  `RECOMP_KICK_AHEAD=1`. Jogo e executor deixam de se revezar (3,8 ms por frame de espera no
+  lobby → 0). Validado só até o lobby.
+- **Por máquina:** placa escolhida pela que apresenta na janela; modo de vsync pelo que o driver
+  oferece; a thread de ack não gira em máquina de 1–2 núcleos.
+- A caixa-preta de quadros passou a ser opcional (`DW4_FRAME_RING=1`).
+- **Confirmado pelo usuário jogando (2026-11-24, RTX 5070, Vulkan, com janela):** 4K a 60 fps
+  cravados nas áreas que antes ficavam abaixo de 40 fps; 1440p igual; uso de CPU do sistema de
+  ~20% para 5–7%. "Perfeito em relação a performance nessa máquina."
+  Esse teste foi com o modo paralelo **desligado**.
+- **Modo paralelo confirmado pelo usuário (2026-11-24):** jogou com ele ligado sem problemas;
+  uso de CPU e GPU na mesma faixa do teste desligado nesta máquina (já cravada em 60 fps, então
+  o ganho não aparece aqui). Continua desligado por padrão.
+- **Ainda não verificado:** tela
+  cheia / redimensionar / minimizar, limite de 30 fps com janela, AMD/Intel e máquinas mais
+  fracas, recarga a quente no modo direto.
+- **Não feito:** paralelizar o executor do toolkit (é onde está o custo de CPU que sobrou);
+  apresentação direta no OpenGL.
 
 ## Plugar o controle com o jogo aberto fechava o jogo — RESOLVIDO (2026-11-24)
 
@@ -276,6 +338,11 @@ camada de entrada). É candidato a ser também a "corrida que corrompe o heap" n
   `HalReturnToFirmware routine=2` (o próprio jogo desiste) e um SIGSEGV em `glBindFramebuffer` na
   saída. É o mesmo caso visto antes e não reproduzido (`ret guest 0x00277037`). Reproduzir:
   roteiro `f1000:enter` + `wait_flips:500`, várias vezes. Causa não investigada.
+- **2026-11-24 (DW4R-2):** o usuário, jogando com janela, relata que pula o vídeo sempre e nunca
+  mais viu o crash. Sem janela ele **continua**: `soak.py --scenario tests/scenarios/title.txt
+  --runs 16` → 2 CRASH + 1 execução com o mesmo `[ICALL] alvo 0x00000000` que sobreviveu
+  (`ret guest 0x002773A6` / `0x0026A1E0`, logo após o `f1000 enter`). O roteiro aperta START
+  sempre no flip 1000 (~17,5 s); não se sabe se a diferença é o instante do aperto ou a janela.
 
 ## Launcher e pacote de release
 
@@ -328,7 +395,7 @@ jogar e para desenvolver, correções de runtime candidatas a portar e a discuss
 
 | Caminho | Conteúdo |
 |---|---|
-| `xboxrecomp/` | toolkit (v0.18.0 + 8 patches locais) |
+| `xboxrecomp/` | toolkit (v0.18.0 + patches locais, `PORT_NOTES.md` §4) |
 | `game_data/` | disco do jogo (`D:\`) |
 | `src/recompiled/` | C gerado (não editar) |
 | `src/hooks/`, `src/main.c` | host POSIX e hooks |

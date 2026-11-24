@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "recomp_types.h"
+#include "xbox_memory_layout.h"
 #include "dw4_hooks.h"
 
 /* ── Defaults de ambiente ──────────────────────────────────────────────────── */
@@ -69,6 +70,20 @@ void dw4_hooks_set_env_defaults(void)
      * tomava por enderecos da imagem -- lia o .text do jogo como descritores
      * e a enumeracao do controle nunca terminava. */
     env_default("RECOMP_CONTIG_AVOID_IMAGE", "1");
+    /* Com o renderizador Vulkan (o padrao) a janela e aberta para uma
+     * superficie Vulkan: o back end apresenta por swapchain e o frame nao
+     * sai da GPU (patch 4.14 no toolkit; nv2a_vk_backend.c "Apresentacao
+     * direta"). Com OpenGL ou CPU, a janela SDL de sempre. Se o Vulkan nao
+     * subir, a janela ganha o renderizador SDL no primeiro frame. */
+    {
+        const char *api = getenv("DW4_RENDERER"), *sw = getenv("DW4_SW_RENDER");
+        const char *pm = getenv("DW4_VK_PRESENT");
+        int vulkan = !(api && *api && strcmp(api, "vulkan") && strcmp(api, "vk"))
+                  && !(sw && *sw && *sw != '0');
+
+        if (vulkan && !(pm && !strcmp(pm, "readback")))
+            env_default("RECOMP_WINDOW_VULKAN", "1");
+    }
 }
 
 void dw4_hooks_init(void)
@@ -78,6 +93,7 @@ void dw4_hooks_init(void)
     dw4_screenshot_init();
     dw4_input_script_init();
     dw4_stall_watch_init();
+    dw4_prof_init();
 }
 
 void dw4_hooks_crash_report(void)
@@ -180,4 +196,35 @@ void sub_000BC050_enter(void)
         return;
     for (uint32_t i = 0; i < 8; i++)
         MEMF(g_ecx + i * 16) *= k;
+}
+
+/* ── Funcoes embrulhadas ──────────────────────────────────────────────────── *
+ * `extern void sub_XXXXXXXX_gen(void);` + uma definicao de sub_XXXXXXXX aqui:
+ * o recompilador emite o corpo gerado com o nome _gen e todo chamador passa
+ * por esta versao. Mesma regra dos ganchos: regen.sh --lift + build completo. */
+
+/* 0x002B1320: kick-off do D3D (XDK). Liga o bit 16 de NV_PFB 0x100410, gira
+ * ate a GPU limpa-lo e so entao grava o DMA_PUT. A GPU emulada so limpa o bit
+ * entre duas caminhadas do pushbuffer, e nao limpa com um flip retido a
+ * espera do vblank: a thread do jogo queimava um nucleo inteiro girando ali
+ * (86% das amostras dela no lobby, DW4_PROF). O portao dorme ate a GPU poder
+ * responder; o corpo gerado roda igual. Ver xbox_Nv2aKickGate (PORT_NOTES
+ * §4.13). DW4_KICK_GATE=0 volta a espera ocupada. */
+extern void sub_002B1320_gen(void);
+
+void sub_002B1320(void)
+{
+    static int on = -1;
+
+    if (on < 0) {
+        const char *e = getenv("DW4_KICK_GATE");
+        on = !(e && e[0] == '0');
+    }
+    if (!on) {
+        sub_002B1320_gen();
+        return;
+    }
+    xbox_Nv2aKickGate();
+    sub_002B1320_gen();
+    xbox_Nv2aKickDone();
 }

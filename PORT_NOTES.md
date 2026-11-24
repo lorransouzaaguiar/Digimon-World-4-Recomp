@@ -243,6 +243,69 @@ sequência de operações (`cN` clear, `dNxM` M draws na superfície N, `tK` amo
 K): comparar o quadro ruim com os vizinhos. Outra hipótese anotada: Outra hipótese anotada: passes coplanares com `LEQUAL` / z-bias dependente da resolução
 (o termo de inclinação do polygon offset encolhe com a escala da imagem).
 
+### 4.13 `xbox_memory_layout.c`, `kernel_bridge.c`, `nv2a_pb_exec.c`, `nv2a_pb_scan.c` — esperas que queimavam dois núcleos (2026-11-24, DW4R-2)
+
+**Sintoma:** ~195% de um núcleo no lobby, qualquer que fosse a carga (`PORT_NOTES` §7.10).
+
+**Como foi achado:** amostrador próprio (`DW4_PROF`, `src/hooks/prof.c`; a máquina não tem `perf`).
+A thread do jogo passava **86%** das amostras num laço de 2 instruções em `sub_002B1320`
+(kick-off do D3D: liga o bit 16 de `NV_PFB 0x100410`, gira até a GPU limpar, grava `DMA_PUT`); a
+thread `nv2a_ack_thread` passava 57% em `sched_yield` + leitura de relógio (laço terminado em
+`Sleep(0)`). O bit só é limpo entre duas caminhadas do pushbuffer e não é limpo com um flip
+retido à espera do vblank — é assim que o jogo "sente" o FLIP_STALL.
+
+**Correção (três partes):**
+- *thread de ack dorme:* durante um flip retido espera um evento que o timer de vblank sinaliza
+  (`xbox_Nv2aAckWake`, chamado em `kernel_vblank_count`); com o pushbuffer quieto espera o próximo
+  kick. Logo depois de trabalhar continua cedendo a vez por `RECOMP_ACK_HOT_US` (300; 0 em
+  máquina de 1–2 núcleos). Teto de 1 ms por espera. `RECOMP_ACK_SLEEP=0` volta ao `Sleep(0)`.
+- *portão do kick:* `sub_002B1320` é embrulhada em `recomp_manual.c` (`sub_002B1320_gen` = corpo
+  gerado): `xbox_Nv2aKickGate()` antes, `xbox_Nv2aKickDone()` depois. O portão dorme até tudo o
+  que o jogo já enviou ter sido caminhado e nenhum flip estar retido — exatamente quando o laço
+  do jogo é respondido na hora. Contagem de kicks lida pela thread de ack **antes** de ler o PUT
+  (o jogo incrementa depois de gravar o PUT), publicada como "feito" quando o PUT foi consumido.
+  `DW4_KICK_GATE=0` desliga. O jogo envia nem antes nem depois do que enviava: só a espera mudou.
+- *limitador de 30 fps:* `xbox_Nv2aHostStall(1/0)` em volta do sono (`fps_limit.c`); o portão
+  espera junto.
+
+**Medido** (cenário do lobby, 92 s, sem janela, Vulkan, RTX 5070 / 16 threads): CPU do processo
+178,8 s → **25,5 s** (195% → 28% de um núcleo), mesmos flips nos mesmos instantes, goldens iguais.
+A ideia de recuar quando o pushbuffer está quieto é do Amped 2 (`RECOMP_ACK_IDLE_US`, um `usleep`
+depois de 4000 voltas paradas); lá o flip retido e a thread do jogo continuam girando.
+
+**Modo paralelo (`RECOMP_KICK_AHEAD=1`, desligado por padrão; launcher: Gráficos → Desempenho):**
+medido com o portão: ~14 kicks por frame, e a thread do jogo dorme **3,8 ms por frame esperando o
+executor** terminar o trecho anterior — jogo e executor se revezam. Com a opção o portão só
+espera a cadência (flip retido / limitador), marca o kick como concedido e ele é respondido de
+dentro da caminhada (`xbox_Nv2aAckGranted`, a cada 64 palavras) ou do laço de ack, mesmo com flip
+retido. Lobby: espera pelo executor 3,8 → 0,0 ms por frame, 2 execuções com goldens iguais e a
+mesma cadência (600 holds / 10 s). O quanto o jogo se adianta passa a depender só do D3D dele
+(fence do swap, espera pelo `DMA_GET`), como no console. **Não validado além do lobby**: se um
+buffer dinâmico for reescrito antes de o executor ler, o sintoma seria geometria/textura piscando.
+
+Também neste patch: `getenv("RECOMP_PB_EXEC_VERBOSE")` era chamado a cada draw (2,6% da thread);
+`zbuf_clear` do rasterizador em CPU rodava a cada clear mesmo com back end de GPU (2%);
+`raster_xf_clipped` copiava os 3 vértices inteiros antes de saber se o triângulo precisava de
+recorte. Estatística: `xbox_Nv2aKickStats` (linha `[VK] jogo: ...` a cada 5 s).
+
+### 4.14 `src/video/fb_present_sdl.c` — janela para superfície Vulkan (2026-11-24, DW4R-2)
+
+`RECOMP_WINDOW_VULKAN=1` (default quando o renderizador é Vulkan, `recomp_manual.c`): a janela é
+criada com `SDL_WINDOW_VULKAN` e **sem** `SDL_Renderer`. O back end pede as extensões de instância
+e a superfície (`xbox_FramebufferWindowVkExtensions` / `VkSurface`), cria o swapchain e apresenta
+da thread do executor; a thread principal continua com eventos, título e forma da janela
+(`xbox_FramebufferWindowFrameShape`). Enquanto ninguém segura a superfície (`VkRelease`, ou o
+Vulkan não subiu) os frames chegam pelo caminho antigo e o laço cria o `SDL_Renderer` no primeiro
+frame (testado no gamescope com `DW4_VK_DEVICE=99`: cai no OpenGL e o log mostra
+`no Vulkan presenter: SDL renderer after all`; a imagem nesse caso não foi vista).
+Ao fechar com um swapchain vivo a janela é deixada para o `exit()`.
+
+### 4.15 `nv2a_backend.h`, `nv2a_pb_exec.c` — origem do recorte da superfície (2026-11-24, DW4R-2)
+
+`Nv2aSurface.clip_x` / `clip_y` (de `s_gpu.clip_x/y`, pixels reais). A interface só dava o
+tamanho do recorte; sem a origem o back end não tinha como cortar um sub-viewport (o minimapa das
+fases, `PORT_NOTES` §7.6).
+
 ## 5. Hooks (`src/hooks/`)
 
 | Arquivo | Função |
@@ -421,9 +484,53 @@ Segunda API gráfica, ao lado do OpenGL (que continua o padrão). O jogador esco
 - **Não verificado:** jogar com janela; AMD/Intel (lá o depth é `D32F+S8`, o que muda a
   resolução do z-bias); camadas de validação (`vulkan-validation-layers` não está instalado).
 
+### 7.5b Apresentação direta e quadros em voo no Vulkan (2026-11-24, DW4R-2)
+
+O "sem swapchain" acima deixou de ser verdade com janela. Dois modos (`[VK] apresentacao: ...`):
+
+- **direto** (com janela, padrão): swapchain na janela do toolkit (patch 4.14). No flip, um
+  `vkCmdBlitImage` leva a superfície exibida para a imagem do swapchain (escala e faixas pretas
+  na GPU; `NEAREST` em 480p original, `LINEAR` em resolução interna maior) e o envio **não
+  espera**: há dois conjuntos de frame (`FrameSet`: command buffers, anéis de vértices/UBO/staging,
+  descritores, semáforos) e o executor só espera se a GPU estiver um frame inteiro atrasada.
+  `frame_submit()` sem "async" continua esperando todos os conjuntos — é o ponto seguro para
+  destruir imagens. A memória do guest não recebe o frame (como já era em resolução interna).
+- **leitura** (sem janela, `DW4_VK_PRESENT=readback`, ou swapchain indisponível): o de antes.
+- `DW4_VK_PRESENT=async`: quadros em voo sem janela, para `soak.py --golden` exercitar o caminho.
+
+**Captura sob demanda** (`screenshot.c`): no modo direto o frame só é lido de volta quando alguém
+pede (`dw4_frame_wanted()`: captura do roteiro, `DW4_SHOT`, assinatura, F9, caixa-preta ligada).
+A **caixa-preta de quadros (§7.7) passou a ser opcional: `DW4_FRAME_RING=1`** — ligada, obriga a
+ler todo frame e monta uma linha de texto por lote.
+
+**Vsync:** `DW4_VSYNC=auto|on|off` (o launcher manda `RECOMP_PRESENT_VSYNC=0` com o vsync
+desligado). auto = `MAILBOX` se existir, senão `FIFO`; off = `IMMEDIATE`, senão `MAILBOX`.
+O jogo já é cadenciado pelo vblank emulado, então isto só decide o que fazer com um quadro fora
+de fase com o monitor.
+
+**Extensões:** só as de WSI (`VK_KHR_surface` + plataforma + `VK_KHR_swapchain`), e só para
+apresentar; sem elas vale o modo leitura, que segue Vulkan 1.0 puro. Escolha de placa: com
+janela, quem apresenta nela ganha de uma mais forte que não apresenta.
+
+**Medido** (lobby, 3840×2160 16:9, janela dentro de `gamescope --backend headless`, RTX 5070):
+
+| | fps | ms/frame no renderizador | CPU do processo |
+|---|---|---|---|
+| leitura (antes) | 49 | 15,9 (GPU 10,7 + cópia p/ janela 4,3) | 93% de um núcleo |
+| direto | 60 | 1,2 | 34% |
+
+**Verificado:** `soak.py --gamescope --golden` (janela + swapchain, 480p) e `--golden -e
+DW4_VK_PRESENT=async`; 4K 16:9 com `DW4_VK_SHOT_SWAP=1` (captura da própria imagem do swapchain:
+escala e forma corretas; a janela é redimensionada e o swapchain refeito). **Não verificado:**
+janela real no monitor, tela cheia, minimizar, trocar de monitor, AMD/Intel, X11 puro, recarga a
+quente no modo direto, e o OpenGL continua no caminho de leitura (não ganhou nada disto).
+
+Das referências: todos os ports Vulkan apresentam por swapchain; o nosso mantém o modo leitura
+como reserva e para os testes sem janela, e fica sem extensões fora do WSI.
+
 ### 7.6 Resolução interna e widescreen (2026-11-24) — `src/hooks/render_opts.h`
 
-`DW4_RES=<altura>` (480, 720, 1080, 1440, 2160) e `DW4_ASPECT=<L:A>` (16:9, 16:10, 21:9; 4:3 =
+`DW4_RES=<altura>` (480, 720, 1080, 1440, 2160) e `DW4_ASPECT=<L:A>` (16:9, 21:9; 16:10 deixou de ser oferecida em 2026-11-24; 4:3 =
 original); no launcher, Gráficos → Imagem. Vale para os **dois** renderizadores (o cabeçalho é
 comum). Desenho tirado do Amped 2 e dos dois SSX 3 (`docs/REFERENCIAS.md`), código nosso.
 
@@ -474,6 +581,77 @@ comum). Desenho tirado do Amped 2 e dos dois SSX 3 (`docs/REFERENCIAS.md`), cód
   seja, em 4K o gargalo é a leitura de volta, não o desenho: apresentar direto da GPU (swapchain
   Vulkan na janela, como os ports de referência) tiraria ~14 ms por quadro. É o próximo passo de
   desempenho para resoluções altas; nas áreas pesadas sobra ainda o custo de CPU do executor.
+- **Fade e escurecimento presos em 4:3 (2026-11-24, DW4R-2):** em widescreen, ao trocar de
+  cenário aparecia um "quadrado 4:3" escuro no meio com o cenário visível nas laterais, e o
+  escurecimento atrás de menus (ex.: portal do Commander Room) cobria só o meio.
+  - *Como foi achado:* cenário de teste com capturas a cada 20 flips entre o login e o lobby em
+    16:9 (reproduz sem janela), depois `DW4_FRAME_RING=1` + `ringdump` para listar os lotes do
+    quadro exato. Hipóteses descartadas pelo rastreio (`DW4_RO_TRACE=1`): quadro 2D quase de tela
+    inteira (existem — 29,6..611,4 de 640 com uv constante — e também foram tratados, mas não eram
+    o quadrado); foto do próprio quadro como textura (o quadro 640×480 com uv 0..640 é o **vídeo**
+    de abertura, textura 1024×512 em 0x81000000); malha 2D de quadradinhos (não existe).
+  - *Causa:* o fade é uma **malha 3D presa à câmera** (1086 vértices, rhw constante
+    0,00136..0,00138, blend 302/303, teste de z ligado), centrada na tela, com miolo escuro de
+    ±424 px — o tamanho exato para cobrir 4:3 — e moldura clara até ±516 px. Espremida em x como
+    o resto do 3D, o miolo virava o retângulo 4:3 e a moldura aparecia nas laterais.
+  - *Correção (`ro_squeeze`, agora chamada no **flush do lote**, nos dois renderizadores):* lote
+    em que todo vértice tem o mesmo rhw (±3%), caixa cobrindo a tela 4:3 inteira, centrada, e
+    área somada ≥ 90% da tela não é espremido. Vale também para malha 2D. Quadro 2D de altura
+    inteira, ≥ 70% da largura e uv constante é alargado até as bordas.
+  - *Efeito colateral aceito:* a tela de "Now Loading" (faixas de texto em lote que cobre a tela)
+    passou a ocupar a tela larga, esticada 1,33× em 16:9; antes ficava em 4:3 com faixas pretas.
+  - *Risco:* um chão visto exatamente de cima (rhw constante, cobrindo a tela) deixaria de ser
+    espremido e sairia esticado. Não visto.
+  - Verificado sem janela em 16:9 nos dois renderizadores (fade de saída do login e de entrada
+    no lobby); goldens 4:3 iguais. **Confirmado pelo usuário jogando (2026-11-24):** "melhorou
+    muito os efeitos".
+- **HUD ancorado nas bordas (2026-11-24, DW4R-2):** em tela larga o HUD (retrato, HP/MP, nível)
+  ficava em 4:3 no meio, com a faixa escura acabando antes das bordas. Rastreio
+  (`DW4_RO_TRACE=<flip>[,<flip>]` lista os lotes de um quadro): todo o 2D do jogo tem rhw = 1; o
+  HUD é uma **faixa** de 3 quadros (-18..659 × 393..485, encostada na borda de baixo) seguida dos
+  elementos do jogador; a caixa de diálogo é um painel -54..695 × 295..463 (não encosta na borda).
+  Regra em `ro_squeeze`: lote 2D da largura da tela, baixo (≤ 40% da altura) e encostado na borda
+  de cima ou de baixo = faixa, não é espremido; o lote 2D seguinte na altura da faixa e todo de
+  um lado da tela é ancorado na borda desse lado (escala em x em torno da borda). Diálogo e menus
+  continuam em 4:3. Verificado sem janela: Vulkan 16:9 e 21:9, OpenGL 16:10 (1 jogador, lobby).
+  **Menu rápido de itens (captura `f9-014` do usuário, 16:9):** o painel e os textos foram para o
+  canto, mas a barra de seleção (55..171 × 317..341, textura e blend próprios) ficou no meio —
+  ela está toda acima da faixa e o teste era pelo centro do lote. Agora cada lado tem uma zona
+  de altura que começa na faixa e **cresce com cada lote ancorado** (o painel, 317..440, é
+  desenhado antes da barra). Não reproduz sem janela (no lobby, com personagem novo, o menu não
+  abre): aguardando o usuário.
+  **Não verificado:** 2–4 jogadores (um lote que junte elementos dos dois lados fica no meio),
+  HUD de chefe / outros elementos de borda, fases.
+- **Minimapa das fases enorme — recorte do guest não era aplicado (2026-11-24, DW4R-2):** o
+  painel do mapa ocupava do meio da tela até além da borda direita. Não é do widescreen: vale em
+  qualquer proporção.
+  - *Como foi achado:* captura F9 do usuário no OpenGL (`build/shots/f9-011.txt`): os 70 draws do
+    mapa vêm com `clip=120x120` na superfície 640×480, e o conteúdo é desenhado 5× maior (painel
+    de 606×606 centrado em 588,134; salas até x = 721). A NV2A corta o que sai do recorte
+    (`SET_SURFACE_CLIP_*`); os dois renderizadores só usavam o tamanho do recorte, sem origem e
+    sem cortar.
+  - *Correção:* `Nv2aSurface` ganhou `clip_x`/`clip_y` (toolkit, patch 4.15); a chave do lote
+    guarda o recorte quando ele é menor que a superfície e o flush aplica scissor
+    (`vkCmdSetScissor` / `glScissor`; o clear não é afetado). `DW4_GL_MODULE_ABI` = 3.
+  - *Em tela larga* (`ro_clip_mode` / `ro_scissor` em `render_opts.h`): um recorte estreito é um
+    elemento só — vértices e retângulo passam pela mesma transformação em x; encostado na borda
+    lateral da tela 4:3 é ancorado na borda da tela larga (o minimapa vai para o canto), senão é
+    espremido em torno do centro. Recorte da largura inteira só corta na vertical.
+  - *Verificado sem janela:* goldens 4:3 iguais nos dois renderizadores (a seleção de Digimon usa
+    um recorte para o modelo 3D e o alvo de sombra usa 498×498 em 512×512); 16:9 sem regressão.
+    **Confirmado em 4:3 por captura F9 do usuário** (`build/shots/f9-012.bmp`): o minimapa
+    aparece como um quadrado de 120×120 em 468..588 × 36..156, no canto superior direito. Essa
+    posição mostrou que o limiar de "encostado na borda" (92%) não pegava o mapa; passou a 85%.
+    **Confirmado pelo usuário jogando (2026-11-24, OpenGL):** 4:3, 16:9 e 21:9 normais.
+    Depois também no Vulkan em 21:9.
+- **Menu do START quebrado em 21:9 — a regra da faixa do HUD pegava o menu (2026-11-24):**
+  captura `f9-015` do usuário: os painéis da esquerda arrancados para o canto, textos no meio,
+  barra de ajuda esticada. A barra de ajuda do menu é um lote 2D largo encostado embaixo
+  (-54..933 × 366..509 com o painel deslizante) e passava no critério genérico de "faixa";
+  a zona crescente então puxava os painéis. Correção: a faixa do HUD é reconhecida pela
+  **geometria exata** dela (-18..659 × 393..485, ±3). Reproduz sem janela (START no lobby);
+  verificado em 21:9 e 16:9: HUD ancorado e menu inteiro na coluna 4:3. Confirmado pelo usuário
+  jogando em 21:9.
 - **Limites conhecidos:** menus e vídeos ficam com faixas laterais; a sonda de pixel do F9 só
   funciona em 480 + 4:3; os frames de referência (`tests/golden`) só valem para 480 + 4:3.
 - **Verificado sem janela:** 1440 + 16:9 nos dois renderizadores (seleção de Digimon, login,
@@ -668,6 +846,19 @@ guest em `0x00277037`, depois `0x00000100` em `0x00270421`, depois ~180 alvos-li
 congelou. Não se sabe em que tela estava. Não reproduziu em 9 runs seguintes com roteiro fixo
 (incluindo 2 com 35 s de pausa nos menus). O log se perdeu (o soak ainda apagava runs antigos; não
 apaga mais). Se reaparecer: `scripts/triage.py` mostra o primeiro alvo e o ponto do roteiro.
+
+### 8.x Perfil de CPU sem `perf` (2026-11-24) — `src/hooks/prof.c`, `scripts/prof_report.py`
+
+`scripts/soak.py -e DW4_PROF=/tmp/p.txt -e DW4_PROF_FROM=3900` grava amostras (SIGPROF a 1000 Hz
+de CPU do processo, a partir do flip dado) e `scripts/prof_report.py /tmp/p.txt` mostra o consumo
+por thread e as funções mais amostradas (`sub_XXXXXXXX` = jogo). `soak.py` agora imprime o tempo
+de CPU de cada execução. `soak.py --gamescope [LxA]` roda com janela dentro de um gamescope sem
+tela (nada aparece no monitor) — o único jeito de exercitar o swapchain sem o usuário.
+
+Perfil do lobby depois da DW4R-2 (28% de um núcleo no total): executor ~68% (decodificação e
+transformação de vértices do toolkit: `draw_primitive`, `fetch_attr`, `backend_from_xf`,
+`raster_xf_clipped`; o renderizador Vulkan é ~6%), jogo ~25%, áudio ~5%. O próximo ganho de CPU
+está no executor do toolkit (cache de vértices pós-transformação, como SSX 3 / Amped 2 fizeram).
 
 ## 9. Pendências conhecidas
 

@@ -7,7 +7,10 @@ import QtQuick.Dialogs
 
 ApplicationWindow {
     id: win
-    width: 980; height: 620
+    // Abre alta o bastante para a pagina Graficos (a mais longa) caber quase
+    // inteira; o que nao couber rola, com a barra sempre a vista.
+    width: Math.min(1120, Screen.desktopAvailableWidth - 40)
+    height: Math.min(940, Screen.desktopAvailableHeight - 60)
     minimumWidth: 860; minimumHeight: 560
     visible: true
     title: "Digimon World 4 — Recomp"
@@ -231,7 +234,17 @@ ApplicationWindow {
         contentHeight: col.implicitHeight + 48
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        ColumnLayout { id: col; x: 28; y: 24; width: parent.width - 56; spacing: 16 }
+        id: page
+        // Barra de rolagem sempre visivel quando ha mais conteudo abaixo.
+        ScrollBar.vertical: ScrollBar {
+            id: vbar
+            policy: page.contentHeight > page.height + 1 ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+            width: 14
+            contentItem: Rectangle { implicitWidth: 8; radius: 4
+                                     color: vbar.pressed ? win.gold : (vbar.hovered ? win.accent : win.blue) }
+            background: Rectangle { color: "#40050d2a"; radius: 4 }
+        }
+        ColumnLayout { id: col; x: 28; y: 24; width: parent.width - 70; spacing: 16 }
     }
 
     RowLayout {
@@ -319,7 +332,7 @@ ApplicationWindow {
                 Card {
                     Info { k: t.gpu; v: app.gpu }
                     Info { k: t.version; v: app.version }
-                    Info { k: t.renderer; v: app.opt("renderer") === "cpu" ? t.r_cpu : (app.opt("renderer") === "vulkan" ? t.r_vk : t.r_gl); property var dep: app.gameDir }
+                    Info { k: t.renderer; v: app.opt("renderer") === "vulkan" ? t.r_vk : t.r_gl; property var dep: app.gameDir }
                 }
                 Card {
                     RowLayout {
@@ -345,8 +358,8 @@ ApplicationWindow {
                     Combo {
                         Layout.fillWidth: true
                         id: apiCombo
-                        readonly property var apis: ["vulkan", "opengl", "cpu"]
-                        model: [t.r_vk, t.r_gl, t.r_cpu]
+                        readonly property var apis: ["vulkan", "opengl"]
+                        model: [t.r_vk, t.r_gl]
                         currentIndex: Math.max(0, apis.indexOf(app.opt("renderer")))
                         onActivated: i => app.setOpt("renderer", apis[i])
                     }
@@ -355,10 +368,12 @@ ApplicationWindow {
                             wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Label { text: t.renderer_d; color: win.ink; font.pixelSize: 13; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Repeater {
-                        model: [t.api_vk, t.api_gl, t.api_cpu]
+                        model: [t.api_vk, t.api_gl]
                         RowLayout {
                             required property int index
                             required property string modelData
+                            // so a descricao da API escolhida: a pagina fica mais curta
+                            visible: apiCombo.currentIndex === index
                             Layout.fillWidth: true; spacing: 8
                             Label { text: "▸"; color: apiCombo.currentIndex === index ? win.gold : win.line
                                     font.pixelSize: 13; Layout.alignment: Qt.AlignTop }
@@ -367,12 +382,6 @@ ApplicationWindow {
                         }
                     }
                     Label { text: t.api_note; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                }
-                Card {
-                    heading: t.window
-                    Toggle { optKey: "fullscreen"; label: t.fullscreen; hint: t.fullscreen_d }
-                    Label { text: t.window_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                    Toggle { optKey: "vsync"; label: t.vsync; hint: t.vsync_d }
                 }
                 Card {
                     heading: t.image
@@ -384,7 +393,7 @@ ApplicationWindow {
                             Label { text: t.res_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                         }
                         Combo {
-                            implicitWidth: 170
+                            implicitWidth: 215
                             id: resCombo
                             Connections { target: win; function onDebugOpenComboChanged() { resCombo.popup.open(); resCombo.incrementCurrentIndex() } }
                             readonly property var heights: [480, 720, 1080, 1440, 2160]
@@ -401,9 +410,9 @@ ApplicationWindow {
                             Label { text: t.aspect_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                         }
                         Combo {
-                            implicitWidth: 170
-                            readonly property var ratios: ["4:3", "16:9", "16:10", "21:9"]
-                            model: [t.aspect_orig, "16:9", "16:10", "21:9"]
+                            implicitWidth: 215
+                            readonly property var ratios: ["4:3", "16:9", "21:9"]
+                            model: [t.aspect_orig, "16:9", "21:9"]
                             currentIndex: Math.max(0, ratios.indexOf(app.opt("aspect")))
                             onActivated: i => app.setOpt("aspect", ratios[i])
                         }
@@ -416,16 +425,23 @@ ApplicationWindow {
                             Label { text: t.fps_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                         }
                         Combo {
-                            implicitWidth: 170
+                            implicitWidth: 215
                             readonly property var rates: [30, 60]
                             model: [t.fps_30, t.fps_60]
                             currentIndex: Math.max(0, rates.indexOf(app.opt("fps")))
                             onActivated: i => app.setOpt("fps", rates[i])
                         }
                     }
-                    Label { visible: app.opt("renderer") === "cpu"; property var dep: app.gameDir
-                            text: t.image_cpu; color: "#ffb454"; font.pixelSize: 12
-                            wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                }
+                Card {
+                    heading: t.window
+                    Toggle { optKey: "fullscreen"; label: t.fullscreen; hint: t.fullscreen_d }
+                    Label { text: t.window_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Toggle { optKey: "vsync"; label: t.vsync; hint: t.vsync_d }
+                }
+                Card {
+                    heading: t.perf
+                    Toggle { optKey: "parallel"; label: t.parallel; hint: t.parallel_d }
                 }
             }
 
@@ -487,7 +503,15 @@ ApplicationWindow {
                 Card {
                     heading: t.known
                     Repeater {
-                        model: [t.known_1, t.known_2, t.known_3]
+                        model: [t.known_1, t.known_2, t.known_3, t.known_4]
+                        Label { required property string modelData
+                                text: "•  " + modelData; color: win.ink; font.pixelSize: 14; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    }
+                }
+                Card {
+                    heading: t.slow
+                    Repeater {
+                        model: [t.slow_1, t.slow_2, t.slow_3, t.slow_4, t.slow_5]
                         Label { required property string modelData
                                 text: "•  " + modelData; color: win.ink; font.pixelSize: 14; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     }

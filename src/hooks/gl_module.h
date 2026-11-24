@@ -18,7 +18,7 @@
 
 #include "nv2a_backend.h"
 
-#define DW4_GL_MODULE_ABI 2
+#define DW4_GL_MODULE_ABI 3
 
 typedef struct {
     int abi;

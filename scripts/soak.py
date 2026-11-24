@@ -7,6 +7,7 @@ Roda o jogo N vezes SEM JANELA com um cenario de entrada e classifica cada run.
     scripts/soak.py --scenario tests/scenarios/title.txt --timeout 60
     scripts/soak.py --golden                         # compara os shots com tests/golden
     scripts/soak.py --window                         # com janela (para assistir)
+    scripts/soak.py --gamescope --golden             # janela dentro de um gamescope sem tela
     scripts/soak.py --sw                             # rasterizador em CPU (lento)
     scripts/soak.py --opengl --golden                # renderizador OpenGL (o padrao e Vulkan)
     scripts/soak.py -e RECOMP_GUEST_LOCK=1           # variavel extra no ambiente
@@ -27,6 +28,7 @@ jeito. Mesma ideia de soak.py (BLiNX 2) e race_loop.sh (SSX 3), feito aqui.
 """
 import argparse
 import os
+import resource
 import subprocess
 import sys
 import time
@@ -43,6 +45,9 @@ def main():
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--timeout", type=int, default=240, help="segundos por run")
     ap.add_argument("--window", action="store_true", help="abre a janela do jogo")
+    ap.add_argument("--gamescope", metavar="LxA", nargs="?", const="1280x720",
+                    help="com janela, mas dentro de um gamescope sem tela (nada aparece no "
+                         "monitor): exercita o swapchain do Vulkan e o caminho da janela")
     ap.add_argument("--sw", action="store_true", help="DW4_SW_RENDER=1")
     ap.add_argument("--vulkan", action="store_true", help="DW4_RENDERER=vulkan (ja e o padrao)")
     ap.add_argument("--opengl", action="store_true", help="DW4_RENDERER=opengl")
@@ -78,7 +83,15 @@ def main():
             "RECOMP_SAVE_DIR": os.path.join(d, "save"),
             "DW4_GL_STATS": "1",
         })
-        if not args.window:
+        cmd = [os.path.join(ROOT, args.binary), os.path.join(ROOT, "game_data")]
+        if args.gamescope:
+            gw, _, gh = args.gamescope.partition("x")
+            # Sem DISPLAY/WAYLAND_DISPLAY o gamescope nao tem onde se aninhar.
+            env.pop("DISPLAY", None)
+            env.pop("WAYLAND_DISPLAY", None)
+            env.setdefault("SDL_AUDIODRIVER", "dummy")
+            cmd = ["gamescope", "--backend", "headless", "-W", gw, "-H", gh or "720", "--"] + cmd
+        elif not args.window:
             env["RECOMP_HEADLESS"] = "1"
             env.setdefault("SDL_AUDIODRIVER", "dummy")
         if args.sw:
@@ -92,11 +105,12 @@ def main():
             env[k] = v
 
         t0 = time.time()
+        ru0 = resource.getrusage(resource.RUSAGE_CHILDREN)
         timed_out = False
         with open(log, "wb") as f:
             # cwd proprio: o runtime grava xbox_kernel.log no diretorio corrente
-            p = subprocess.Popen([os.path.join(ROOT, args.binary), os.path.join(ROOT, "game_data")],
-                                 stdout=f, stderr=subprocess.STDOUT, env=env, cwd=d)
+            p = subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT, env=env, cwd=d,
+                                 start_new_session=bool(args.gamescope))
             try:
                 rc = p.wait(timeout=args.timeout)
             except subprocess.TimeoutExpired:
@@ -104,14 +118,21 @@ def main():
                 subprocess.run([os.path.join(ROOT, "scripts", "dump_threads.sh")],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 time.sleep(1.0)
-                p.kill()
+                if args.gamescope:
+                    os.killpg(p.pid, 9)
+                else:
+                    p.kill()
                 rc = p.wait()
         secs = time.time() - t0
+        ru1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+        cpu = (ru1.ru_utime + ru1.ru_stime) - (ru0.ru_utime + ru0.ru_stime)
 
         verdict, out = triage.triage(log)
         if timed_out and verdict not in ("CRASH", "STALL"):
             verdict = "STALL"
             out.insert(0, f"(estourou o tempo de {args.timeout} s)")
+        elif args.gamescope and verdict in ("OK", "AVISOS"):
+            pass        # o codigo de saida e do gamescope (ele cai ao fechar), nao do jogo
         elif rc < 0 and verdict != "CRASH":
             verdict = "CRASH"
             out.insert(0, f"(morreu pelo sinal {-rc})")
@@ -119,7 +140,8 @@ def main():
             verdict = "INCOMPLETO"
             out.insert(0, f"(saiu com codigo {rc})")
         results.append((i, verdict, secs, log))
-        print(f"run {i:02d}: {verdict:10s} {secs:6.1f} s  {os.path.relpath(log, ROOT)}", flush=True)
+        print(f"run {i:02d}: {verdict:10s} {secs:6.1f} s  CPU {cpu:6.1f} s ({100 * cpu / secs:3.0f}% de um nucleo)"
+              f"  {os.path.relpath(log, ROOT)}", flush=True)
         if args.verbose or verdict not in ("OK", "AVISOS"):
             print("    " + "\n    ".join(out))
 

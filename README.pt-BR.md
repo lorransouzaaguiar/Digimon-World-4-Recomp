@@ -3,7 +3,7 @@
 [English](README.md) · **Português (Brasil)**
 
 **Recompilação estática experimental de Digimon World 4 (Xbox original, 2005)** em um programa
-nativo x86-64 (Linux hoje; Windows e macOS estão planejados), feito com o [xboxrecomp](https://github.com/sp00nznet/xboxrecomp).
+nativo x86-64, feito com o [xboxrecomp](https://github.com/sp00nznet/xboxrecomp).
 O código do próprio jogo é traduzido para C uma vez e compilado nativamente; o runtime do
 xboxrecomp e o código deste projeto substituem o kernel, a GPU, o áudio e a entrada do Xbox.
 Não é um emulador.
@@ -12,11 +12,19 @@ Não é um emulador.
 > obtida legalmente, de Digimon World 4 para Xbox (NTSC-U). O código C é gerado na sua máquina a
 > partir do seu `default.xbe` e nunca é versionado.
 
+> **Por enquanto, só Linux.** Os ports para Windows e macOS ainda não foram começados. Os dois
+> estão planejados: o código que fala com o sistema vem sendo mantido separado para que eles
+> possam ser feitos, e o renderizador Vulkan foi escrito pensando neles.
+>
+> **Só o começo do jogo foi testado:** Terminal Area (o lobby), Central Area, Death Valley e Humid
+> Cave. Tudo o que vem depois — áreas seguintes, chefes, o final — nunca foi executado.
+
 ![Tela título](docs/title_screen.png)
 
 ## Estado
 
-Jogável do boot até a primeira fase na única máquina em que foi testado (veja
+Jogável do boot até as primeiras áreas — Terminal Area, Central Area, Death Valley e Humid Cave —
+na única máquina em que foi testado (veja
 [Máquina de teste e resultados](#máquina-de-teste-e-resultados)). Inicial e experimental: espere
 bugs.
 
@@ -27,14 +35,16 @@ bugs.
 | Boot, vídeos de abertura (CRI Sofdec), tela título | ✅ |
 | Menus, criação do Digimon, salvar e carregar | ✅ |
 | Renderizador OpenGL 3.3 com cache de texturas: 60 fps no lobby (o de CPU faz ~3 fps e fica como referência) | ✅ |
-| Renderizador Vulkan, o padrão; o OpenGL continua selecionável no launcher (Gráficos → API gráfica) e desenha a mesma imagem | ✅ novo |
+| Renderizador Vulkan, o padrão: apresenta direto pela placa de vídeo (swapchain), 4K a 60 fps; o OpenGL continua selecionável no launcher (Gráficos → API gráfica) e desenha a mesma imagem | ✅ |
+| Pouco uso de processador: cerca de um terço de um núcleo no lobby (eram cerca de dois núcleos) | ✅ novo |
 | Controle (padrão Xbox/XInput) e teclado | ✅ |
-| Lobby, tutorial e primeira fase jogáveis | ✅ |
-| Fases seguintes, chefes, o resto do jogo | ⬜ ainda não testado |
+| Terminal Area (lobby), tutorial, Central Area, Death Valley e Humid Cave jogáveis | ✅ |
+| Todas as áreas depois dessas, chefes, o resto do jogo | ⬜ nunca executado |
 | Multijogador (2 a 4 jogadores) | ⬜ ainda não testado |
-| Resolução interna até 4K e widescreen (16:9, 16:10, 21:9: cenário mais largo, HUD e menus ficam em 4:3), no launcher | ✅ novo, conferido até o lobby |
+| Resolução interna até 4K e widescreen (16:9, 21:9): cenário mais largo, painel do jogador e minimapa nos cantos da tela, menus e diálogos em 4:3 | ✅ jogado nas primeiras fases |
 | Launcher com visual inspirado nos menus do jogo; limite de quadros (30 por padrão, a velocidade do console; em 60 fica mais fluido, mas o jogo roda no dobro da velocidade) | ✅ novo |
 | Remapear teclas | ⬜ não implementado |
+| Linux | ✅ o único sistema suportado hoje |
 | Windows e macOS | ⬜ planejado, não iniciado |
 | Steam Deck | ⬜ não testado |
 
@@ -52,43 +62,49 @@ Tudo o que está neste README foi testado em **um** computador. Nenhum outro foi
 | Sistema | CachyOS Linux (base Arch), kernel 7.3 |
 
 Quadros por segundo, com o limitador desligado (o jogo então roda a até 60 fps, o dobro da
-velocidade do console):
+velocidade do console), em Vulkan:
 
 | Onde | Resultado |
 |---|---|
-| Menus, criação do Digimon, lobby | 60 fps, em 480p e em 2560×1440 16:9, em Vulkan e em OpenGL |
-| Central Area (o lugar mais pesado testado, 32 a 38 mil draws por quadro) | 34 a 50 fps em 2560×1440 16:9 |
+| Menus, criação do Digimon, lobby | 60 fps de 480p a 3840×2160 |
+| Central Area e primeiras fases (os lugares mais pesados testados) | 60 fps em 2560×1440 e em 3840×2160, jogando; essas áreas rodavam a 34–50 fps antes do trabalho de desempenho |
 | Renderizador de referência em CPU | cerca de 3 fps |
 
-Na única sessão jogada até agora com o limite padrão de 30 fps, o jogo manteve 30.
+Uso de processador no mesmo percurso de 92 segundos (dos menus ao lobby, Vulkan, uma execução de
+cada):
 
-Custo das duas APIs gráficas no mesmo percurso de 92 segundos (dos menus ao lobby, sem janela, uma
-execução de cada):
-
-| | Processador | Placa de vídeo |
+| | Antes | Agora |
 |---|---|---|
-| Vulkan, 480p 4:3 | 195% de um núcleo | 5% |
-| OpenGL, 480p 4:3 | 200% de um núcleo | 5% |
-| Vulkan, 2560×1440 16:9 | 182% de um núcleo | 18% |
-| OpenGL, 2560×1440 16:9 | 199% de um núcleo | 18% |
+| 480p 4:3, sem janela | 195% de um núcleo | 28% de um núcleo |
+| 3840×2160 16:9, com janela | 93% de um núcleo, 49 fps | 34% de um núcleo, 60 fps |
 
-O que limita o jogo é o processador, não a placa de vídeo: cerca de dois núcleos ficam ocupados
-com qualquer das duas APIs, e a placa fica quase ociosa mesmo em 1440p.
+Duas coisas mudaram. A thread do jogo e a da GPU emulada ficavam girando à espera do retraço
+vertical; agora dormem. E, com Vulkan, o quadro pronto vai direto da placa de vídeo para a janela,
+em vez de ser copiado de volta pela memória. O OpenGL continua copiando cada quadro, por isso é
+mais lento de 1440p para cima.
+
+Um modo opcional (launcher → Gráficos → Desempenho, desligado por padrão) roda a lógica do jogo e
+o desenho em dois núcleos ao mesmo tempo, em vez de se revezarem. Na máquina de teste não faz
+diferença visível, porque o jogo já segura 60 fps; ele existe para processadores mais fracos e
+ainda não foi experimentado em um.
 
 Verificações automáticas (sem janela, entrada por roteiro): o percurso do boot ao lobby confere
-com os quadros de referência nos dois renderizadores; plugar e desplugar um controle virtual 400
+com os quadros de referência nos dois renderizadores; o mesmo percurso passa com janela e o
+swapchain do Vulkan dentro de um compositor sem tela; plugar e desplugar um controle virtual 400
 vezes enquanto o jogo o lê passa.
 
 ### Problemas conhecidos
 
-- Pular o vídeo de abertura com START às vezes fecha o jogo (cerca de 1 em cada 4 execuções nos
-  testes automáticos). Abra de novo; deixar o vídeo tocar evita o problema.
+- Pular o vídeo de abertura com START pode fechar o jogo. Nos testes automáticos sem janela
+  aconteceu em 2 de 16 execuções; jogando com janela não foi visto. Abra o jogo de novo.
 - A geração automática de coordenadas de textura (reflexos, brilhos) não está implementada; alguns
   objetos podem aparecer chapados.
 - O chão às vezes escurece por uma fração de segundo em algumas áreas (Central Area, cavernas),
-  nos dois renderizadores. É cosmético; a causa ainda não foi encontrada.
+  nos dois renderizadores, menos com OpenGL. É cosmético; a causa ainda não foi encontrada.
 - A 60 fps o jogo roda duas vezes mais rápido que no console, porque a lógica dele avança por
   quadro. O padrão é 30.
+- Em widescreen a tela de loading fica esticada na largura toda, e o painel do jogador só foi
+  conferido com um jogador.
 - Testado em uma única máquina (acima). Outras GPUs, drivers e distribuições não foram testados;
   placas AMD e Intel nunca foram experimentadas.
 
@@ -121,15 +137,17 @@ uma versão nova não mexe neles.
 ./launcher.sh --play     # inicia o jogo direto, com as opções salvas
 ```
 
-![Launcher](docs/launcher.png)
+![Launcher, tela Jogar](docs/launcher.pt-BR.png)
+
+![Launcher, tela Gráficos](docs/launcher_graphics.pt-BR.png)
 
 | Tela | O que faz |
 |---|---|
 | Jogar | arquivos do jogo: escolha a imagem do disco (`.iso`) ou uma pasta; placa de vídeo detectada, versão, botão Jogar |
-| Gráficos | tela cheia, tamanho da janela (1× a 4× de 640×480), sincronização vertical, renderizador GPU ou CPU |
+| Gráficos | API gráfica (Vulkan ou OpenGL); resolução interna (480p a 4K), proporção (4:3, 16:9, 21:9) e limite de quadros (30 ou 60); tela cheia e sincronização vertical; o modo paralelo experimental |
 | Controles | teclado como controle 1 ligado/desligado, tabela de teclas |
 | Saves e dados | pasta dos saves, lista de saves, backup, exportar e importar `.zip` (os saves atuais são guardados antes) |
-| Suporte | problemas conhecidos, pasta de logs, relatório de problema sem o nome da sua pasta pessoal |
+| Suporte | problemas conhecidos, o que tentar se o jogo estiver lento, pasta de logs, relatório de problema (sistema, processador, placa de vídeo, opções, resumo dos quadros por segundo) sem o nome da sua pasta pessoal |
 
 A interface é em português (Brasil) ou inglês, conforme o idioma do sistema; dá para trocar na
 barra lateral. Toda execução pelo launcher é gravada em `logs/` (ficam as 10 últimas). As opções
@@ -219,12 +237,16 @@ Rode guardando o log e anexe o arquivo:
 - **Travamento:** espere uns dez segundos antes de fechar; depois de 5 s sem quadro novo o log
   registra onde cada thread parou (`[STALL]`).
 - **Defeito de imagem:** aperte **F9** com o defeito na tela (builds a partir do código). Ele grava
-  uma captura e a lista de todos os draws em `build/shots/`.
+  uma captura em `build/shots/`; com o renderizador OpenGL grava também a lista de todos os draws,
+  que é o que permite achar a maioria dos defeitos de imagem.
+- **Lentidão:** o relatório do launcher traz um resumo dos quadros por segundo da sessão.
 
 `DW4_RES=1440 DW4_ASPECT=16:9 ./run.sh` define a resolução interna (altura da imagem) e a proporção
-sem o launcher. `DW4_RENDERER=opengl ./run.sh` (ou `vulkan`, o padrão) escolhe a API gráfica; se a
-pedida não estiver disponível o jogo cai na outra. `DW4_SW_RENDER=1 ./run.sh` usa o renderizador de
-referência em CPU, para separar bug do renderizador de bug do jogo.
+(`16:9` ou `21:9`) sem o launcher. `DW4_RENDERER=opengl ./run.sh` (ou `vulkan`, o padrão) escolhe a
+API gráfica; se a pedida não estiver disponível o jogo cai na outra. `DW4_SW_RENDER=1 ./run.sh` usa
+o renderizador de referência em CPU, para separar bug do renderizador de bug do jogo.
+`RECOMP_KICK_AHEAD=1` liga o modo paralelo; `DW4_VSYNC=on|off` escolhe o modo de apresentação no
+Vulkan.
 
 ## Para quem desenvolve
 
@@ -233,8 +255,12 @@ referência em CPU, para separar bug do renderizador de bug do jogo.
 - [docs/REFERENCIAS.md](docs/REFERENCIAS.md): o que outros ports com o mesmo toolkit fazem.
 - `scripts/soak.py` roda o jogo sem janela a partir de um roteiro de entrada e classifica o
   resultado; `scripts/golden.py` compara quadros com referências; `scripts/triage.py` resume um log.
-- O renderizador (`src/hooks/nv2a_gl_backend.c`) recarrega a quente: rode
-  `cmake --build build --target dw4_gl` com o jogo aberto.
+- `scripts/soak.py --gamescope` roda o mesmo cenário com janela dentro de um gamescope sem tela
+  (nada aparece no monitor), o que exercita o swapchain do Vulkan.
+- Perfil de CPU sem `perf`: `scripts/soak.py -e DW4_PROF=/tmp/p.txt -e DW4_PROF_FROM=3900` e depois
+  `scripts/prof_report.py /tmp/p.txt`.
+- Os renderizadores (`src/hooks/nv2a_vk_backend.c`, `nv2a_gl_backend.c`) recarregam a quente: rode
+  `cmake --build build --target dw4_vk` (ou `dw4_gl`) com o jogo aberto.
 - As mudanças no toolkit ficam em `patches/xboxrecomp-dw4.patch` e são aplicadas por
   `scripts/setup.sh`.
 
@@ -269,5 +295,10 @@ cobre.
 
 ## Licença
 
-A definir antes de o projeto se tornar público. O toolkit xboxrecomp é MIT, com partes LGPL-2.1
-derivadas do xemu.
+O código deste projeto está sob a [licença MIT](LICENSE). Ela cobre o que está neste repositório:
+o host, os renderizadores, o launcher, os scripts e os patches.
+
+Ela não cobre o jogo. Digimon World 4, seu código, dados, nomes e artes pertencem aos seus
+detentores; nada disso está neste repositório, e o C gerado a partir do seu `default.xbe` é para
+ficar na sua máquina, não para redistribuir. O toolkit xboxrecomp (um submódulo) é MIT, com partes
+sob LGPL-2.1 derivadas do xemu; veja `LICENSE`, `NOTICE` e `LICENSES/` dele.

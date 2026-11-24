@@ -19,10 +19,19 @@ caminho para as três plataformas (macOS via MoltenVK).
 - **Vulkan (branch `DW4R-1`):** `src/hooks/nv2a_vk_backend.c` passa nos mesmos frames de
   referência do OpenGL sem janela, até o lobby, a 60 fps, e o usuário jogou com janela em
   2026-11-24 sem problemas. Não testado fora de NVIDIA — veja `STATUS.md` antes de afirmar mais que isso.
-- **Aberto:** crash intermitente ao pular o vídeo de abertura com START (assinatura no
-  `STATUS.md`); texgen não implementado; resolução interna e widescreen (`src/hooks/render_opts.h`) ainda não
-  foram jogados com janela; licença do
-  projeto ainda não escolhida.
+- **Desempenho (branch `DW4R-2`, 2026-11-24):** esperas ocupadas removidas (195% → 28% de um
+  núcleo no lobby); Vulkan apresenta por swapchain com quadros em voo quando há janela (modo
+  leitura sem janela); modo paralelo jogo/executor opcional (`RECOMP_KICK_AHEAD=1`). Confirmado
+  pelo usuário jogando em 4K e 1440p a 60 fps nas áreas pesadas (RTX 5070); não testado em
+  outras placas nem em máquinas fracas.
+- **Widescreen (DW4R-2):** só 16:9 e 21:9 (16:10 retirada). Fade, HUD e minimapa tratados em
+  `src/hooks/render_opts.h` (`ro_squeeze`, chamada no flush do lote); recorte do guest (scissor)
+  nos dois renderizadores. Detalhes e casos em `PORT_NOTES.md` §7.6.
+- **Aberto:** crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
+  assinatura no `STATUS.md`); texgen não implementado; o chão que escurece por alguns quadros;
+  HUD em widescreen só conferido com 1 jogador.
+- **Licença: MIT** (`LICENSE`, escolhida em 2026-11-24). Testado só no começo do jogo: Terminal
+  Area, Central Area, Death Valley e Humid Cave.
 
 ## Onde ler antes de mexer
 
@@ -51,7 +60,7 @@ empacotamento, port para outro sistema, ferramenta de teste), veja como eles res
    desenho deles (`docs/vulkan-backend.md`, `docs/VULKAN.html`, READMEs, `PROGRESS.md`).
 2. Falta um clone ou está velho? `git clone --depth 1 <url> refs/<dono>_<repo>` (ignorado pelo git).
 3. **Licença:** Amped 2 e os dois SSX 3 são **GPL-3** — aproveite ideias, formatos e correções
-   reescritas, **nunca copie código** (a licença deste projeto ainda não foi escolhida). Def Jam,
+   reescritas, **nunca copie código** (este projeto é MIT, incompatível com receber código GPL). Def Jam,
    BLiNX 2 e o toolkit são MIT.
 4. Ao terminar, diga ao usuário o que veio das referências e onde o nosso desenho difere e por
    quê; o que aprender de novo sobre eles vai para `docs/REFERENCIAS.md`.
@@ -67,11 +76,12 @@ src/hooks/                    todo o código próprio do runtime
   nv2a_vk_backend.c           renderizador Vulkan  -> build/libdw4_vk.so (recarrega a quente)
   shaders/                    GLSL do Vulkan (glslc -> SPIR-V embutido); porte do shader do OpenGL
   gl_module.h                 interface comum aos dois renderizadores (ABI)
-  render_opts.h               resolução interna e proporção, comum aos dois (DW4_RES, DW4_ASPECT)
+  render_opts.h               resolução interna, proporção e regras de widescreen (fade, HUD, minimapa), comum aos dois
   widescreen.c                alarga o culling do jogo em widescreen (gancho sub_000BC050_enter)
   gl_host.c                   escolhe a API (DW4_RENDERER), contexto EGL, carga/recarga (no executável)
   recomp_manual.c             defaults de ambiente (RECOMP_*), overrides, init dos hooks
   d3d_fence.c  input_script.c  screenshot.c  stall_watch.c
+  prof.c                      amostrador de CPU (DW4_PROF; relatorio: scripts/prof_report.py)
 src/recompiled/               C GERADO do default.xbe (ignorado; scripts/regen.sh)
 launcher/                     launcher Qt Quick: dw4_launcher.py, qml/Main.qml, xiso.py
 packaging/                    AppRun, .desktop, ícone, README do pacote
@@ -95,10 +105,13 @@ scripts/soak.py --opengl --golden                # o mesmo com o renderizador Op
 DW4_RENDERER=opengl ./run.sh                     # escolhe a API sem o launcher: vulkan | opengl | cpu
 DW4_RES=1440 DW4_ASPECT=16:9 ./run.sh            # resolução interna e proporção (vale em soak.py com -e)
 scripts/soak.py --scenario <arquivo> --runs N    # outro roteiro / repetir
+scripts/soak.py --gamescope --golden             # com janela dentro de um gamescope sem tela (swapchain)
+scripts/soak.py -e DW4_PROF=/tmp/p.txt -e DW4_PROF_FROM=3900 && scripts/prof_report.py /tmp/p.txt   # perfil de CPU
 scripts/triage.py <log>                          # resumo e veredito de um log
 scripts/regen.sh                                 # regenera src/recompiled/ (após mudar sementes)
 scripts/test_pad.sh                              # plugar/desplugar controle virtual (sem jogo, ~5 s)
 ./launcher.sh --selftest                         # launcher fora da tela
+./launcher.sh --screenshot 1 docs/launcher_graphics.png --lang en --size 1120x1000 --defaults   # imagens dos READMEs
 scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
 ```
 
@@ -120,7 +133,8 @@ scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
    de imagem (estado, shader, textura) feita em um tem de ser repetida no outro e testada com
    `soak.py --golden` **e** `soak.py --opengl --golden`. O Vulkan é o padrão (jogado pelo usuário
    em 2026-11-24); o de CPU (`DW4_SW_RENDER=1`) segue como árbitro.
-   O Vulkan fica no 1.0 sem extensões (MoltenVK, drivers antigos).
+   O Vulkan fica no 1.0 sem extensões (MoltenVK, drivers antigos); a única exceção são as de
+   janela (WSI/swapchain), opcionais: sem elas ele apresenta por leitura de volta.
 4. **Código próprio em `src/hooks/`.** Não edite `src/recompiled/` à mão (é regenerado): corrija
    com override em `recomp_manual.c`, semente em `config/` ou patch no toolkit. Gancho de entrada
    (`void sub_XXXXXXXX_enter(void)` em `recomp_manual.c`) só vale depois de

@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include "xbox_memory_layout.h"
 #include "dw4_hooks.h"
 
 void dw4_fps_limit_tick(void)
@@ -49,7 +50,31 @@ void dw4_fps_limit_tick(void)
     clock_gettime(CLOCK_MONOTONIC, &now);
     if (next.tv_sec && (now.tv_sec < next.tv_sec
             || (now.tv_sec == next.tv_sec && now.tv_nsec < next.tv_nsec))) {
-        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL);
+        /* Enquanto esta thread dorme ninguem responde ao kick do D3D: o
+         * jogo espera dormindo tambem (xbox_Nv2aKickGate), nao girando. */
+        xbox_Nv2aHostStall(1);
+        for (;;) {
+            /* Em fatias de 0,5 ms: um kick que passou pelo portao logo antes
+             * (RECOMP_KICK_AHEAD) e respondido daqui, e o jogo nao fica
+             * girando a espera durante o sono todo. */
+            struct timespec slice = now;
+
+            slice.tv_nsec += 500000L;
+            if (slice.tv_nsec >= 1000000000L) {
+                slice.tv_nsec -= 1000000000L;
+                slice.tv_sec++;
+            }
+            if (slice.tv_sec > next.tv_sec
+                    || (slice.tv_sec == next.tv_sec && slice.tv_nsec >= next.tv_nsec))
+                slice = next;
+            clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &slice, NULL);
+            xbox_Nv2aAckGranted();
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            if (now.tv_sec > next.tv_sec
+                    || (now.tv_sec == next.tv_sec && now.tv_nsec >= next.tv_nsec))
+                break;
+        }
+        xbox_Nv2aHostStall(0);
     } else {
         next = now;                     /* atrasado: recomeca daqui, sem compensar */
     }

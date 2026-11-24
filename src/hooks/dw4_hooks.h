@@ -45,10 +45,20 @@ void dw4_frame_tag(const char *tag);
 void dw4_frame_ring_dump(void);
 /* Uma linha de texto por lote do quadro corrente; sai em lotes.txt na gravacao. */
 void dw4_frame_detail(const char *line);
+/* 1 com DW4_FRAME_RING=1 (desligada por padrao): so entao vale montar as
+ * linhas de dw4_frame_detail. */
+int dw4_frame_ring_on(void);
+/* Captura sob demanda (renderizador que apresenta direto pela GPU): ele liga
+ * com dw4_frame_on_demand(1) e pergunta a cada quadro se alguem quer pixels;
+ * se sim, entrega aquele quadro por dw4_frame_note_host. */
+void dw4_frame_on_demand(int on);
+int dw4_frame_wanted(void);
 uint64_t dw4_frame_count(void);
 /* Grade 16x12 de luminancia media do frame exibido; 0 se ainda nao ha frame. */
 int dw4_frame_signature(uint8_t sig[DW4_SIG_CELLS]);
 int dw4_screenshot_save(const char *path);
+/* O mesmo sem esperar um quadro novo (para a thread do renderizador). */
+int dw4_screenshot_save_now(const char *path);
 
 /* widescreen.c: fator (<= 1) aplicado ao x dos cantos no teste de descarte de
  * objetos do jogo; 1 fora do widescreen. Usado por sub_000BC050_enter. */
@@ -63,6 +73,10 @@ void dw4_input_script_init(void);
 /* stall_watch.c: DW4_STALL_MS sem flip -> despeja todas as threads no log. */
 void dw4_stall_watch_init(void);
 void dw4_dump_all_threads(void);
+
+/* prof.c: amostrador de CPU (DW4_PROF=<arquivo>); dump ao sair. */
+void dw4_prof_init(void);
+void dw4_prof_dump(void);
 
 /* nv2a_gl_backend.c: back end OpenGL 3.3 do executor NV2A (DW4_SW_RENDER=1 desliga). */
 void dw4_gl_backend_init(void);

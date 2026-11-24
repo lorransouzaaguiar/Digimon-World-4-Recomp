@@ -60,11 +60,54 @@ static pthread_mutex_t s_host_lock = PTHREAD_MUTEX_INITIALIZER;
 static const uint8_t *s_host_px;
 static uint32_t s_host_w, s_host_h, s_host_pitch;
 
+/* Captura sob demanda: um renderizador que apresenta direto pela GPU (o
+ * swapchain do Vulkan) nao traz o quadro para a memoria a cada flip -- era o
+ * custo mais alto dele em resolucao alta. Ele avisa com dw4_frame_on_demand(1)
+ * e, a cada quadro, pergunta dw4_frame_wanted(): se alguem quer pixels (uma
+ * captura, a assinatura do roteiro, a caixa-preta), le aquele quadro e o
+ * entrega por dw4_frame_note_host. Quem consome pede e espera o proximo. */
+static volatile int s_on_demand;
+static volatile int s_want;             /* quadros ainda a entregar */
+static volatile uint64_t s_host_seq;    /* entregas de dw4_frame_note_host */
+static int s_ring_on = -1;
+
+void dw4_frame_on_demand(int on)
+{
+    s_on_demand = on;
+}
+
+int dw4_frame_wanted(void)
+{
+    if (s_ring_on > 0)
+        return 1;
+    if (s_want > 0) {
+        __atomic_sub_fetch(&s_want, 1, __ATOMIC_RELAXED);
+        return 1;
+    }
+    return 0;
+}
+
+/* Antes de ler o frame: garante um quadro recente (no maximo ~0,3 s de
+ * espera; com o jogo parado fica o ultimo que foi entregue). */
+static void want_fresh_frame(void)
+{
+    uint64_t seq = s_host_seq;
+    struct timespec ts = { 0, 2000000 };
+
+    if (!s_on_demand)
+        return;
+    __atomic_store_n(&s_want, 2, __ATOMIC_RELAXED);
+    for (int i = 0; i < 150 && s_host_seq == seq; i++)
+        nanosleep(&ts, NULL);
+}
+
 void dw4_frame_note_host(const uint8_t *bgra, uint32_t w, uint32_t h, uint32_t pitch)
 {
     pthread_mutex_lock(&s_host_lock);
     s_host_px = (bgra && w && h) ? bgra : NULL;
     s_host_w = w; s_host_h = h; s_host_pitch = pitch;
+    if (s_host_px)
+        s_host_seq++;
     pthread_mutex_unlock(&s_host_lock);
 }
 
@@ -107,6 +150,7 @@ int dw4_frame_signature(uint8_t sig[DW4_SIG_CELLS])
     uint32_t pitch = 0, fw = 0, fh = 0, cw, ch;
     const uint8_t *fb;
 
+    want_fresh_frame();
     pthread_mutex_lock(&s_host_lock);
     fb = frame_ptr(&pitch, &fw, &fh);
     cw = fw / DW4_SIG_W; ch = fh / DW4_SIG_H;
@@ -134,6 +178,13 @@ int dw4_frame_signature(uint8_t sig[DW4_SIG_CELLS])
 }
 
 int dw4_screenshot_save(const char *path)
+{
+    want_fresh_frame();
+    return dw4_screenshot_save_now(path);
+}
+
+/* Sem esperar por um quadro novo: para a propria thread do renderizador. */
+int dw4_screenshot_save_now(const char *path)
 {
     uint32_t pitch = 0, row, filesz, w = 0, h = 0;
     const uint8_t *fb;
@@ -214,7 +265,7 @@ typedef struct {
 static RingFrame s_ring[RING_N];
 static unsigned s_ring_head;            /* proximo a escrever */
 static unsigned s_ring_count;
-static int s_ring_on = -1, s_ring_busy;
+static int s_ring_busy;
 static int s_flash_left = 12, s_flash_wait = -1, s_flash_slot = -1;
 static int s_flash_cells = 14, s_flash_thr = 18;   /* DW4_FLASH_CELLS / DW4_FLASH_THR */
 static char s_next_tag[320];
@@ -360,6 +411,14 @@ void dw4_frame_ring_dump(void)
 {
     if (s_ring_on > 0)
         ring_dump_start(-1);
+    else
+        fprintf(stderr, "[FLASH] a caixa-preta de quadros esta desligada "
+                        "(ligue com DW4_FRAME_RING=1)\n");
+}
+
+int dw4_frame_ring_on(void)
+{
+    return s_ring_on > 0;
 }
 
 /* A cada flip, na thread do executor. */
@@ -371,7 +430,12 @@ static void ring_push(void)
 
     if (s_ring_on < 0) {
         const char *e = getenv("DW4_FRAME_RING"), *m = getenv("DW4_FLASH_MAX");
-        s_ring_on = !(e && e[0] == '0');
+        /* Desligada por padrao desde a DW4R-2: custa uma copia reduzida de
+         * cada quadro e uma linha de texto por lote, e obriga o renderizador
+         * a trazer todo quadro da GPU. E ferramenta de investigacao. */
+        s_ring_on = e && e[0] && e[0] != '0';
+        if (s_ring_on)
+            fprintf(stderr, "[FLASH] caixa-preta de quadros ligada (DW4_FRAME_RING)\n");
         if (m)
             s_flash_left = atoi(m);
         if (getenv("DW4_FLASH_CELLS"))
