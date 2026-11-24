@@ -229,6 +229,18 @@ em `PORT_NOTES.md` §7.0. Validado sem janela (2 reloads durante o cenário do l
 `docs/REFERENCIAS.md` (2026-11-23): comparação dos 5 clones em `refs/`, o que têm em comum para
 jogar e para desenvolver, correções de runtime candidatas a portar e a discussão OpenGL × Vulkan.
 
+## Direção: Vulkan e três plataformas (decidido em 2026-11-24)
+
+- Alvo do projeto: **Linux, macOS e Windows**. Hoje só Linux funciona.
+- **Back end Vulkan em desenvolvimento** (`src/hooks/nv2a_vk_backend.c`, `src/hooks/shaders/`,
+  `third_party/Vulkan-Headers`); o OpenGL 3.3 segue como padrão e referência até o Vulkan passar
+  nos mesmos frames de referência.
+- Só Linux hoje, a portar: `CMakeLists.txt` (recusa Windows/macOS), `src/main.c` (sinais POSIX,
+  falha de MMIO), `gl_host.c` (EGL, `dlopen`), `stall_watch.c` (`/proc`), empacotamento
+  (AppImage), pasta de dados XDG do launcher. macOS em Apple Silicon precisa ainda de um decodificador
+  de falhas de MMIO para aarch64 (o nosso é x86-64); BLiNX 2 e Def Jam já rodam em macOS com o
+  mesmo toolkit (`docs/REFERENCIAS.md`).
+
 ## Próximos passos
 
 1. Lobby a 60 fps estáveis: agrupar draws com o mesmo estado e evitar um `glBufferData` por draw.
