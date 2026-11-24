@@ -50,6 +50,7 @@
 #include "xbox_memory_layout.h"
 #include "dw4_hooks.h"
 #include "gl_module.h"
+#include "render_opts.h"
 
 #define CONTIG_BASE 0x80000000u
 #define CONTIG_SIZE (64u * 1024u * 1024u)
@@ -343,7 +344,9 @@ static int s_dbg;   /* DW4_GL_DBG: 1 sem alpha test, 2 sem blend, 4 sem depth, 8
 /* ── Superficies ───────────────────────────────────────────────────────────── */
 
 typedef struct {
-    uint32_t va, w, h, pitch, bpp, clip_h;
+    uint32_t va, w, h, pitch, bpp, clip_h;  /* do guest */
+    uint32_t pw, ph;                    /* imagem da GPU (render_opts.h) */
+    int wide;                           /* superficie de tela alargada */
     GLuint fbo, color;
     uint32_t zeta_va;                   /* depth anexado no momento */
 } Surface;
@@ -407,9 +410,14 @@ static Surface *surface_get(const Nv2aSurface *s)
     }
     if (!e->fbo) {
         e->va = s->color_va; e->w = w; e->h = h; e->zeta_va = ~0u;
+        e->wide = ro_is_screen(w, h);
+        ro_extent(w, h, e->wide, &e->pw, &e->ph);
+        if (ro_enhanced())
+            fprintf(stderr, "[GL] superficie %08X %ux%u (clip %ux%u) -> imagem %ux%u%s\n",
+                    e->va, w, h, s->width, s->height, e->pw, e->ph, e->wide ? " (tela)" : "");
         glGenTextures(1, &e->color);
         glBindTexture(GL_TEXTURE_2D, e->color);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei)w, (GLsizei)h, 0,
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei)e->pw, (GLsizei)e->ph, 0,
                      GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -434,8 +442,8 @@ static void surface_bind(Surface *e, uint32_t zeta_va)
         if (zeta_va) {
             Zeta *z = NULL;
             for (int i = 0; i < s_nzeta; i++)
-                if (s_zeta[i].va == zeta_va && s_zeta[i].w == e->w
-                        && s_zeta[i].h == e->h) { z = &s_zeta[i]; break; }
+                if (s_zeta[i].va == zeta_va && s_zeta[i].w == e->pw
+                        && s_zeta[i].h == e->ph) { z = &s_zeta[i]; break; }
             if (!z) {
                 if (s_nzeta == MAX_SURF) {
                     glDeleteRenderbuffers(1, &s_zeta[0].rb);
@@ -443,11 +451,11 @@ static void surface_bind(Surface *e, uint32_t zeta_va)
                 } else {
                     z = &s_zeta[s_nzeta++];
                 }
-                z->va = zeta_va; z->w = e->w; z->h = e->h;
+                z->va = zeta_va; z->w = e->pw; z->h = e->ph;
                 glGenRenderbuffers(1, &z->rb);
                 glBindRenderbuffer(GL_RENDERBUFFER, z->rb);
                 glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8,
-                                      (GLsizei)e->w, (GLsizei)e->h);
+                                      (GLsizei)e->pw, (GLsizei)e->ph);
             }
             rb = z->rb;
         }
@@ -455,12 +463,14 @@ static void surface_bind(Surface *e, uint32_t zeta_va)
                                   GL_RENDERBUFFER, rb);
         e->zeta_va = zeta_va;
     }
-    glViewport(0, 0, (GLsizei)e->w, (GLsizei)e->h);
+    glViewport(0, 0, (GLsizei)e->pw, (GLsizei)e->ph);
 }
 
 static void note_shown(Surface *e)
 {
-    if (!s_shown_stale && s_shown && e->w * e->clip_h < s_shown->w * s_shown->clip_h)
+    /* Pela area da superficie, nao pelo recorte do ultimo draw (ver o mesmo
+     * trecho em nv2a_vk_backend.c: a tela piscava distorcida). */
+    if (!s_shown_stale && s_shown && e->w * e->h < s_shown->w * s_shown->h)
         return;
     s_shown_stale = 0;
     s_shown = e;
@@ -546,7 +556,10 @@ static GLuint texture_get(const Nv2aTexture *t, const Surface *target)
      * muita coisa com a mesma textura de indices trocando so a paleta entre
      * um draw e outro do mesmo frame (as vezes no mesmo endereco); conferir
      * uma vez por frame deixava tudo com a primeira paleta -- cinza. */
-    if (t->palette) {
+    /* So para formato paletizado (P8, 0x0B): o campo palette fica com o valor
+     * da ultima paleta ligada, e uma textura DXT ganhava uma copia nova no
+     * cache toda vez que aquela paleta (que ela nem usa) mudava. */
+    if (t->palette && t->color == 0x0B) {
         const uint8_t *pal = guest_bytes(t->palette, 1024);
         uint64_t ph = pal ? hash_bytes(pal, 1024) : t->palette;
         pal_key = (uint32_t)(ph ^ (ph >> 32)) | 1u;
@@ -1105,7 +1118,8 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
                 (double)x0, (double)y0, (double)x1, (double)y1,
                 (double)(z0 / zmax_of(b->state)), (double)(z1 / zmax_of(b->state)));
     }
-    if (s_trace_frames > 0 && e->w == 640 && s->height >= 400) {
+    /* a sonda le o pixel (320,240) do guest: so na resolucao original */
+    if (s_trace_frames > 0 && e->w == 640 && s->height >= 400 && !ro_enhanced()) {
         for (uint32_t i = 0; i + 2 < b->count && !probe; i += 3)
             probe = tri_covers(&b->vertices[i], 320.0f, 240.0f, &probe_z);
         if (probe) {
@@ -1133,6 +1147,9 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
         }
     }
     memcpy(s_pv + s_pcount, b->vertices, b->count * sizeof *s_pv);
+    if (e->wide)                        /* 16:9: comprime em x (render_opts.h) */
+        ro_squeeze(s_pv + s_pcount, b->count, (float)e->w,
+                   (float)ro_display_rows(e->h));
     if (b->ext)
         memcpy(s_pe + s_pcount, b->ext->vertices, b->count * sizeof *s_pe);
     s_pcount += b->count;
@@ -1273,6 +1290,12 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
 
 static uint32_t s_last_va, s_last_pitch;    /* ultimo frame trazido ao guest */
 
+/* Janela do toolkit: recebe um frame de qualquer tamanho (patch 4.10). */
+extern void xbox_FramebufferWindowPresentPixels(const void *pixels, uint32_t w,
+                                                uint32_t h, uint32_t pitch);
+static uint8_t *s_host_frame;               /* resolucao interna / widescreen */
+static size_t s_host_cap;
+
 /* Antes do snapshot da janela: traz o frame pronto para a memoria do guest. */
 static void be_present_sync(void)
 {
@@ -1287,6 +1310,32 @@ static void be_present_sync(void)
     if (!e || !e->fbo)
         return;
     rows = e->clip_h && e->clip_h < e->h ? e->clip_h : e->h;
+    if (ro_enhanced()) {
+        /* Resolucao interna / widescreen: o frame nao cabe nos 640x480 do
+         * guest. Vai direto para a janela e para as capturas. A linha 0 do
+         * FBO e a linha 0 da superficie, entao sai de cima para baixo. */
+        uint32_t prow = (uint32_t)((float)ro_display_rows(e->h) * ro_scale + 0.5f);
+        size_t need;
+
+        if (prow > e->ph) prow = e->ph;
+        need = (size_t)e->pw * prow * 4;
+        if (need > s_host_cap) {
+            dw4_frame_note_host(NULL, 0, 0, 0);
+            free(s_host_frame);
+            s_host_frame = malloc(need);
+            s_host_cap = s_host_frame ? need : 0;
+            if (!s_host_frame)
+                return;
+        }
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, e->fbo);
+        glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+        glReadPixels(0, 0, (GLsizei)e->pw, (GLsizei)prow, GL_BGRA,
+                     GL_UNSIGNED_INT_8_8_8_8_REV, s_host_frame);
+        xbox_FramebufferWindowPresentPixels(s_host_frame, e->pw, prow, e->pw * 4);
+        dw4_frame_note_host(s_host_frame, e->pw, prow, e->pw * 4);
+        s_last_va = 0;
+        return;
+    }
     if (e->va >= CONTIG_BASE) {
         if ((uint64_t)e->va + (uint64_t)e->pitch * rows
                 > (uint64_t)CONTIG_BASE + CONTIG_SIZE)
@@ -1361,10 +1410,10 @@ static void f9_capture(void)
 
 static void hotkeys_poll(void)
 {
-    static int prev[7];
+    static int prev[8];
     static const char *cull_name[3] = { "DESLIGADO", "normal", "GIRO CRU" };
 
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
         int down = xbox_FramebufferKeyDown(0x74 + i);      /* VK_F5.. */
         int edge = down && !prev[i];
 
@@ -1387,6 +1436,9 @@ static void hotkeys_poll(void)
         case 3:
             s_dbg ^= 8;
             fprintf(stderr, "[GL] F8: combiners %s\n", (s_dbg & 8) ? "DESLIGADOS" : "normais");
+            break;
+        case 7:
+            dw4_frame_ring_dump();      /* F12: caixa-preta, os ultimos ~4 s de quadros */
             break;
         case 5:
             s_skip_depth_only ^= 1;
@@ -1459,6 +1511,7 @@ static void module_env(void)
     if (c)
         s_cull_mode = strcmp(c, "inv") == 0 ? 2 : (c[0] == '0' ? 0 : 1);
     s_stats = getenv("DW4_GL_STATS") != NULL;
+    ro_init("GL");
     if (getenv("DW4_GL_DBG"))
         s_dbg = atoi(getenv("DW4_GL_DBG"));
     if (getenv("DW4_GL_TRACE_AT"))

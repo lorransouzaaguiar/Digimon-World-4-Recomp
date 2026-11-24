@@ -16,8 +16,9 @@ Não é um emulador.
 
 ## Estado
 
-Jogável do boot até a primeira fase a 60 fps na máquina de teste (CachyOS, NVIDIA).
-Inicial e experimental: espere bugs.
+Jogável do boot até a primeira fase na única máquina em que foi testado (veja
+[Máquina de teste e resultados](#máquina-de-teste-e-resultados)). Inicial e experimental: espere
+bugs.
 
 | Marco | |
 |---|---|
@@ -26,16 +27,57 @@ Inicial e experimental: espere bugs.
 | Boot, vídeos de abertura (CRI Sofdec), tela título | ✅ |
 | Menus, criação do Digimon, salvar e carregar | ✅ |
 | Renderizador OpenGL 3.3 com cache de texturas: 60 fps no lobby (o de CPU faz ~3 fps e fica como referência) | ✅ |
-| Renderizador Vulkan, escolhido no launcher (Gráficos → API gráfica); mesma imagem do OpenGL | ✅ novo, conferido até o lobby |
+| Renderizador Vulkan, o padrão; o OpenGL continua selecionável no launcher (Gráficos → API gráfica) e desenha a mesma imagem | ✅ novo |
 | Controle (padrão Xbox/XInput) e teclado | ✅ |
 | Lobby, tutorial e primeira fase jogáveis | ✅ |
 | Fases seguintes, chefes, o resto do jogo | ⬜ ainda não testado |
 | Multijogador (2 a 4 jogadores) | ⬜ ainda não testado |
-| Resolução interna maior, widescreen, remapear teclas | ⬜ não implementado |
+| Resolução interna até 4K e widescreen (16:9, 16:10, 21:9: cenário mais largo, HUD e menus ficam em 4:3), no launcher | ✅ novo, conferido até o lobby |
+| Launcher com visual inspirado nos menus do jogo; limite de quadros (30 por padrão, a velocidade do console; em 60 fica mais fluido, mas o jogo roda no dobro da velocidade) | ✅ novo |
+| Remapear teclas | ⬜ não implementado |
 | Windows e macOS | ⬜ planejado, não iniciado |
 | Steam Deck | ⬜ não testado |
 
 Detalhes e a lista do que falta: [STATUS.md](STATUS.md).
+
+### Máquina de teste e resultados
+
+Tudo o que está neste README foi testado em **um** computador. Nenhum outro foi experimentado.
+
+| | |
+|---|---|
+| Placa de vídeo | NVIDIA GeForce RTX 5070, 12 GB (driver 620.73.04) |
+| Processador | AMD Ryzen 7 5700X (8 núcleos / 16 threads) |
+| Memória | 32 GB |
+| Sistema | CachyOS Linux (base Arch), kernel 7.3 |
+
+Quadros por segundo, com o limitador desligado (o jogo então roda a até 60 fps, o dobro da
+velocidade do console):
+
+| Onde | Resultado |
+|---|---|
+| Menus, criação do Digimon, lobby | 60 fps, em 480p e em 2560×1440 16:9, em Vulkan e em OpenGL |
+| Central Area (o lugar mais pesado testado, 32 a 38 mil draws por quadro) | 34 a 50 fps em 2560×1440 16:9 |
+| Renderizador de referência em CPU | cerca de 3 fps |
+
+Na única sessão jogada até agora com o limite padrão de 30 fps, o jogo manteve 30.
+
+Custo das duas APIs gráficas no mesmo percurso de 92 segundos (dos menus ao lobby, sem janela, uma
+execução de cada):
+
+| | Processador | Placa de vídeo |
+|---|---|---|
+| Vulkan, 480p 4:3 | 195% de um núcleo | 5% |
+| OpenGL, 480p 4:3 | 200% de um núcleo | 5% |
+| Vulkan, 2560×1440 16:9 | 182% de um núcleo | 18% |
+| OpenGL, 2560×1440 16:9 | 199% de um núcleo | 18% |
+
+O que limita o jogo é o processador, não a placa de vídeo: cerca de dois núcleos ficam ocupados
+com qualquer das duas APIs, e a placa fica quase ociosa mesmo em 1440p.
+
+Verificações automáticas (sem janela, entrada por roteiro): o percurso do boot ao lobby confere
+com os quadros de referência nos dois renderizadores; plugar e desplugar um controle virtual 400
+vezes enquanto o jogo o lê passa.
 
 ### Problemas conhecidos
 
@@ -43,7 +85,12 @@ Detalhes e a lista do que falta: [STATUS.md](STATUS.md).
   testes automáticos). Abra de novo; deixar o vídeo tocar evita o problema.
 - A geração automática de coordenadas de textura (reflexos, brilhos) não está implementada; alguns
   objetos podem aparecer chapados.
-- Testado em uma única máquina. Outras GPUs, drivers e distribuições não foram testados.
+- O chão às vezes escurece por uma fração de segundo em algumas áreas (Central Area, cavernas),
+  nos dois renderizadores. É cosmético; a causa ainda não foi encontrada.
+- A 60 fps o jogo roda duas vezes mais rápido que no console, porque a lógica dele avança por
+  quadro. O padrão é 30.
+- Testado em uma única máquina (acima). Outras GPUs, drivers e distribuições não foram testados;
+  placas AMD e Intel nunca foram experimentadas.
 
 ## Jogar a partir de um release
 
@@ -174,7 +221,8 @@ Rode guardando o log e anexe o arquivo:
 - **Defeito de imagem:** aperte **F9** com o defeito na tela (builds a partir do código). Ele grava
   uma captura e a lista de todos os draws em `build/shots/`.
 
-`DW4_RENDERER=vulkan ./run.sh` (ou `opengl`, o padrão) escolhe a API gráfica sem o launcher; se a
+`DW4_RES=1440 DW4_ASPECT=16:9 ./run.sh` define a resolução interna (altura da imagem) e a proporção
+sem o launcher. `DW4_RENDERER=opengl ./run.sh` (ou `vulkan`, o padrão) escolhe a API gráfica; se a
 pedida não estiver disponível o jogo cai na outra. `DW4_SW_RENDER=1 ./run.sh` usa o renderizador de
 referência em CPU, para separar bug do renderizador de bug do jogo.
 

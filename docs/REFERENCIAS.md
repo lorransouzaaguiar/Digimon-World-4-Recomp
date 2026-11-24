@@ -30,8 +30,12 @@ e BLiNX 2 também, mas o código de runtime deles não está nos clones (só doc
 - **Limite de quadros no vblank** (todos): flip preso a 60 Hz. Nós: `RECOMP_FLIP_PACING=1`.
 - **Back end de GPU com o rasterizador em CPU como referência** (todos): variável de ambiente
   para voltar à CPU e comparar frames. Nós: `DW4_SW_RENDER=1`.
-- **Escala de resolução interna** (SSX 3 ×2, Def Jam, BLiNX 2): renderizar a N× 640×480. Não temos.
-- **Widescreen** (SSX 3 bertibertig, Def Jam): hook na projeção da câmera. Não temos.
+- **Escala de resolução interna** (SSX 3 ×2, Amped 2, Def Jam, BLiNX 2): renderizar a N× 640×480.
+  Temos desde 2026-11-24 (`DW4_RES`, `src/hooks/render_opts.h`).
+- **Widescreen** (SSX 3 ×2, Amped 2, Def Jam): Amped 2 só comprime o x de todo vértice numa
+  superfície mais larga (sem patch no jogo); os SSX 3 também alargam a projeção com um hook na
+  câmera (corrige o culling nas laterais). Temos o do Amped 2 (`DW4_ASPECT`); o hook de câmera
+  fica para quando o culling incomodar.
 - **Cache de shaders/pipelines em disco** (Def Jam; SSX 3 koenhendriks compila em thread). Não
   precisamos ainda (um shader só).
 - **Mapa de teclas configurável** (`keys.ini`, SSX 3 koenhendriks) e tratamento do controle

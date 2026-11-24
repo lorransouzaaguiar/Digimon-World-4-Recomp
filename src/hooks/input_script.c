@@ -20,6 +20,7 @@
  *   wait_flips:<n>     espera <n> flips (frames apresentados)
  *   shot:<nome>        grava <DW4_SHOT_DIR>/<nome>.bmp (padrao build/shots)
  *   mark:<texto>       linha "[SCRIPT] mark <texto>" no log
+ *   ringdump           grava a caixa-preta de quadros (o mesmo que F12)
  *   vpad / vpad_off    conecta / desconecta um controle virtual (teste de
  *                      plugar o controle com o jogo aberto, sem hardware)
  *   quit               encerra o processo com codigo 0 (run automatizado OK)
@@ -195,6 +196,11 @@ static void run_step(char *tok, double t0)
             fprintf(stderr, "[SCRIPT] vpad_off: controle virtual desconectado (t=%.1fs)\n",
                     now_s() - t0);
         }
+        return;
+    }
+    if (strcasecmp(tok, "ringdump") == 0) {             /* o mesmo que F12 */
+        dw4_frame_ring_dump();
+        sleep_s(1.5);                                   /* deixa gravar */
         return;
     }
     if (strcasecmp(tok, "quit") == 0) {

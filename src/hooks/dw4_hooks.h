@@ -35,10 +35,27 @@ void dw4_d3d_fence_init(void);
 void dw4_screenshot_init(void);
 /* Chamado a cada flip pelo back end: onde esta o frame pronto (0 = nao sei). */
 void dw4_frame_note(uint32_t va, uint32_t pitch);
+/* Frame que o renderizador entrega direto, de qualquer tamanho (B,G,R,X, linha
+ * de cima primeiro); NULL = voltar a ler a memoria do guest. O buffer e do
+ * renderizador: avise com NULL ANTES de libera-lo. */
+void dw4_frame_note_host(const uint8_t *bgra, uint32_t w, uint32_t h, uint32_t pitch);
+/* Caixa-preta (screenshot.c): etiqueta do proximo quadro, e gravar agora os
+ * ultimos ~2 s de quadros (F12). A gravacao automatica e por clarao detectado. */
+void dw4_frame_tag(const char *tag);
+void dw4_frame_ring_dump(void);
+/* Uma linha de texto por lote do quadro corrente; sai em lotes.txt na gravacao. */
+void dw4_frame_detail(const char *line);
 uint64_t dw4_frame_count(void);
 /* Grade 16x12 de luminancia media do frame exibido; 0 se ainda nao ha frame. */
 int dw4_frame_signature(uint8_t sig[DW4_SIG_CELLS]);
 int dw4_screenshot_save(const char *path);
+
+/* widescreen.c: fator (<= 1) aplicado ao x dos cantos no teste de descarte de
+ * objetos do jogo; 1 fora do widescreen. Usado por sub_000BC050_enter. */
+float dw4_cull_x_scale(void);
+
+/* fps_limit.c: a cada flip; DW4_FPS_LIMIT=30 segura o flip. */
+void dw4_fps_limit_tick(void);
 
 /* input_script.c: DW4_INPUT_SCRIPT="sleep:17 enter! z! quit" ou @arquivo. */
 void dw4_input_script_init(void);
