@@ -243,6 +243,63 @@ sequência de operações (`cN` clear, `dNxM` M draws na superfície N, `tK` amo
 K): comparar o quadro ruim com os vizinhos. Outra hipótese anotada: Outra hipótese anotada: passes coplanares com `LEQUAL` / z-bias dependente da resolução
 (o termo de inclinação do polygon offset encolhe com a escala da imagem).
 
+### 4.13 `xbox_memory_layout.c`, `kernel_bridge.c`, `nv2a_pb_exec.c`, `nv2a_pb_scan.c` — esperas que queimavam dois núcleos (2026-11-24, DW4R-2)
+
+**Sintoma:** ~195% de um núcleo no lobby, qualquer que fosse a carga (`PORT_NOTES` §7.10).
+
+**Como foi achado:** amostrador próprio (`DW4_PROF`, `src/hooks/prof.c`; a máquina não tem `perf`).
+A thread do jogo passava **86%** das amostras num laço de 2 instruções em `sub_002B1320`
+(kick-off do D3D: liga o bit 16 de `NV_PFB 0x100410`, gira até a GPU limpar, grava `DMA_PUT`); a
+thread `nv2a_ack_thread` passava 57% em `sched_yield` + leitura de relógio (laço terminado em
+`Sleep(0)`). O bit só é limpo entre duas caminhadas do pushbuffer e não é limpo com um flip
+retido à espera do vblank — é assim que o jogo "sente" o FLIP_STALL.
+
+**Correção (três partes):**
+- *thread de ack dorme:* durante um flip retido espera um evento que o timer de vblank sinaliza
+  (`xbox_Nv2aAckWake`, chamado em `kernel_vblank_count`); com o pushbuffer quieto espera o próximo
+  kick. Logo depois de trabalhar continua cedendo a vez por `RECOMP_ACK_HOT_US` (300; 0 em
+  máquina de 1–2 núcleos). Teto de 1 ms por espera. `RECOMP_ACK_SLEEP=0` volta ao `Sleep(0)`.
+- *portão do kick:* `sub_002B1320` é embrulhada em `recomp_manual.c` (`sub_002B1320_gen` = corpo
+  gerado): `xbox_Nv2aKickGate()` antes, `xbox_Nv2aKickDone()` depois. O portão dorme até tudo o
+  que o jogo já enviou ter sido caminhado e nenhum flip estar retido — exatamente quando o laço
+  do jogo é respondido na hora. Contagem de kicks lida pela thread de ack **antes** de ler o PUT
+  (o jogo incrementa depois de gravar o PUT), publicada como "feito" quando o PUT foi consumido.
+  `DW4_KICK_GATE=0` desliga. O jogo envia nem antes nem depois do que enviava: só a espera mudou.
+- *limitador de 30 fps:* `xbox_Nv2aHostStall(1/0)` em volta do sono (`fps_limit.c`); o portão
+  espera junto.
+
+**Medido** (cenário do lobby, 92 s, sem janela, Vulkan, RTX 5070 / 16 threads): CPU do processo
+178,8 s → **25,5 s** (195% → 28% de um núcleo), mesmos flips nos mesmos instantes, goldens iguais.
+A ideia de recuar quando o pushbuffer está quieto é do Amped 2 (`RECOMP_ACK_IDLE_US`, um `usleep`
+depois de 4000 voltas paradas); lá o flip retido e a thread do jogo continuam girando.
+
+**Modo paralelo (`RECOMP_KICK_AHEAD=1`, desligado por padrão; launcher: Gráficos → Desempenho):**
+medido com o portão: ~14 kicks por frame, e a thread do jogo dorme **3,8 ms por frame esperando o
+executor** terminar o trecho anterior — jogo e executor se revezam. Com a opção o portão só
+espera a cadência (flip retido / limitador), marca o kick como concedido e ele é respondido de
+dentro da caminhada (`xbox_Nv2aAckGranted`, a cada 64 palavras) ou do laço de ack, mesmo com flip
+retido. Lobby: espera pelo executor 3,8 → 0,0 ms por frame, 2 execuções com goldens iguais e a
+mesma cadência (600 holds / 10 s). O quanto o jogo se adianta passa a depender só do D3D dele
+(fence do swap, espera pelo `DMA_GET`), como no console. **Não validado além do lobby**: se um
+buffer dinâmico for reescrito antes de o executor ler, o sintoma seria geometria/textura piscando.
+
+Também neste patch: `getenv("RECOMP_PB_EXEC_VERBOSE")` era chamado a cada draw (2,6% da thread);
+`zbuf_clear` do rasterizador em CPU rodava a cada clear mesmo com back end de GPU (2%);
+`raster_xf_clipped` copiava os 3 vértices inteiros antes de saber se o triângulo precisava de
+recorte. Estatística: `xbox_Nv2aKickStats` (linha `[VK] jogo: ...` a cada 5 s).
+
+### 4.14 `src/video/fb_present_sdl.c` — janela para superfície Vulkan (2026-11-24, DW4R-2)
+
+`RECOMP_WINDOW_VULKAN=1` (default quando o renderizador é Vulkan, `recomp_manual.c`): a janela é
+criada com `SDL_WINDOW_VULKAN` e **sem** `SDL_Renderer`. O back end pede as extensões de instância
+e a superfície (`xbox_FramebufferWindowVkExtensions` / `VkSurface`), cria o swapchain e apresenta
+da thread do executor; a thread principal continua com eventos, título e forma da janela
+(`xbox_FramebufferWindowFrameShape`). Enquanto ninguém segura a superfície (`VkRelease`, ou o
+Vulkan não subiu) os frames chegam pelo caminho antigo e o laço cria o `SDL_Renderer` no primeiro
+frame (testado no gamescope com `DW4_VK_DEVICE=99`: cai no OpenGL e o log mostra
+`no Vulkan presenter: SDL renderer after all`; a imagem nesse caso não foi vista).
+Ao fechar com um swapchain vivo a janela é deixada para o `exit()`.
+
 ## 5. Hooks (`src/hooks/`)
 
 | Arquivo | Função |
@@ -420,6 +477,50 @@ Segunda API gráfica, ao lado do OpenGL (que continua o padrão). O jogador esco
   fallback Vulkan → OpenGL (`DW4_VK_DEVICE=99`); recarga a quente.
 - **Não verificado:** jogar com janela; AMD/Intel (lá o depth é `D32F+S8`, o que muda a
   resolução do z-bias); camadas de validação (`vulkan-validation-layers` não está instalado).
+
+### 7.5b Apresentação direta e quadros em voo no Vulkan (2026-11-24, DW4R-2)
+
+O "sem swapchain" acima deixou de ser verdade com janela. Dois modos (`[VK] apresentacao: ...`):
+
+- **direto** (com janela, padrão): swapchain na janela do toolkit (patch 4.14). No flip, um
+  `vkCmdBlitImage` leva a superfície exibida para a imagem do swapchain (escala e faixas pretas
+  na GPU; `NEAREST` em 480p original, `LINEAR` em resolução interna maior) e o envio **não
+  espera**: há dois conjuntos de frame (`FrameSet`: command buffers, anéis de vértices/UBO/staging,
+  descritores, semáforos) e o executor só espera se a GPU estiver um frame inteiro atrasada.
+  `frame_submit()` sem "async" continua esperando todos os conjuntos — é o ponto seguro para
+  destruir imagens. A memória do guest não recebe o frame (como já era em resolução interna).
+- **leitura** (sem janela, `DW4_VK_PRESENT=readback`, ou swapchain indisponível): o de antes.
+- `DW4_VK_PRESENT=async`: quadros em voo sem janela, para `soak.py --golden` exercitar o caminho.
+
+**Captura sob demanda** (`screenshot.c`): no modo direto o frame só é lido de volta quando alguém
+pede (`dw4_frame_wanted()`: captura do roteiro, `DW4_SHOT`, assinatura, F9, caixa-preta ligada).
+A **caixa-preta de quadros (§7.7) passou a ser opcional: `DW4_FRAME_RING=1`** — ligada, obriga a
+ler todo frame e monta uma linha de texto por lote.
+
+**Vsync:** `DW4_VSYNC=auto|on|off` (o launcher manda `RECOMP_PRESENT_VSYNC=0` com o vsync
+desligado). auto = `MAILBOX` se existir, senão `FIFO`; off = `IMMEDIATE`, senão `MAILBOX`.
+O jogo já é cadenciado pelo vblank emulado, então isto só decide o que fazer com um quadro fora
+de fase com o monitor.
+
+**Extensões:** só as de WSI (`VK_KHR_surface` + plataforma + `VK_KHR_swapchain`), e só para
+apresentar; sem elas vale o modo leitura, que segue Vulkan 1.0 puro. Escolha de placa: com
+janela, quem apresenta nela ganha de uma mais forte que não apresenta.
+
+**Medido** (lobby, 3840×2160 16:9, janela dentro de `gamescope --backend headless`, RTX 5070):
+
+| | fps | ms/frame no renderizador | CPU do processo |
+|---|---|---|---|
+| leitura (antes) | 49 | 15,9 (GPU 10,7 + cópia p/ janela 4,3) | 93% de um núcleo |
+| direto | 60 | 1,2 | 34% |
+
+**Verificado:** `soak.py --gamescope --golden` (janela + swapchain, 480p) e `--golden -e
+DW4_VK_PRESENT=async`; 4K 16:9 com `DW4_VK_SHOT_SWAP=1` (captura da própria imagem do swapchain:
+escala e forma corretas; a janela é redimensionada e o swapchain refeito). **Não verificado:**
+janela real no monitor, tela cheia, minimizar, trocar de monitor, AMD/Intel, X11 puro, recarga a
+quente no modo direto, e o OpenGL continua no caminho de leitura (não ganhou nada disto).
+
+Das referências: todos os ports Vulkan apresentam por swapchain; o nosso mantém o modo leitura
+como reserva e para os testes sem janela, e fica sem extensões fora do WSI.
 
 ### 7.6 Resolução interna e widescreen (2026-11-24) — `src/hooks/render_opts.h`
 
@@ -668,6 +769,19 @@ guest em `0x00277037`, depois `0x00000100` em `0x00270421`, depois ~180 alvos-li
 congelou. Não se sabe em que tela estava. Não reproduziu em 9 runs seguintes com roteiro fixo
 (incluindo 2 com 35 s de pausa nos menus). O log se perdeu (o soak ainda apagava runs antigos; não
 apaga mais). Se reaparecer: `scripts/triage.py` mostra o primeiro alvo e o ponto do roteiro.
+
+### 8.x Perfil de CPU sem `perf` (2026-11-24) — `src/hooks/prof.c`, `scripts/prof_report.py`
+
+`scripts/soak.py -e DW4_PROF=/tmp/p.txt -e DW4_PROF_FROM=3900` grava amostras (SIGPROF a 1000 Hz
+de CPU do processo, a partir do flip dado) e `scripts/prof_report.py /tmp/p.txt` mostra o consumo
+por thread e as funções mais amostradas (`sub_XXXXXXXX` = jogo). `soak.py` agora imprime o tempo
+de CPU de cada execução. `soak.py --gamescope [LxA]` roda com janela dentro de um gamescope sem
+tela (nada aparece no monitor) — o único jeito de exercitar o swapchain sem o usuário.
+
+Perfil do lobby depois da DW4R-2 (28% de um núcleo no total): executor ~68% (decodificação e
+transformação de vértices do toolkit: `draw_primitive`, `fetch_attr`, `backend_from_xf`,
+`raster_xf_clipped`; o renderizador Vulkan é ~6%), jogo ~25%, áudio ~5%. O próximo ganho de CPU
+está no executor do toolkit (cache de vértices pós-transformação, como SSX 3 / Amped 2 fizeram).
 
 ## 9. Pendências conhecidas
 

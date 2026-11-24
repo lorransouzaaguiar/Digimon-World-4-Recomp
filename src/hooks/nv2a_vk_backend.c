@@ -14,10 +14,14 @@
  * frame, paleta na chave da textura.
  *
  * O que e diferente deles, de proposito:
- *   - sem swapchain: como no OpenGL, o frame pronto e lido de volta para a
- *     memoria do guest e a janela SDL do toolkit continua apresentando. Assim
- *     janela, tela cheia, DW4_SHOT, soak sem janela e goldens funcionam iguais
- *     nos dois back ends;
+ *   - dois jeitos de apresentar (ver "Apresentacao" mais abaixo):
+ *       direto   com janela: swapchain proprio na janela do toolkit; o frame
+ *                nao sai da GPU e o envio nao espera (dois conjuntos de
+ *                recursos de frame, "quadros em voo"). Pixels so sao lidos de
+ *                volta quando alguem pede (captura, roteiro);
+ *       leitura  sem janela (soak, goldens) ou se o swapchain nao sobe: como
+ *                no OpenGL, o frame e lido de volta para a memoria do guest e
+ *                a janela SDL do toolkit apresenta;
  *   - Vulkan 1.0 puro, sem extensoes: o estado que o 1.0 nao tem como dinamico
  *     (blend, profundidade, stencil, cull, mascara de cor) vira um cache de
  *     pipelines. Roda em qualquer driver Vulkan, nao so nos com 1.3 + EDS3.
@@ -29,8 +33,9 @@
  *                 formato, tamanho, paleta) + hash conferido uma vez por frame
  *   lotes         draws consecutivos com o mesmo estado saem num vkCmdDraw
  *   frame         dois command buffers: "upload" (texturas) e "draw", enviados
- *                 nessa ordem no flip; um frame em voo, espera no flip (a
- *                 leitura de volta precisa disso de qualquer forma)
+ *                 nessa ordem no flip. No modo direto ha dois conjuntos
+ *                 (buffers de comando, aneis, descritores) e o flip nao espera
+ *                 a GPU; no modo leitura, um conjunto e espera no flip
  *
  * Convencoes (diferem do OpenGL): y do NDC para baixo -- a linha 0 da imagem e
  * a linha 0 da superficie, sem espelhamento, entao o sentido de giro da NV2A
@@ -40,6 +45,10 @@
  *   DW4_VK_ALLOW_SW=1   aceita Vulkan por software (lavapipe)
  *   DW4_VK_CULL=0|inv   desliga / inverte o culling (depuracao)
  *   DW4_VK_STATS=1      contadores a cada 5 s
+ *   DW4_VK_PRESENT=     readback: sempre o modo leitura; async: quadros em voo
+ *                       mesmo sem janela (teste); padrao: direto se houver janela
+ *   DW4_VSYNC=          auto (padrao: mailbox, senao fifo) | on (fifo) |
+ *                       off (immediate, senao mailbox)
  *   F5..F8, F10, F11    os mesmos alternadores do OpenGL (a captura F9 e a
  *                       sonda de pixel existem so no OpenGL)
  */
@@ -104,6 +113,7 @@ static VkPhysicalDeviceMemoryProperties s_memprops;
 static VkFormat s_depth_fmt;
 static int s_depth_clamp;
 static VkCommandPool s_pool;
+/* Do conjunto de frame corrente (ver "Conjuntos de frame"). */
 static VkCommandBuffer s_cmd_up, s_cmd;     /* texturas; desenho */
 static VkFence s_fence;
 static VkRenderPass s_rp[2];                /* [0] so cor, [1] cor + depth */
@@ -122,6 +132,7 @@ static unsigned long s_n_decode, s_n_draw, s_n_tris, s_n_flush, s_n_submit;
 /* Onde vai o tempo da thread do executor (DW4_VK_STATS): total dentro do back
  * end, espera pela GPU (envio + fence) e copia do frame para a janela. */
 static double s_t_backend, s_t_gpu, s_t_copy;
+static unsigned long s_n_readback;          /* frames lidos de volta para a CPU */
 static unsigned long s_n_odd_present;       /* frames exibidos de superficie nao-tela */
 
 static double now_s(void)
@@ -263,6 +274,265 @@ static void barrier(VkCommandBuffer cb, VkImage img, VkImageAspectFlags aspect,
     vkCmdPipelineBarrier(cb, ss, ds, 0, 0, NULL, 0, NULL, 1, &b);
 }
 
+/* ── Conjuntos de frame ────────────────────────────────────────────────────
+ * Tudo o que um frame grava e a GPU ainda le depois do envio: os dois command
+ * buffers, os aneis de vertices / uniformes / staging e os descritores. Com
+ * um conjunto so, cada flip espera a GPU terminar (modo leitura). Com dois, o
+ * flip envia e ja comeca o frame seguinte no outro conjunto, esperando apenas
+ * se a GPU estiver um frame inteiro atrasada: CPU e GPU trabalham ao mesmo
+ * tempo. Os globais s_cmd, s_vb, s_dpool... sao sempre os do conjunto
+ * corrente (set_load / set_save).
+ *
+ * Destruir uma imagem ou um buffer continua exigindo a GPU parada:
+ * frame_submit() (sem "async") espera TODOS os conjuntos. */
+#define FRAME_SETS 2
+
+typedef struct {
+    VkCommandBuffer up, draw;
+    VkFence fence;
+    int pending;                        /* enviado; o fence ainda nao foi conferido */
+    VkDescriptorPool dpool;
+    Buf vb, vbe, ubo, stage;
+    VkSemaphore acquired, rendered;     /* imagem do swapchain: obtida / desenhada */
+} FrameSet;
+
+static FrameSet s_sets[FRAME_SETS];
+static int s_nsets, s_set;
+static int s_async;                     /* 1: o flip nao espera a GPU */
+
+static void set_save(void)
+{
+    FrameSet *f = &s_sets[s_set];
+
+    f->up = s_cmd_up; f->draw = s_cmd; f->fence = s_fence; f->dpool = s_dpool;
+    f->vb = s_vb; f->vbe = s_vbe; f->ubo = s_ubo; f->stage = s_stage;
+}
+
+static void set_load(int i)
+{
+    const FrameSet *f = &s_sets[i];
+
+    s_set = i;
+    s_cmd_up = f->up; s_cmd = f->draw; s_fence = f->fence; s_dpool = f->dpool;
+    s_vb = f->vb; s_vbe = f->vbe; s_ubo = f->ubo; s_stage = f->stage;
+}
+
+static void set_wait(FrameSet *f)
+{
+    if (!f->pending)
+        return;
+    VKCHECK(vkWaitForFences(s_dev, 1, &f->fence, VK_TRUE, UINT64_MAX));
+    VKCHECK(vkResetFences(s_dev, 1, &f->fence));
+    f->pending = 0;
+}
+
+/* ── Apresentacao direta (swapchain) ───────────────────────────────────────
+ * A janela e do toolkit (fb_present_sdl.c, RECOMP_WINDOW_VULKAN=1); aqui so
+ * a superficie e o swapchain. WSI e extensao por definicao (VK_KHR_surface,
+ * a da plataforma e VK_KHR_swapchain): sao as unicas que este back end pede,
+ * e so para apresentar -- sem elas ele cai no modo leitura, que e Vulkan 1.0
+ * puro. */
+extern int  xbox_FramebufferWindowVulkan(void);
+extern int  xbox_FramebufferWindowVkExtensions(const char **names, unsigned *count);
+extern int  xbox_FramebufferWindowVkSurface(void *instance, void *surface_out);
+extern void xbox_FramebufferWindowVkRelease(void);
+extern void xbox_FramebufferWindowVkDrawableSize(int *w, int *h);
+extern void xbox_FramebufferWindowFrameShape(uint32_t w, uint32_t h);
+
+#define SWAP_MAX 8
+#define SWAP_NONE 0xFFFFFFFFu
+
+static struct {
+    VkSurfaceKHR surf;
+    VkSwapchainKHR sc;
+    VkImage img[SWAP_MAX];
+    uint32_t n, w, h;
+    VkFormat fmt;
+    VkPresentModeKHR mode;
+    int have_ext;                       /* o dispositivo tem VK_KHR_swapchain */
+    int ok;                             /* da para apresentar */
+    int stale;                          /* refazer antes do proximo frame */
+    int shot;                           /* DW4_VK_SHOT_SWAP: capturas leem o swapchain */
+    uint32_t acquired;                  /* imagem obtida neste frame, ou SWAP_NONE */
+    unsigned fails;
+} s_swap = { .acquired = SWAP_NONE };
+
+static void sets_wait_all(void);
+
+static void swap_destroy(int with_surface)
+{
+    if (s_dev && s_swap.sc) {
+        vkDeviceWaitIdle(s_dev);
+        vkDestroySwapchainKHR(s_dev, s_swap.sc, NULL);
+    }
+    s_swap.sc = VK_NULL_HANDLE;
+    s_swap.ok = 0;
+    s_swap.n = 0;
+    s_swap.acquired = SWAP_NONE;
+    if (with_surface && s_swap.surf) {
+        vkDestroySurfaceKHR(s_inst, s_swap.surf, NULL);
+        s_swap.surf = VK_NULL_HANDLE;
+        xbox_FramebufferWindowVkRelease();
+    }
+}
+
+static const char *present_mode_name(VkPresentModeKHR m)
+{
+    switch (m) {
+    case VK_PRESENT_MODE_IMMEDIATE_KHR:    return "immediate (sem vsync)";
+    case VK_PRESENT_MODE_MAILBOX_KHR:      return "mailbox (vsync sem fila)";
+    case VK_PRESENT_MODE_FIFO_KHR:         return "fifo (vsync)";
+    case VK_PRESENT_MODE_FIFO_RELAXED_KHR: return "fifo relaxed";
+    default:                               return "?";
+    }
+}
+
+/* Cria (ou refaz, apos mudanca de tamanho) o swapchain. A GPU precisa estar
+ * parada: quem chama garante. 0 = nao deu; o chamador decide se desiste. */
+static int swap_create(void)
+{
+    VkSurfaceCapabilitiesKHR caps;
+    VkSurfaceFormatKHR fmts[64];
+    VkPresentModeKHR modes[16];
+    uint32_t nf = 64, nm = 16, want_n;
+    VkSwapchainCreateInfoKHR ci = { .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR };
+    VkSwapchainKHR old = s_swap.sc;
+    const char *vs = getenv("DW4_VSYNC"), *legacy = getenv("RECOMP_PRESENT_VSYNC");
+    int pref = 0, dw = 0, dh = 0, have[4] = { 0, 0, 0, 0 };   /* 0 auto, 1 on, 2 off */
+    VkResult r;
+
+    s_swap.ok = 0;
+    s_swap.stale = 0;
+    if (!s_swap.surf || !s_swap.have_ext)
+        return 0;
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(s_phys, s_swap.surf, &caps) != VK_SUCCESS)
+        return 0;
+    if (vkGetPhysicalDeviceSurfaceFormatsKHR(s_phys, s_swap.surf, &nf, fmts) < 0 || !nf)
+        return 0;
+    if (vkGetPhysicalDeviceSurfacePresentModesKHR(s_phys, s_swap.surf, &nm, modes) < 0)
+        nm = 0;
+    if (!(caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT)) {
+        fprintf(stderr, "[VK] a janela nao aceita copia para o swapchain\n");
+        return 0;
+    }
+
+    /* Formato sem conversao sRGB: as cores ja saem prontas do shader. */
+    ci.imageFormat = VK_FORMAT_UNDEFINED;
+    for (uint32_t i = 0; i < nf && ci.imageFormat == VK_FORMAT_UNDEFINED; i++)
+        if (fmts[i].format == VK_FORMAT_B8G8R8A8_UNORM) {
+            ci.imageFormat = fmts[i].format; ci.imageColorSpace = fmts[i].colorSpace;
+        }
+    for (uint32_t i = 0; i < nf && ci.imageFormat == VK_FORMAT_UNDEFINED; i++)
+        if (fmts[i].format == VK_FORMAT_R8G8B8A8_UNORM
+                || fmts[i].format == VK_FORMAT_A8B8G8R8_UNORM_PACK32) {
+            ci.imageFormat = fmts[i].format; ci.imageColorSpace = fmts[i].colorSpace;
+        }
+    if (ci.imageFormat == VK_FORMAT_UNDEFINED) {
+        fprintf(stderr, "[VK] a janela so oferece formatos sRGB/HDR (primeiro: %d)\n",
+                (int)fmts[0].format);
+        return 0;
+    }
+    {
+        VkFormatProperties fp;
+        vkGetPhysicalDeviceFormatProperties(s_phys, ci.imageFormat, &fp);
+        if (!(fp.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT))
+            return 0;
+    }
+
+    /* Vsync. O jogo ja e cadenciado pelo vblank emulado (60 Hz do relogio),
+     * entao o modo aqui so decide o que acontece quando um quadro chega fora
+     * de fase com o monitor: mailbox troca sem rasgar e sem segurar o
+     * executor; fifo segura ate o proximo vblank real; immediate rasga. */
+    if (vs && *vs)
+        pref = !strcmp(vs, "on") || !strcmp(vs, "fifo") ? 1
+             : (!strcmp(vs, "off") || !strcmp(vs, "0") || !strcmp(vs, "immediate")) ? 2 : 0;
+    else if (legacy && legacy[0] == '0')
+        pref = 2;
+    for (uint32_t i = 0; i < nm; i++)
+        if ((uint32_t)modes[i] < 4)
+            have[modes[i]] = 1;
+    ci.presentMode = VK_PRESENT_MODE_FIFO_KHR;          /* sempre existe */
+    if (pref == 2 && have[VK_PRESENT_MODE_IMMEDIATE_KHR])
+        ci.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+    else if (pref != 1 && have[VK_PRESENT_MODE_MAILBOX_KHR])
+        ci.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+
+    xbox_FramebufferWindowVkDrawableSize(&dw, &dh);
+    if (caps.currentExtent.width != 0xFFFFFFFFu) {
+        ci.imageExtent = caps.currentExtent;
+    } else {
+        ci.imageExtent.width = dw > 0 ? (uint32_t)dw : 640;
+        ci.imageExtent.height = dh > 0 ? (uint32_t)dh : 480;
+    }
+    if (ci.imageExtent.width < caps.minImageExtent.width)
+        ci.imageExtent.width = caps.minImageExtent.width;
+    if (ci.imageExtent.height < caps.minImageExtent.height)
+        ci.imageExtent.height = caps.minImageExtent.height;
+    if (caps.maxImageExtent.width && ci.imageExtent.width > caps.maxImageExtent.width)
+        ci.imageExtent.width = caps.maxImageExtent.width;
+    if (caps.maxImageExtent.height && ci.imageExtent.height > caps.maxImageExtent.height)
+        ci.imageExtent.height = caps.maxImageExtent.height;
+    if (!ci.imageExtent.width || !ci.imageExtent.height)
+        return 0;                       /* minimizada: tenta de novo depois */
+
+    want_n = caps.minImageCount + 1;
+    if (caps.maxImageCount && want_n > caps.maxImageCount)
+        want_n = caps.maxImageCount;
+    ci.surface = s_swap.surf;
+    ci.minImageCount = want_n;
+    ci.imageArrayLayers = 1;
+    ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    /* Teste: as capturas passam a ser da imagem do swapchain (o que a janela
+     * mostra, com escala e faixas), nao da superficie do jogo. */
+    s_swap.shot = getenv("DW4_VK_SHOT_SWAP") != NULL
+               && (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+    if (s_swap.shot)
+        ci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    ci.preTransform = caps.currentTransform;
+    ci.compositeAlpha = (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)
+                      ? VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR
+                      : (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR)
+                      ? VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
+                      : VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR;
+    ci.clipped = VK_TRUE;
+    ci.oldSwapchain = old;
+
+    r = vkCreateSwapchainKHR(s_dev, &ci, NULL, &s_swap.sc);
+    if (old)
+        vkDestroySwapchainKHR(s_dev, old, NULL);
+    if (r != VK_SUCCESS) {
+        fprintf(stderr, "[VK] vkCreateSwapchainKHR falhou (%d)\n", (int)r);
+        s_swap.sc = VK_NULL_HANDLE;
+        return 0;
+    }
+    s_swap.n = SWAP_MAX;
+    r = vkGetSwapchainImagesKHR(s_dev, s_swap.sc, &s_swap.n, s_swap.img);
+    if ((r != VK_SUCCESS && r != VK_INCOMPLETE) || !s_swap.n) {
+        /* VK_INCOMPLETE: mais imagens que SWAP_MAX; sem todas nao da para usar */
+        fprintf(stderr, "[VK] swapchain com imagens demais ou sem imagens (%d)\n", (int)r);
+        vkDestroySwapchainKHR(s_dev, s_swap.sc, NULL);
+        s_swap.sc = VK_NULL_HANDLE;
+        return 0;
+    }
+    if (r == VK_INCOMPLETE) {
+        vkDestroySwapchainKHR(s_dev, s_swap.sc, NULL);
+        s_swap.sc = VK_NULL_HANDLE;
+        return 0;
+    }
+    if (!s_swap.fmt || s_swap.w != ci.imageExtent.width || s_swap.h != ci.imageExtent.height
+            || s_swap.mode != ci.presentMode)
+        fprintf(stderr, "[VK] swapchain %ux%u, %u imagens, %s\n", ci.imageExtent.width,
+                ci.imageExtent.height, s_swap.n, present_mode_name(ci.presentMode));
+    s_swap.w = ci.imageExtent.width;
+    s_swap.h = ci.imageExtent.height;
+    s_swap.fmt = ci.imageFormat;
+    s_swap.mode = ci.presentMode;
+    s_swap.acquired = SWAP_NONE;
+    s_swap.ok = 1;
+    return 1;
+}
+
 /* ── Frame: gravacao e envio ───────────────────────────────────────────────── */
 
 typedef struct Surface Surface;
@@ -311,33 +581,82 @@ static void end_pass(void)
     }
 }
 
-/* Envia o que foi gravado e espera terminar. Depois disto nada na GPU usa
- * mais nenhum recurso: e o ponto seguro para destruir imagens. */
-static void frame_submit(void)
+static void sets_wait_all(void)
+{
+    for (int i = 0; i < s_nsets; i++)
+        set_wait(&s_sets[i]);
+}
+
+/* Envia o que foi gravado.
+ *   async = 0: espera terminar. Depois disto nada na GPU usa mais nenhum
+ *              recurso (nem os frames anteriores ainda em voo): e o ponto
+ *              seguro para destruir imagens.
+ *   async = 1: nao espera; passa a gravar no outro conjunto de frame (e so
+ *              espera se esse ainda estiver em uso, isto e, a GPU um frame
+ *              inteiro atrasada).
+ * Se ha uma imagem do swapchain obtida neste frame, ela e apresentada. */
+static void frame_submit_ex(int async)
 {
     VkCommandBuffer cbs[2] = { s_cmd_up, s_cmd };
+    VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
     VkSubmitInfo si = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 2, .pCommandBuffers = cbs };
+    FrameSet *f = &s_sets[s_set];
+    double t0;
 
-    if (!s_recording)
+    if (!s_recording) {
+        if (!async)
+            sets_wait_all();
         return;
+    }
     end_pass();
     VKCHECK(vkEndCommandBuffer(s_cmd_up));
     VKCHECK(vkEndCommandBuffer(s_cmd));
     s_recording = 0;
     if (s_lost)
         return;
-    {
-        double t0 = now_s();
-
-        VKCHECK(vkQueueSubmit(s_queue, 1, &si, s_fence));
-        if (s_lost)
-            return;
-        VKCHECK(vkWaitForFences(s_dev, 1, &s_fence, VK_TRUE, UINT64_MAX));
-        VKCHECK(vkResetFences(s_dev, 1, &s_fence));
-        s_t_gpu += now_s() - t0;
+    if (s_swap.acquired != SWAP_NONE) {
+        si.waitSemaphoreCount = 1;
+        si.pWaitSemaphores = &f->acquired;
+        si.pWaitDstStageMask = &wait_stage;
+        si.signalSemaphoreCount = 1;
+        si.pSignalSemaphores = &f->rendered;
     }
+    t0 = now_s();
+    VKCHECK(vkQueueSubmit(s_queue, 1, &si, s_fence));
+    if (s_lost)
+        return;
+    f->pending = 1;
     s_n_submit++;
+    if (s_swap.acquired != SWAP_NONE) {
+        VkPresentInfoKHR pi = { .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .waitSemaphoreCount = 1, .pWaitSemaphores = &f->rendered,
+            .swapchainCount = 1, .pSwapchains = &s_swap.sc,
+            .pImageIndices = &s_swap.acquired };
+        VkResult r = vkQueuePresentKHR(s_queue, &pi);
+
+        s_swap.acquired = SWAP_NONE;
+        if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR) {
+            s_swap.stale = 1;
+        } else if (r != VK_SUCCESS) {
+            fprintf(stderr, "[VK] vkQueuePresentKHR falhou (%d)\n", (int)r);
+            s_swap.stale = 1;
+            s_swap.fails++;
+        }
+    }
+    if (async && s_nsets > 1) {
+        set_save();
+        set_load((s_set + 1) % s_nsets);
+        set_wait(&s_sets[s_set]);
+    } else {
+        sets_wait_all();
+    }
+    s_t_gpu += now_s() - t0;
+}
+
+static void frame_submit(void)
+{
+    frame_submit_ex(0);
 }
 
 /* ── Superficies ───────────────────────────────────────────────────────────── */
@@ -764,13 +1083,15 @@ static VkImageView texture_get(const Nv2aTexture *t, const Surface *target,
         fresh = 1;
     }
     {
-        /* Caixa-preta: toda textura criada ou cujo conteudo mudou neste quadro. */
-        char ev[160];
+        if (dw4_frame_ring_on()) {
+            /* Caixa-preta: toda textura criada ou cujo conteudo mudou neste quadro. */
+            char ev[160];
 
-        snprintf(ev, sizeof ev, "TEX %s va=%08X %ux%u f%02X pal=%08X:%08X hash %08X -> %08X",
-                 fresh ? "NOVA" : "MUDOU", va, t->width, t->height, t->color, t->palette,
-                 pal_key, (uint32_t)e->hash, (uint32_t)h);
-        dw4_frame_detail(ev);
+            snprintf(ev, sizeof ev, "TEX %s va=%08X %ux%u f%02X pal=%08X:%08X hash %08X -> %08X",
+                     fresh ? "NOVA" : "MUDOU", va, t->width, t->height, t->color, t->palette,
+                     pal_key, (uint32_t)e->hash, (uint32_t)h);
+            dw4_frame_detail(ev);
+        }
         /* tex_upload pode enviar o frame (anel cheio), mas nunca esvazia o
          * cache: `e` continua valido. */
         tex_upload(&e->img, s_decode, t->width, t->height, fresh);
@@ -1288,7 +1609,7 @@ static void flush_pending(void)
         vkCmdBindVertexBuffers(s_cmd, 1, 1, k->has_ext ? &s_vbe.buf : &s_dummy.buf, &zero);
         s_bound_ext = k->has_ext;
     }
-    {
+    if (dw4_frame_ring_on()) {
         /* Caixa-preta: o que este lote e, para comparar quadro a quadro. */
         char line[480];
         uint32_t rch = 0;
@@ -1506,7 +1827,7 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
                 key.tva[i] = tex_va(t->offset);
                 key.tfmt[i] = t->color;
                 key.tpal[i] = t->palette;
-                if (t->palette) {
+                if (t->palette && dw4_frame_ring_on()) {     /* so diagnostico */
                     const uint8_t *pal = guest_bytes(t->palette, 1024);
                     uint64_t ph = pal ? hash_bytes(pal, 1024) : 0;
                     key.tpalh[i] = (uint32_t)(ph ^ (ph >> 32));
@@ -1537,7 +1858,7 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
         return;
 
     enqueue(&key, b->vertices, b->ext ? b->ext->vertices : NULL, b->count);
-    if (b->ext)
+    if (b->ext && dw4_frame_ring_on())
         tm_note();
     seq_draw(e, key.tsurf[0] ? key.tsurf[0] : key.tsurf[1] ? key.tsurf[1]
                 : key.tsurf[2] ? key.tsurf[2] : key.tsurf[3]);
@@ -1546,13 +1867,185 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
     s_n_tris += b->count / 3;
 }
 
-static uint32_t s_last_va, s_last_pitch;    /* ultimo frame trazido ao guest */
-
 /* Janela do toolkit: recebe um frame de qualquer tamanho (patch 4.10). */
 extern void xbox_FramebufferWindowPresentPixels(const void *pixels, uint32_t w,
                                                 uint32_t h, uint32_t pitch);
 
-/* Antes do snapshot da janela: traz o frame pronto para a memoria do guest. */
+static uint32_t s_last_va, s_last_pitch;    /* ultimo frame trazido ao guest */
+static int s_f9_pending;                    /* F9 no modo direto: grava no proximo frame */
+static void f9_save(void);
+
+/* Obtem a proxima imagem do swapchain (refazendo-o se a janela mudou).
+ * 0 = este frame nao vai para a janela. */
+static int swap_acquire(void)
+{
+    FrameSet *f = &s_sets[s_set];
+    int dw = 0, dh = 0;
+
+    if (!s_swap.surf || s_swap.fails > 8)
+        return 0;
+    xbox_FramebufferWindowVkDrawableSize(&dw, &dh);
+    if (dw <= 0 || dh <= 0)
+        return 0;                       /* minimizada */
+    if (s_swap.ok && ((uint32_t)dw != s_swap.w || (uint32_t)dh != s_swap.h))
+        s_swap.stale = 1;               /* Wayland nao avisa: o tamanho e nosso */
+    for (int attempt = 0; attempt < 2; attempt++) {
+        VkResult r;
+
+        if (!s_swap.ok || s_swap.stale) {
+            sets_wait_all();            /* nada em voo usa as imagens antigas */
+            if (!swap_create()) {
+                s_swap.fails++;
+                return 0;
+            }
+        }
+        r = vkAcquireNextImageKHR(s_dev, s_swap.sc, UINT64_MAX, f->acquired,
+                                  VK_NULL_HANDLE, &s_swap.acquired);
+        if (r == VK_SUCCESS || r == VK_SUBOPTIMAL_KHR) {
+            if (r == VK_SUBOPTIMAL_KHR)
+                s_swap.stale = 1;       /* serve para este frame; refaz depois */
+            s_swap.fails = 0;
+            return 1;
+        }
+        s_swap.acquired = SWAP_NONE;
+        if (r != VK_ERROR_OUT_OF_DATE_KHR) {
+            fprintf(stderr, "[VK] vkAcquireNextImageKHR falhou (%d)\n", (int)r);
+            s_swap.fails++;
+            s_swap.ok = 0;
+            return 0;
+        }
+        s_swap.stale = 1;
+    }
+    return 0;
+}
+
+/* Modo direto: o frame pronto vai da superficie para a imagem do swapchain
+ * com um blit (escala e faixas pretas feitas pela GPU) e o envio nao espera.
+ * So le o frame de volta para a CPU se alguem pediu pixels. */
+static void present_direct(Surface *e)
+{
+    static const VkClearColorValue black = { .float32 = { 0, 0, 0, 1 } };
+    static const VkImageSubresourceRange range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    uint32_t src_w = e->pw;
+    uint32_t src_h = (uint32_t)((float)ro_display_rows(e->h) * ro_scale + 0.5f);
+    int want = dw4_frame_wanted() || s_f9_pending;
+    int shown, from_swap = 0;
+    VkImage dst = VK_NULL_HANDLE;
+
+    if (src_h > e->ph) src_h = e->ph;
+    if (!src_w || !src_h) {
+        frame_submit_ex(1);
+        return;
+    }
+    if (want) {
+        VkDeviceSize need = (VkDeviceSize)src_w * src_h * 4;
+
+        if (s_swap.shot && need < (VkDeviceSize)s_swap.w * s_swap.h * 4)
+            need = (VkDeviceSize)s_swap.w * s_swap.h * 4;
+
+        if (need > s_rb.size) {
+            frame_submit();             /* nada na GPU usa o buffer antigo */
+            dw4_frame_note_host(NULL, 0, 0, 0);
+            buf_destroy(&s_rb);
+            s_buf_cached = 1;
+            if (!buf_create(&s_rb, need, VK_BUFFER_USAGE_TRANSFER_DST_BIT)) {
+                s_lost = 1;
+                return;
+            }
+        }
+    }
+    frame_begin();
+    end_pass();
+    shown = swap_acquire();
+    if (s_lost)
+        return;
+    frame_begin();                      /* swap_acquire pode ter esperado a GPU */
+    barrier(s_cmd, e->color.img, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_ACCESS_TRANSFER_READ_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT);
+    e->dirty = 0;
+    if (shown) {
+        VkImageBlit blit = {
+            .srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
+            .dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 } };
+        /* Maior retangulo com a forma do frame, centrado na janela. */
+        uint32_t dw = s_swap.w, dh = (uint32_t)((uint64_t)s_swap.w * src_h / src_w);
+
+        if (dh > s_swap.h) {
+            dh = s_swap.h;
+            dw = (uint32_t)((uint64_t)s_swap.h * src_w / src_h);
+        }
+        if (!dw) dw = 1;
+        if (!dh) dh = 1;
+        dst = s_swap.img[s_swap.acquired];
+        from_swap = want && s_swap.shot
+                 && (VkDeviceSize)s_swap.w * s_swap.h * 4 <= s_rb.size;
+        blit.srcOffsets[1] = (VkOffset3D){ (int32_t)src_w, (int32_t)src_h, 1 };
+        blit.dstOffsets[0] = (VkOffset3D){ (int32_t)((s_swap.w - dw) / 2),
+                                           (int32_t)((s_swap.h - dh) / 2), 0 };
+        blit.dstOffsets[1] = (VkOffset3D){ blit.dstOffsets[0].x + (int32_t)dw,
+                                           blit.dstOffsets[0].y + (int32_t)dh, 1 };
+        barrier(s_cmd, dst, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+        if (dw != s_swap.w || dh != s_swap.h)
+            vkCmdClearColorImage(s_cmd, dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1,
+                                 &range);
+        /* 640x480 original ampliado: pixels nitidos, como a janela SDL fazia;
+         * imagem em resolucao interna maior: filtro linear. */
+        vkCmdBlitImage(s_cmd, e->color.img, VK_IMAGE_LAYOUT_GENERAL, dst,
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
+                       ro_enhanced() ? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
+        if (from_swap) {
+            VkBufferImageCopy region = {
+                .imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
+                .imageExtent = { s_swap.w, s_swap.h, 1 } };
+
+            barrier(s_cmd, dst, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT);
+            vkCmdCopyImageToBuffer(s_cmd, dst, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, s_rb.buf,
+                                   1, &region);
+        }
+        barrier(s_cmd, dst, VK_IMAGE_ASPECT_COLOR_BIT,
+                from_swap ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+                          : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                from_swap ? VK_ACCESS_TRANSFER_READ_BIT : VK_ACCESS_TRANSFER_WRITE_BIT, 0,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+        xbox_FramebufferWindowFrameShape(src_w, src_h);
+    }
+    if (want) {
+        VkBufferImageCopy region = { .imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
+                                     .imageExtent = { src_w, src_h, 1 } };
+        uint32_t out_w = from_swap ? s_swap.w : src_w, out_h = from_swap ? s_swap.h : src_h;
+
+        if (!from_swap)
+            vkCmdCopyImageToBuffer(s_cmd, e->color.img, VK_IMAGE_LAYOUT_GENERAL, s_rb.buf, 1,
+                                   &region);
+        frame_submit();                 /* espera: os pixels sao lidos ja */
+        if (s_lost)
+            return;
+        s_n_readback++;
+        dw4_frame_note_host(s_rb.map, out_w, out_h, out_w * 4);
+        if (s_f9_pending) {
+            s_f9_pending = 0;
+            f9_save();
+        }
+    } else {
+        frame_submit_ex(1);
+    }
+    if (e->w != 640)
+        s_n_odd_present++;
+    s_last_va = 0;
+}
+
+/* Antes do snapshot da janela: traz o frame pronto para a memoria do guest
+ * (modo leitura) ou o apresenta pelo swapchain (modo direto). */
 static void be_present_sync(void)
 {
     VkBufferImageCopy region = { .imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 } };
@@ -1571,6 +2064,10 @@ static void be_present_sync(void)
         return;
     }
     rows = e->clip_h && e->clip_h < e->h ? e->clip_h : e->h;
+    if (s_async) {
+        present_direct(e);
+        return;
+    }
     if (ro_enhanced()) {
         /* Resolucao interna / widescreen: o frame nao cabe nos 640x480 do
          * guest. Vai direto para a janela e para as capturas. */
@@ -1676,6 +2173,26 @@ submit_only:
  * As mesmas do back end OpenGL, menos a captura F9. */
 extern int xbox_FramebufferKeyDown(int vk);
 
+static void f9_save(void)
+{
+    const char *dir = getenv("DW4_SHOT_DIR");
+    char path[512];
+    int seq = 0;
+
+    if (!dir || !*dir)
+        dir = "build/shots";
+    for (; seq < 1000; seq++) {
+        FILE *t;
+        snprintf(path, sizeof path, "%s/f9-%03d.bmp", dir, seq);
+        t = fopen(path, "r");
+        if (!t)
+            break;
+        fclose(t);
+    }
+    fprintf(stderr, "[VK] F9: %s %s (rastreio de draws: so no OpenGL)\n",
+            dw4_screenshot_save_now(path) ? "captura em" : "NAO gravou", path);
+}
+
 static void hotkeys_poll(void)
 {
     static int prev[8];
@@ -1705,26 +2222,14 @@ static void hotkeys_poll(void)
             s_dbg ^= 8;
             fprintf(stderr, "[VK] F8: combiners %s\n", (s_dbg & 8) ? "DESLIGADOS" : "normais");
             break;
-        case 4: {
-            /* So a imagem; o rastreio de draws existe so no back end OpenGL. */
-            const char *dir = getenv("DW4_SHOT_DIR");
-            char path[512];
-            int seq = 0;
-
-            if (!dir || !*dir)
-                dir = "build/shots";
-            for (; seq < 1000; seq++) {
-                FILE *t;
-                snprintf(path, sizeof path, "%s/f9-%03d.bmp", dir, seq);
-                t = fopen(path, "r");
-                if (!t)
-                    break;
-                fclose(t);
-            }
-            fprintf(stderr, "[VK] F9: %s %s (rastreio de draws: so no OpenGL)\n",
-                    dw4_screenshot_save(path) ? "captura em" : "NAO gravou", path);
+        case 4:
+            /* So a imagem; o rastreio de draws existe so no back end OpenGL.
+             * No modo direto o frame nao esta na CPU: le o proximo. */
+            if (s_async)
+                s_f9_pending = 1;
+            else
+                f9_save();
             break;
-        }
         case 7:
             dw4_frame_ring_dump();      /* F12: os ultimos ~2 s de quadros */
             break;
@@ -1749,7 +2254,7 @@ static void be_flip(void)
 
     if (s_ok && !s_lost) {
         flush_pending();
-        frame_submit();                 /* o que sobrou depois do present_sync */
+        frame_submit_ex(s_async);       /* o que sobrou depois do present_sync */
     }
     /* Etiqueta do quadro na caixa-preta: o que ele teve de diferente. */
     seq_flush_run();
@@ -1775,13 +2280,34 @@ static void be_flip(void)
             fprintf(stderr, "[VK] %.1f fps | por frame: %lu draws -> %lu lotes, %lu tris, "
                             "%.1f envios | %lu decodes em %lds | %d texturas, %d superficies, "
                             "%d pipelines | ms/frame: back end %.1f (GPU %.1f, copia p/ janela "
-                            "%.1f)%s\n",
+                            "%.1f) | %s, %lu lidos de volta%s\n",
                     (double)(s_frame - frame0) / (double)(now - last),
                     s_n_draw / nf, s_n_flush / nf, s_n_tris / nf,
                     (double)s_n_submit / nf, s_n_decode, (long)(now - last),
                     s_tex_count, s_nsurf, s_npipes,
                     s_t_backend * 1e3 / nf, s_t_gpu * 1e3 / nf, s_t_copy * 1e3 / nf,
+                    !s_async ? "modo leitura" : s_swap.ok ? "direto (swapchain)"
+                                                          : "direto sem janela",
+                    s_n_readback,
                     s_n_odd_present ? " | FRAMES DE SUPERFICIE NAO-TELA" : "");
+            {
+                /* A thread do jogo no portao do kick (patch 4.13): quantos
+                 * kicks por frame, e quanto ela dormiu esperando a cadencia
+                 * (flip retido / limitador) e esperando o executor terminar o
+                 * que ja tinha sido enviado. O segundo numero e o quanto o
+                 * jogo fica preso atras do executor. */
+                extern void xbox_Nv2aKickStats(unsigned long *, double *, double *);
+                static unsigned long k0;
+                static double p0, b0;
+                unsigned long k;
+                double pw, bw;
+
+                xbox_Nv2aKickStats(&k, &pw, &bw);
+                fprintf(stderr, "[VK] jogo: %.1f kicks/frame | ms/frame dormindo: %.1f na "
+                        "cadencia, %.1f esperando o executor\n",
+                        (double)(k - k0) / nf, (pw - p0) * 1e3 / nf, (bw - b0) * 1e3 / nf);
+                k0 = k; p0 = pw; b0 = bw;
+            }
             {
                 /* metodos do pushbuffer cortados por um kick e retomados (patch 4.12) */
                 extern unsigned long nv2a_pb_scan_segment_splits(void);
@@ -1798,6 +2324,7 @@ static void be_flip(void)
             tag_draw = tag_tris = tag_flush = 0;
             s_t_backend = s_t_gpu = s_t_copy = 0.0;
             s_n_odd_present = 0;
+            s_n_readback = 0;
         }
     }
 }
@@ -1807,8 +2334,23 @@ static void be_flip(void)
 static void be_shutdown(void)
 {
     dw4_frame_note_host(NULL, 0, 0, 0);     /* o buffer de leitura vai embora */
+    dw4_frame_on_demand(0);
     if (s_dev) {
         vkDeviceWaitIdle(s_dev);
+        swap_destroy(0);
+        if (s_nsets) {
+            set_save();
+            for (int i = 0; i < s_nsets; i++) {
+                FrameSet *f = &s_sets[i];
+
+                buf_destroy(&f->vb); buf_destroy(&f->vbe);
+                buf_destroy(&f->ubo); buf_destroy(&f->stage);
+                if (f->dpool) vkDestroyDescriptorPool(s_dev, f->dpool, NULL);
+                if (f->fence) vkDestroyFence(s_dev, f->fence, NULL);
+                if (f->acquired) vkDestroySemaphore(s_dev, f->acquired, NULL);
+                if (f->rendered) vkDestroySemaphore(s_dev, f->rendered, NULL);
+            }
+        }
         for (int i = 0; i < s_nfb; i++)
             vkDestroyFramebuffer(s_dev, s_fb[i].fb, NULL);
         for (int i = 0; i < s_npipes; i++)
@@ -1824,21 +2366,26 @@ static void be_shutdown(void)
             VkSampler *sp = &s_samp[i / 6][(i / 2) % 3][i % 2];
             if (*sp) vkDestroySampler(s_dev, *sp, NULL);
         }
-        buf_destroy(&s_vb); buf_destroy(&s_vbe); buf_destroy(&s_dummy);
-        buf_destroy(&s_ubo); buf_destroy(&s_stage); buf_destroy(&s_rb);
+        buf_destroy(&s_dummy); buf_destroy(&s_rb);
         if (s_vs) vkDestroyShaderModule(s_dev, s_vs, NULL);
         if (s_fs) vkDestroyShaderModule(s_dev, s_fs, NULL);
-        if (s_dpool) vkDestroyDescriptorPool(s_dev, s_dpool, NULL);
         if (s_layout) vkDestroyPipelineLayout(s_dev, s_layout, NULL);
         if (s_dsl) vkDestroyDescriptorSetLayout(s_dev, s_dsl, NULL);
         for (int i = 0; i < 2; i++)
             if (s_rp[i]) vkDestroyRenderPass(s_dev, s_rp[i], NULL);
-        if (s_fence) vkDestroyFence(s_dev, s_fence, NULL);
         if (s_pool) vkDestroyCommandPool(s_dev, s_pool, NULL);
         vkDestroyDevice(s_dev, NULL);
     }
+    s_dev = VK_NULL_HANDLE;
+    swap_destroy(1);                        /* a superficie e da instancia */
     if (s_inst)
         vkDestroyInstance(s_inst, NULL);
+    memset(s_sets, 0, sizeof s_sets);
+    memset(&s_swap, 0, sizeof s_swap);
+    s_swap.acquired = SWAP_NONE;
+    s_nsets = 0; s_set = 0; s_async = 0; s_f9_pending = 0;
+    memset(&s_vb, 0, sizeof s_vb); memset(&s_vbe, 0, sizeof s_vbe);
+    memset(&s_ubo, 0, sizeof s_ubo); memset(&s_stage, 0, sizeof s_stage);
     s_dev = VK_NULL_HANDLE; s_inst = VK_NULL_HANDLE; s_phys = VK_NULL_HANDLE;
     s_pool = VK_NULL_HANDLE; s_fence = VK_NULL_HANDLE; s_dpool = VK_NULL_HANDLE;
     s_layout = VK_NULL_HANDLE; s_dsl = VK_NULL_HANDLE; s_vs = s_fs = VK_NULL_HANDLE;
@@ -1871,15 +2418,29 @@ static int pick_device(void)
         VkPhysicalDeviceProperties p;
         VkQueueFamilyProperties qf[32];
         uint32_t nq = 32;
-        int has_gfx = 0, r;
+        int has_gfx = 0, presents = 0, r;
 
         vkGetPhysicalDeviceProperties(devs[i], &p);
         vkGetPhysicalDeviceQueueFamilyProperties(devs[i], &nq, qf);
-        for (uint32_t q = 0; q < nq; q++)
-            if (qf[q].queueFlags & VK_QUEUE_GRAPHICS_BIT) has_gfx = 1;
+        for (uint32_t q = 0; q < nq; q++) {
+            VkBool32 can = VK_FALSE;
+
+            if (!(qf[q].queueFlags & VK_QUEUE_GRAPHICS_BIT))
+                continue;
+            has_gfx = 1;
+            if (s_swap.surf
+                    && vkGetPhysicalDeviceSurfaceSupportKHR(devs[i], q, s_swap.surf, &can)
+                       == VK_SUCCESS && can)
+                presents = 1;
+        }
         r = p.deviceType <= 4 ? rank[p.deviceType] : 0;
-        fprintf(stderr, "[VK] placa %u: %s (%s)\n", i, p.deviceName,
-                p.deviceType <= 4 ? type_name[p.deviceType] : "?");
+        /* Com janela: uma placa que apresenta nela vale mais que uma mais
+         * forte que nao apresenta (notebook com a tela na integrada). */
+        if (presents)
+            r += 10;
+        fprintf(stderr, "[VK] placa %u: %s (%s%s)\n", i, p.deviceName,
+                p.deviceType <= 4 ? type_name[p.deviceType] : "?",
+                s_swap.surf && !presents ? ", nao apresenta nesta janela" : "");
         if (!has_gfx)
             continue;
         if (want && *want) {
@@ -1978,8 +2539,11 @@ static int be_init(void)
     VkShaderModuleCreateInfo smf = { .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .codeSize = sizeof FS_SPV, .pCode = FS_SPV };
     VkFormatProperties fp;
-    VkCommandBuffer cbs[2];
-    const char *c;
+    const char *c, *pm;
+    const char *inst_ext[16];
+    unsigned n_inst_ext = 16;
+    static const char *dev_ext[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+    int want_direct;
     VkResult r;
 
     if (s_ok)
@@ -1992,11 +2556,32 @@ static int be_init(void)
         s_dbg = atoi(getenv("DW4_VK_DBG"));
     ro_init("VK");
 
+    /* Modo de apresentacao: direto (swapchain) se o toolkit abriu a janela
+     * para isso; senao leitura de volta. */
+    pm = getenv("DW4_VK_PRESENT");
+    want_direct = !(pm && !strcmp(pm, "readback")) && xbox_FramebufferWindowVulkan();
+    if (want_direct && xbox_FramebufferWindowVkExtensions(inst_ext, &n_inst_ext)) {
+        ici.enabledExtensionCount = n_inst_ext;
+        ici.ppEnabledExtensionNames = inst_ext;
+    } else {
+        want_direct = 0;
+    }
     r = vkCreateInstance(&ici, NULL, &s_inst);
+    if (r != VK_SUCCESS && want_direct) {
+        fprintf(stderr, "[VK] instancia com as extensoes de janela falhou (%d); "
+                        "sem apresentacao direta\n", (int)r);
+        want_direct = 0;
+        ici.enabledExtensionCount = 0;
+        r = vkCreateInstance(&ici, NULL, &s_inst);
+    }
     if (r != VK_SUCCESS) {
         fprintf(stderr, "[VK] vkCreateInstance falhou (%d): sem driver Vulkan?\n", (int)r);
         s_inst = VK_NULL_HANDLE;
         return 0;
+    }
+    if (want_direct && !xbox_FramebufferWindowVkSurface(s_inst, &s_swap.surf)) {
+        s_swap.surf = VK_NULL_HANDLE;
+        want_direct = 0;
     }
     if (!pick_device())
         goto fail;
@@ -2006,6 +2591,39 @@ static int be_init(void)
     vkGetPhysicalDeviceQueueFamilyProperties(s_phys, &nq, qf);
     for (s_qfam = 0; s_qfam < nq; s_qfam++)
         if (qf[s_qfam].queueFlags & VK_QUEUE_GRAPHICS_BIT) break;
+    if (s_swap.surf) {
+        /* A fila que desenha tambem apresenta (toda placa de mesa faz isso
+         * na mesma familia); senao, sem apresentacao direta. */
+        uint32_t q;
+
+        for (q = 0; q < nq; q++) {
+            VkBool32 can = VK_FALSE;
+
+            if ((qf[q].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                    && vkGetPhysicalDeviceSurfaceSupportKHR(s_phys, q, s_swap.surf, &can)
+                       == VK_SUCCESS && can)
+                break;
+        }
+        if (q < nq) {
+            VkExtensionProperties *ep;
+            uint32_t ne = 0;
+
+            s_qfam = q;
+            vkEnumerateDeviceExtensionProperties(s_phys, NULL, &ne, NULL);
+            ep = ne ? malloc(ne * sizeof *ep) : NULL;
+            if (ep && vkEnumerateDeviceExtensionProperties(s_phys, NULL, &ne, ep) >= 0)
+                for (uint32_t i = 0; i < ne; i++)
+                    if (!strcmp(ep[i].extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME))
+                        s_swap.have_ext = 1;
+            free(ep);
+        }
+        if (!s_swap.have_ext)
+            fprintf(stderr, "[VK] esta placa nao apresenta na janela; usando leitura de volta\n");
+    }
+    if (s_swap.have_ext) {
+        dci.enabledExtensionCount = 1;
+        dci.ppEnabledExtensionNames = dev_ext;
+    }
     s_depth_clamp = feat.depthClamp == VK_TRUE;
     want.depthClamp = feat.depthClamp;
 
@@ -2026,12 +2644,6 @@ static int be_init(void)
     pci.queueFamilyIndex = s_qfam;
     if (vkCreateCommandPool(s_dev, &pci, NULL, &s_pool) != VK_SUCCESS)
         goto fail;
-    cai.commandPool = s_pool;
-    if (vkAllocateCommandBuffers(s_dev, &cai, cbs) != VK_SUCCESS
-            || vkCreateFence(s_dev, &fci, NULL, &s_fence) != VK_SUCCESS)
-        goto fail;
-    s_cmd_up = cbs[0];
-    s_cmd = cbs[1];
     if (!make_render_pass(0, &s_rp[0]) || !make_render_pass(1, &s_rp[1]))
         goto fail;
 
@@ -2048,7 +2660,6 @@ static int be_init(void)
     }
     if (vkCreateDescriptorSetLayout(s_dev, &lci, NULL, &s_dsl) != VK_SUCCESS
             || vkCreatePipelineLayout(s_dev, &plci, NULL, &s_layout) != VK_SUCCESS
-            || vkCreateDescriptorPool(s_dev, &dpci, NULL, &s_dpool) != VK_SUCCESS
             || vkCreateShaderModule(s_dev, &smv, NULL, &s_vs) != VK_SUCCESS
             || vkCreateShaderModule(s_dev, &smf, NULL, &s_fs) != VK_SUCCESS)
         goto fail;
@@ -2058,13 +2669,41 @@ static int be_init(void)
         uint32_t a = (uint32_t)props.limits.minUniformBufferOffsetAlignment;
         s_ubo_step = (s_ubo_step + a - 1) / a * a;
     }
-    if (!buf_create(&s_vb, (VkDeviceSize)VTX_CAP * sizeof(Nv2aVertex),
-                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
-            || !buf_create(&s_vbe, (VkDeviceSize)VTX_CAP * sizeof(Nv2aVertexExt),
-                           VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
-            || !buf_create(&s_dummy, sizeof(Nv2aVertexExt), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
-            || !buf_create(&s_ubo, UBO_CAP, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
-            || !buf_create(&s_stage, 16u * 1024u * 1024u, VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
+    /* Apresentacao direta: swapchain na janela + dois conjuntos de frame.
+     * DW4_VK_PRESENT=async liga os quadros em voo mesmo sem janela (teste). */
+    if (s_swap.surf && s_swap.have_ext && !swap_create()) {
+        fprintf(stderr, "[VK] swapchain nao subiu; usando leitura de volta\n");
+        swap_destroy(1);
+    }
+    if (s_swap.surf && !s_swap.ok)
+        swap_destroy(1);
+    s_async = s_swap.ok || (pm && !strcmp(pm, "async"));
+    for (s_nsets = 0; s_nsets < (s_async ? FRAME_SETS : 1); s_nsets++) {
+        FrameSet *f = &s_sets[s_nsets];
+        VkSemaphoreCreateInfo sci = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+        VkCommandBuffer cbs[2];
+
+        cai.commandPool = s_pool;
+        if (vkAllocateCommandBuffers(s_dev, &cai, cbs) != VK_SUCCESS
+                || vkCreateFence(s_dev, &fci, NULL, &f->fence) != VK_SUCCESS
+                || vkCreateDescriptorPool(s_dev, &dpci, NULL, &f->dpool) != VK_SUCCESS
+                || vkCreateSemaphore(s_dev, &sci, NULL, &f->acquired) != VK_SUCCESS
+                || vkCreateSemaphore(s_dev, &sci, NULL, &f->rendered) != VK_SUCCESS
+                || !buf_create(&f->vb, (VkDeviceSize)VTX_CAP * sizeof(Nv2aVertex),
+                               VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
+                || !buf_create(&f->vbe, (VkDeviceSize)VTX_CAP * sizeof(Nv2aVertexExt),
+                               VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
+                || !buf_create(&f->ubo, UBO_CAP, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
+                || !buf_create(&f->stage, 16u * 1024u * 1024u,
+                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT)) {
+            s_nsets++;                  /* o shutdown libera o que este criou */
+            goto fail;
+        }
+        f->up = cbs[0];
+        f->draw = cbs[1];
+    }
+    set_load(0);
+    if (!buf_create(&s_dummy, sizeof(Nv2aVertexExt), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
             || (s_buf_cached = 1,
                 !buf_create(&s_rb, 640u * 480u * 4u, VK_BUFFER_USAGE_TRANSFER_DST_BIT)))
         goto fail;
@@ -2085,6 +2724,11 @@ static int be_init(void)
             VK_VERSION_MINOR(props.apiVersion), VK_VERSION_PATCH(props.apiVersion),
             s_depth_fmt == VK_FORMAT_D24_UNORM_S8_UINT ? "D24S8" : "D32FS8",
             s_depth_clamp ? "" : ", sem depth clamp");
+    fprintf(stderr, "[VK] apresentacao: %s\n",
+            s_swap.ok ? "direta pela GPU (swapchain), quadros em voo"
+            : s_async ? "quadros em voo, sem janela (DW4_VK_PRESENT=async)"
+                      : "leitura de volta (sem janela Vulkan)");
+    dw4_frame_on_demand(s_async);
     s_ok = 1;
     return 1;
 

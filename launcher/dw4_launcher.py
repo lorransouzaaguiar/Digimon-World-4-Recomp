@@ -54,6 +54,7 @@ DEFAULTS = {
     "res": 480,              # altura da imagem: 480 (original) | 720 | 1080 | 1440 | 2160
     "aspect": "4:3",         # 4:3 (original) | 16:9 | 16:10 | 21:9
     "fps": 30,               # limite de quadros: 30 (como rodava no Xbox) | 60
+    "parallel": False,       # jogo e GPU emulada em paralelo (RECOMP_KICK_AHEAD); experimental
     "keyboard": True,
 }
 
@@ -81,6 +82,13 @@ STR = {
         "window_d": "Fora da tela cheia, a janela abre do tamanho da resolução interna escolhida abaixo (em 480p e "
                     "720p, no dobro, para não ficar pequena). Se não couber no monitor, é reduzida mantendo a forma.",
         "vsync": "Sincronização vertical", "vsync_d": "Apresenta os quadros no ritmo do monitor. Desligue só para testes.",
+        "perf": "Desempenho", "parallel": "Jogo e placa de vídeo em paralelo (experimental)",
+        "parallel_d": "Ligue se o jogo não segura a taxa de quadros escolhida (cai abaixo de 30 ou de 60 fps em "
+                      "áreas cheias) e o seu processador tem 4 núcleos ou mais: a lógica do jogo e o desenho "
+                      "passam a rodar ao mesmo tempo em dois núcleos, em vez de se revezarem. "
+                      "Deixe desligado se o jogo já roda liso (não muda nada, como num PC forte) ou se o "
+                      "processador tem só 2 núcleos (não há núcleo sobrando para aproveitar). "
+                      "Se algo piscar ou sumir na tela com isto ligado, desligue.",
         "image": "Imagem",
         "res": "Resolução interna", "res_orig": "480p (original)",
         "res_d": "Altura em que o jogo é desenhado. Use a do seu monitor para a imagem mais nítida; "
@@ -96,16 +104,17 @@ STR = {
         "renderer": "API gráfica", "r_vk": "Vulkan — padrão", "r_gl": "OpenGL 3.3",
         "r_cpu": "CPU (referência, muito lento)",
         "renderer_d": "É a forma como o jogo fala com a placa de vídeo. Vulkan e OpenGL desenham a mesma imagem; "
-                      "a diferença de desempenho entre elas é pequena.",
-        "api_vk": "Vulkan (padrão) — a mais nova. No nosso teste usou um pouco menos de processador (até 9% menos "
-                  "em 1440p) e a mesma quantidade de placa de vídeo. Precisa de um driver com Vulkan.",
+                      "o Vulkan é o mais rápido, principalmente em resolução alta.",
+        "api_vk": "Vulkan (padrão) — o mais rápido: o quadro pronto vai direto da placa de vídeo para a janela. "
+                  "Em 1440p e 4K é o que segura os 60 fps. Precisa de um driver com Vulkan.",
         "api_gl": "OpenGL 3.3 — a mais antiga e compatível; funciona em praticamente qualquer placa e driver. "
-                  "Mesmo uso de placa de vídeo, um pouco mais de processador. Use se o Vulkan der problema.",
+                  "Mais lenta em resolução alta. Use se o Vulkan der problema.",
         "api_cpu": "CPU — desenha tudo no processador, sem usar a placa de vídeo. Faz poucos quadros por segundo; "
                    "serve só para comparar quando a imagem parece errada.",
-        "api_note": "O que pesa neste jogo é o processador (cerca de 2 núcleos ocupados), não a placa de vídeo: em "
-                    "1440p a placa ficou em 18% de uso com qualquer das duas (medido numa RTX 5070). Se a API "
-                    "escolhida não estiver disponível, o jogo abre com a outra.",
+        "api_note": "Com Vulkan o jogo usa pouco processador (bem menos de um núcleo em cenas leves) e deixa o "
+                    "trabalho pesado para a placa de vídeo; medido numa RTX 5070, onde 4K roda a 60 fps. "
+                    "O OpenGL traz cada quadro de volta pela memória, o que custa quadros de 1440p para cima. "
+                    "Se a API escolhida não estiver disponível, o jogo abre com a outra.",
         "vk_missing": "Vulkan não foi encontrado neste sistema: o jogo vai abrir com OpenGL.",
         "keyboard": "Teclado como controle 1", "keyboard_d": "Um controle conectado continua funcionando junto.",
         "pad_note": "Qualquer controle reconhecido como Xbox/XInput funciona sem configuração.",
@@ -117,11 +126,21 @@ STR = {
         "import_bad": "Este .zip não parece um backup de saves deste launcher.",
         "not_while_running": "Feche o jogo antes de mexer nos saves.",
         "known": "Problemas conhecidos",
-        "known_1": "Pular o vídeo de abertura com START às vezes fecha o jogo. Abra de novo; deixar o vídeo tocar evita.",
+        "known_1": "Pular o vídeo de abertura com START pode, raramente, fechar o jogo. Se acontecer, abra de novo.",
         "known_2": "Reflexos e brilhos gerados automaticamente não estão implementados; alguns objetos podem parecer chapados.",
-        "known_3": "Testado em uma única máquina (CachyOS, NVIDIA). Outros sistemas ainda não foram testados.",
+        "known_3": "Em algumas áreas o chão escurece por alguns quadros e volta. É só visual; a causa ainda não foi achada.",
+        "known_4": "Testado em uma única máquina (CachyOS, NVIDIA RTX 5070), onde roda a 60 fps em 4K. Outras placas "
+                   "(AMD, Intel), processadores mais fracos e outros sistemas ainda não foram testados.",
+        "slow": "Se o jogo estiver lento",
+        "slow_1": "Use a API gráfica Vulkan (Gráficos). Com OpenGL cada quadro passa pela memória, o que pesa de 1440p para cima.",
+        "slow_2": "Baixe a resolução interna (Gráficos → Imagem). É o que mais alivia a placa de vídeo.",
+        "slow_3": "Em processador com 4 núcleos ou mais, ligue \"Jogo e placa de vídeo em paralelo\" (Gráficos → Desempenho).",
+        "slow_4": "Limite de 30 fps é a velocidade original do jogo; em 60 fps tudo anda duas vezes mais rápido e pesa o dobro.",
+        "slow_5": "Continua lento? Jogue um pouco na área lenta, feche o jogo e gere o relatório abaixo: o log anota a "
+                  "cada 5 segundos os quadros por segundo e onde o tempo foi gasto.",
         "logs": "Logs", "open_logs": "Abrir pasta de logs", "report": "Gerar relatório",
-        "report_d": "Junta versão, sistema, placa de vídeo, opções e o fim do último log em um arquivo de texto, "
+        "report_d": "Junta versão, sistema, processador, placa de vídeo, opções, um resumo dos quadros por segundo e "
+                    "o fim do último log em um arquivo de texto, "
                     "sem o nome da sua pasta pessoal. Nenhum arquivo do jogo entra.",
         "report_done": "Relatório gravado em: ", "no_log": "Ainda não há log: jogue uma vez pelo launcher.",
         "language": "Idioma do launcher", "l_auto": "Automático", "freeze_tip":
@@ -150,6 +169,13 @@ STR = {
         "window_d": "Outside fullscreen, the window opens at the internal resolution chosen below (doubled at 480p "
                     "and 720p, so it is not tiny). If it does not fit the display it is shrunk, keeping its shape.",
         "vsync": "Vertical sync", "vsync_d": "Presents frames at the display's pace. Turn off for testing only.",
+        "perf": "Performance", "parallel": "Game and graphics card in parallel (experimental)",
+        "parallel_d": "Turn on if the game cannot hold the frame rate you chose (drops below 30 or 60 fps in "
+                      "busy areas) and your processor has 4 or more cores: game logic and drawing then run "
+                      "at the same time on two cores instead of taking turns. "
+                      "Leave off if the game already runs smoothly (it changes nothing, as on a fast PC) or "
+                      "if the processor has only 2 cores (there is no spare core to use). "
+                      "If anything flickers or goes missing on screen with this on, turn it off.",
         "image": "Picture",
         "res": "Internal resolution", "res_orig": "480p (original)",
         "res_d": "The height the game is drawn at. Use your display's for the sharpest picture; "
@@ -165,16 +191,17 @@ STR = {
         "renderer": "Graphics API", "r_vk": "Vulkan — default", "r_gl": "OpenGL 3.3",
         "r_cpu": "CPU (reference, very slow)",
         "renderer_d": "This is how the game talks to your graphics card. Vulkan and OpenGL draw the same picture; "
-                      "the performance difference between them is small.",
-        "api_vk": "Vulkan (default) — the newer one. In our test it used slightly less processor (up to 9% less "
-                  "at 1440p) and the same amount of graphics card. Needs a driver with Vulkan.",
-        "api_gl": "OpenGL 3.3 — the older, most compatible one; works on practically any card and driver. Same "
-                  "graphics card use, slightly more processor. Use it if Vulkan gives you trouble.",
+                      "Vulkan is the faster one, mostly at high resolutions.",
+        "api_vk": "Vulkan (default) — the faster one: the finished frame goes straight from the graphics card to "
+                  "the window. At 1440p and 4K this is what holds 60 fps. Needs a driver with Vulkan.",
+        "api_gl": "OpenGL 3.3 — the older, most compatible one; works on practically any card and driver. "
+                  "Slower at high resolutions. Use it if Vulkan gives you trouble.",
         "api_cpu": "CPU — draws everything on the processor, without the graphics card. A few frames per second; "
                    "only for comparing when the picture looks wrong.",
-        "api_note": "What is heavy in this game is the processor (about 2 cores busy), not the graphics card: at "
-                    "1440p the card stayed at 18% use with either one (measured on an RTX 5070). If the chosen "
-                    "API is unavailable, the game starts with the other.",
+        "api_note": "With Vulkan the game uses little processor (well under one core in light scenes) and leaves "
+                    "the heavy work to the graphics card; measured on an RTX 5070, where 4K runs at 60 fps. "
+                    "OpenGL copies every frame back through memory, which costs frames at 1440p and above. "
+                    "If the chosen API is unavailable, the game starts with the other.",
         "vk_missing": "Vulkan was not found on this system: the game will start with OpenGL.",
         "keyboard": "Keyboard as controller 1", "keyboard_d": "A connected controller keeps working alongside it.",
         "pad_note": "Any controller the system reports as Xbox/XInput works with no setup.",
@@ -186,11 +213,21 @@ STR = {
         "import_bad": "This .zip does not look like a save backup from this launcher.",
         "not_while_running": "Close the game before touching the saves.",
         "known": "Known issues",
-        "known_1": "Skipping the intro movie with START sometimes makes the game quit. Start again; letting it play avoids it.",
+        "known_1": "Skipping the intro movie with START can, rarely, make the game quit. If it happens, start it again.",
         "known_2": "Automatically generated reflections and shine are not implemented; some objects may look flat.",
-        "known_3": "Tested on one machine (CachyOS, NVIDIA). Other systems are untested.",
+        "known_3": "In some areas the floor darkens for a few frames and comes back. It is only visual; the cause has not been found yet.",
+        "known_4": "Tested on one machine (CachyOS, NVIDIA RTX 5070), where it runs at 60 fps in 4K. Other cards "
+                   "(AMD, Intel), slower processors and other systems are untested.",
+        "slow": "If the game is slow",
+        "slow_1": "Use the Vulkan graphics API (Graphics). With OpenGL every frame goes through memory, which is heavy from 1440p up.",
+        "slow_2": "Lower the internal resolution (Graphics → Picture). It is what relieves the graphics card the most.",
+        "slow_3": "On a processor with 4 or more cores, turn on \"Game and graphics card in parallel\" (Graphics → Performance).",
+        "slow_4": "The 30 fps limit is the game's original speed; at 60 fps everything moves twice as fast and costs twice as much.",
+        "slow_5": "Still slow? Play a little in the slow area, close the game and create the report below: every 5 "
+                  "seconds the log records the frames per second and where the time went.",
         "logs": "Logs", "open_logs": "Open log folder", "report": "Create report",
-        "report_d": "Collects version, system, graphics card, options and the end of the last log into a text file, "
+        "report_d": "Collects version, system, processor, graphics card, options, a frames-per-second summary and "
+                    "the end of the last log into a text file, "
                     "without your home folder's name. No game file is included.",
         "report_done": "Report written to: ", "no_log": "No log yet: play once through the launcher.",
         "language": "Launcher language", "l_auto": "Automatic", "freeze_tip":
@@ -492,6 +529,10 @@ class Backend(QObject):
                 env.pop(k, None)
         if not c["vsync"]:
             env["RECOMP_PRESENT_VSYNC"] = "0"
+        if c["parallel"]:
+            env["RECOMP_KICK_AHEAD"] = "1"      # toolkit, patch 4.13 (PORT_NOTES)
+        else:
+            env.pop("RECOMP_KICK_AHEAD", None)
         # O launcher congelado roda com o LD_LIBRARY_PATH do PyInstaller (Qt etc.);
         # o jogo nao pode herdar isso: volta ao valor original do usuario.
         if FROZEN:
@@ -528,9 +569,9 @@ class Backend(QObject):
 
     def _config_header(self) -> str:
         c = self.cfg
-        return ("Config: launcher %s | renderer=%s res=%s aspect=%s fps=%s fullscreen=%s vsync=%s "
+        return ("Config: launcher %s | renderer=%s res=%s aspect=%s fps=%s parallel=%s fullscreen=%s vsync=%s "
                 "keyboard=%s | GPU: %s\n"
-                % (self.version, c["renderer"], c["res"], c["aspect"], c["fps"], c["fullscreen"],
+                % (self.version, c["renderer"], c["res"], c["aspect"], c["fps"], c["parallel"], c["fullscreen"],
                    c["vsync"], c["keyboard"], self._gpu))
 
     @Slot()
@@ -638,6 +679,41 @@ class Backend(QObject):
         self.changed.emit()
 
     # ── suporte ─────────────────────────────────────────────────────────────
+    @staticmethod
+    def _perf_lines(log: Path) -> list:
+        """Do log inteiro (o fim sozinho pode nao ter): como o jogo apresenta e a faixa de fps."""
+        mode, fps, worst = "", [], ""
+        try:
+            for ln in open(log, encoding="utf-8", errors="replace"):
+                if "] apresentacao:" in ln or "renderizador ativo:" in ln:
+                    mode += " | " + ln.strip()
+                elif " fps | por frame" in ln:
+                    try:
+                        v = float(ln.split("]", 1)[1].split("fps", 1)[0])
+                    except (IndexError, ValueError):
+                        continue
+                    if not fps or v < min(fps):
+                        worst = ln.strip()
+                    fps.append(v)
+        except OSError:
+            return []
+        out = ["presentation:" + (mode or " ?")]
+        if fps:
+            out.append("fps (5 s samples): min %.1f, median %.1f, max %.1f, n=%d"
+                       % (min(fps), sorted(fps)[len(fps) // 2], max(fps), len(fps)))
+            out.append("slowest sample: " + worst)
+        return out
+
+    @staticmethod
+    def _cpu_name() -> str:
+        try:
+            for ln in open("/proc/cpuinfo", encoding="utf-8", errors="replace"):
+                if ln.startswith("model name"):
+                    return ln.split(":", 1)[1].strip()
+        except OSError:
+            pass
+        return platform.processor() or platform.machine() or "?"
+
     @Slot()
     def makeReport(self):
         t = STR[self._lang()]
@@ -651,10 +727,11 @@ class Backend(QObject):
             tail = f.read().decode("utf-8", "replace").splitlines()[-300:]
         osr = platform.freedesktop_os_release().get("PRETTY_NAME", "?") if hasattr(platform, "freedesktop_os_release") else "?"
         body = ["Digimon World 4 - Recomp: report", "version: " + self.version,
-                "system: %s | kernel %s | glibc %s" % (osr, platform.release(), platform.libc_ver()[1]),
+                "system: %s | kernel %s | glibc %s | cpu: %s, %s threads"
+                % (osr, platform.release(), platform.libc_ver()[1], self._cpu_name(), os.cpu_count() or "?"),
                 "gpu: " + self._gpu, "options: " + json.dumps({k: v for k, v in self.cfg.items() if k != "game_dir"}),
                 "game files present: " + ", ".join(n for n in GAME_FILES if n not in self.missing_files()),
-                "log: " + last.name, "-" * 70] + tail
+                "log: " + last.name] + self._perf_lines(last) + ["-" * 70] + tail
         dest = self.log_dir() / time.strftime("report-%Y%m%d-%H%M%S.txt")
         dest.write_text(scrub("\n".join(body)) + "\n")
         self.message.emit(t["report_done"] + scrub(str(dest)))

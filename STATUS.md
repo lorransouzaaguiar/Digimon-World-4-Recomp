@@ -258,6 +258,36 @@ ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
   `_outerFrustCullScale`) não resolveu.
 - **Não verificado:** 16:10 / 21:9 / 4K, fases além do que o usuário jogou.
 
+## Desempenho: CPU, núcleos e GPU (2026-11-24, branch `DW4R-2`)
+
+Detalhes e medições em `PORT_NOTES.md` §4.13, §4.14, §7.5b e §8.x.
+
+- **Uso de CPU: de ~195% para ~28% de um núcleo no lobby.** Duas threads giravam à espera do
+  vblank (a do jogo e a da GPU emulada); agora dormem e acordam por evento. Pesa sobretudo em
+  máquinas de 2–4 núcleos e notebooks. Verificado sem janela, goldens iguais.
+- **Vulkan apresenta direto pela GPU** (swapchain na janela, quadros em voo): o frame não é mais
+  copiado GPU → CPU → janela. Lobby em 4K 16:9 com janela (dentro de um gamescope sem tela):
+  49 → 60 fps, 15,9 → 1,2 ms por frame no renderizador. Sem janela, ou se o swapchain não sobe,
+  vale o caminho antigo. O OpenGL não mudou.
+- **Modo paralelo (experimental, desligado):** launcher → Gráficos → Desempenho, ou
+  `RECOMP_KICK_AHEAD=1`. Jogo e executor deixam de se revezar (3,8 ms por frame de espera no
+  lobby → 0). Validado só até o lobby.
+- **Por máquina:** placa escolhida pela que apresenta na janela; modo de vsync pelo que o driver
+  oferece; a thread de ack não gira em máquina de 1–2 núcleos.
+- A caixa-preta de quadros passou a ser opcional (`DW4_FRAME_RING=1`).
+- **Confirmado pelo usuário jogando (2026-11-24, RTX 5070, Vulkan, com janela):** 4K a 60 fps
+  cravados nas áreas que antes ficavam abaixo de 40 fps; 1440p igual; uso de CPU do sistema de
+  ~20% para 5–7%. "Perfeito em relação a performance nessa máquina."
+  Esse teste foi com o modo paralelo **desligado**.
+- **Modo paralelo confirmado pelo usuário (2026-11-24):** jogou com ele ligado sem problemas;
+  uso de CPU e GPU na mesma faixa do teste desligado nesta máquina (já cravada em 60 fps, então
+  o ganho não aparece aqui). Continua desligado por padrão.
+- **Ainda não verificado:** tela
+  cheia / redimensionar / minimizar, limite de 30 fps com janela, AMD/Intel e máquinas mais
+  fracas, recarga a quente no modo direto.
+- **Não feito:** paralelizar o executor do toolkit (é onde está o custo de CPU que sobrou);
+  apresentação direta no OpenGL.
+
 ## Plugar o controle com o jogo aberto fechava o jogo — RESOLVIDO (2026-11-24)
 
 `malloc(): unaligned tcache chunk detected` ao conectar o controle. Corrida entre a thread da
@@ -276,6 +306,11 @@ camada de entrada). É candidato a ser também a "corrida que corrompe o heap" n
   `HalReturnToFirmware routine=2` (o próprio jogo desiste) e um SIGSEGV em `glBindFramebuffer` na
   saída. É o mesmo caso visto antes e não reproduzido (`ret guest 0x00277037`). Reproduzir:
   roteiro `f1000:enter` + `wait_flips:500`, várias vezes. Causa não investigada.
+- **2026-11-24 (DW4R-2):** o usuário, jogando com janela, relata que pula o vídeo sempre e nunca
+  mais viu o crash. Sem janela ele **continua**: `soak.py --scenario tests/scenarios/title.txt
+  --runs 16` → 2 CRASH + 1 execução com o mesmo `[ICALL] alvo 0x00000000` que sobreviveu
+  (`ret guest 0x002773A6` / `0x0026A1E0`, logo após o `f1000 enter`). O roteiro aperta START
+  sempre no flip 1000 (~17,5 s); não se sabe se a diferença é o instante do aperto ou a janela.
 
 ## Launcher e pacote de release
 
@@ -328,7 +363,7 @@ jogar e para desenvolver, correções de runtime candidatas a portar e a discuss
 
 | Caminho | Conteúdo |
 |---|---|
-| `xboxrecomp/` | toolkit (v0.18.0 + 8 patches locais) |
+| `xboxrecomp/` | toolkit (v0.18.0 + patches locais, `PORT_NOTES.md` §4) |
 | `game_data/` | disco do jogo (`D:\`) |
 | `src/recompiled/` | C gerado (não editar) |
 | `src/hooks/`, `src/main.c` | host POSIX e hooks |

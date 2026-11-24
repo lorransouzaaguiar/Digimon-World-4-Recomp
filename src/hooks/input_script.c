@@ -206,6 +206,7 @@ static void run_step(char *tok, double t0)
     if (strcasecmp(tok, "quit") == 0) {
         fprintf(stderr, "[SCRIPT] quit (t=%.1fs, %llu flips)\n", now_s() - t0,
                 (unsigned long long)dw4_frame_count());
+        dw4_prof_dump();
         fflush(NULL);
         _exit(0);
     }

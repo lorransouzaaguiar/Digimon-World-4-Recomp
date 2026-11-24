@@ -375,6 +375,10 @@ ApplicationWindow {
                     Toggle { optKey: "vsync"; label: t.vsync; hint: t.vsync_d }
                 }
                 Card {
+                    heading: t.perf
+                    Toggle { optKey: "parallel"; label: t.parallel; hint: t.parallel_d }
+                }
+                Card {
                     heading: t.image
                     RowLayout {
                         Layout.fillWidth: true; spacing: 14
@@ -487,7 +491,15 @@ ApplicationWindow {
                 Card {
                     heading: t.known
                     Repeater {
-                        model: [t.known_1, t.known_2, t.known_3]
+                        model: [t.known_1, t.known_2, t.known_3, t.known_4]
+                        Label { required property string modelData
+                                text: "•  " + modelData; color: win.ink; font.pixelSize: 14; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    }
+                }
+                Card {
+                    heading: t.slow
+                    Repeater {
+                        model: [t.slow_1, t.slow_2, t.slow_3, t.slow_4, t.slow_5]
                         Label { required property string modelData
                                 text: "•  " + modelData; color: win.ink; font.pixelSize: 14; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     }

@@ -127,6 +127,17 @@ escala de resolução/AA/quadros em voo já prontos e a GPL-3 for aceitável.
 copiado, e o desenho difere em dois pontos: sem swapchain (leitura de volta, como o OpenGL) e
 Vulkan 1.0 com cache de pipelines em vez de 1.3 + EDS3.
 
+**Atualização (2026-11-24, DW4R-2):** com janela o Vulkan agora apresenta por swapchain, como
+eles (`PORT_NOTES.md` §7.5b); o modo leitura ficou como reserva e para os testes sem janela.
+
+## 6b. Espera ocupada (estudado em 2026-11-24)
+
+- O laço `Sleep(0)` da `nv2a_ack_thread` é do toolkit e todos herdam. Só o Amped 2 mexeu
+  (`RECOMP_ACK_IDLE_US`: `usleep` de 200 µs depois de 4000 voltas com o PUT parado — menus,
+  vídeos, loading). Durante o jogo a thread continua girando, e a thread do jogo gira no kick.
+- Aqui (patch 4.13): espera por evento também durante o flip retido, e a thread do jogo dorme num
+  portão antes do kick. Resultado no lobby: 195% → 28% de um núcleo. Vale propor ao upstream.
+
 ## 7. Como eles publicam releases (estudado em 2026-11-24)
 
 | Port | O que vai no release | Como é montado |
