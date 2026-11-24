@@ -29,7 +29,9 @@ caminho para as três plataformas (macOS via MoltenVK).
   nos dois renderizadores. Detalhes e casos em `PORT_NOTES.md` §7.6.
 - **Aberto:** crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
   assinatura no `STATUS.md`); texgen não implementado; o chão que escurece por alguns quadros;
-  HUD em widescreen só conferido com 1 jogador; licença do projeto ainda não escolhida.
+  HUD em widescreen só conferido com 1 jogador.
+- **Licença: MIT** (`LICENSE`, escolhida em 2026-11-24). Testado só no começo do jogo: Terminal
+  Area, Central Area, Death Valley e Humid Cave.
 
 ## Onde ler antes de mexer
 
@@ -58,7 +60,7 @@ empacotamento, port para outro sistema, ferramenta de teste), veja como eles res
    desenho deles (`docs/vulkan-backend.md`, `docs/VULKAN.html`, READMEs, `PROGRESS.md`).
 2. Falta um clone ou está velho? `git clone --depth 1 <url> refs/<dono>_<repo>` (ignorado pelo git).
 3. **Licença:** Amped 2 e os dois SSX 3 são **GPL-3** — aproveite ideias, formatos e correções
-   reescritas, **nunca copie código** (a licença deste projeto ainda não foi escolhida). Def Jam,
+   reescritas, **nunca copie código** (este projeto é MIT, incompatível com receber código GPL). Def Jam,
    BLiNX 2 e o toolkit são MIT.
 4. Ao terminar, diga ao usuário o que veio das referências e onde o nosso desenho difere e por
    quê; o que aprender de novo sobre eles vai para `docs/REFERENCIAS.md`.

@@ -285,6 +285,11 @@ ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
   `_outerFrustCullScale`) não resolveu.
 - **Não verificado:** 16:10 / 21:9 / 4K, fases além do que o usuário jogou.
 
+## Até onde o jogo foi testado (informado pelo usuário, 2026-11-24)
+
+Terminal Area (lobby), Central Area, Death Valley e Humid Cave — a parte inicial do jogo. Nada
+depois disso foi executado. É o que os READMEs passam a dizer.
+
 ## Desempenho: CPU, núcleos e GPU (2026-11-24, branch `DW4R-2`)
 
 Detalhes e medições em `PORT_NOTES.md` §4.13, §4.14, §7.5b e §8.x.

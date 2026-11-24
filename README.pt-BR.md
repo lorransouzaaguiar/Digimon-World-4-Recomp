@@ -3,7 +3,7 @@
 [English](README.md) · **Português (Brasil)**
 
 **Recompilação estática experimental de Digimon World 4 (Xbox original, 2005)** em um programa
-nativo x86-64 (Linux hoje; Windows e macOS estão planejados), feito com o [xboxrecomp](https://github.com/sp00nznet/xboxrecomp).
+nativo x86-64, feito com o [xboxrecomp](https://github.com/sp00nznet/xboxrecomp).
 O código do próprio jogo é traduzido para C uma vez e compilado nativamente; o runtime do
 xboxrecomp e o código deste projeto substituem o kernel, a GPU, o áudio e a entrada do Xbox.
 Não é um emulador.
@@ -12,11 +12,19 @@ Não é um emulador.
 > obtida legalmente, de Digimon World 4 para Xbox (NTSC-U). O código C é gerado na sua máquina a
 > partir do seu `default.xbe` e nunca é versionado.
 
+> **Por enquanto, só Linux.** Os ports para Windows e macOS ainda não foram começados. Os dois
+> estão planejados: o código que fala com o sistema vem sendo mantido separado para que eles
+> possam ser feitos, e o renderizador Vulkan foi escrito pensando neles.
+>
+> **Só o começo do jogo foi testado:** Terminal Area (o lobby), Central Area, Death Valley e Humid
+> Cave. Tudo o que vem depois — áreas seguintes, chefes, o final — nunca foi executado.
+
 ![Tela título](docs/title_screen.png)
 
 ## Estado
 
-Jogável do boot até a primeira fase na única máquina em que foi testado (veja
+Jogável do boot até as primeiras áreas — Terminal Area, Central Area, Death Valley e Humid Cave —
+na única máquina em que foi testado (veja
 [Máquina de teste e resultados](#máquina-de-teste-e-resultados)). Inicial e experimental: espere
 bugs.
 
@@ -30,12 +38,13 @@ bugs.
 | Renderizador Vulkan, o padrão: apresenta direto pela placa de vídeo (swapchain), 4K a 60 fps; o OpenGL continua selecionável no launcher (Gráficos → API gráfica) e desenha a mesma imagem | ✅ |
 | Pouco uso de processador: cerca de um terço de um núcleo no lobby (eram cerca de dois núcleos) | ✅ novo |
 | Controle (padrão Xbox/XInput) e teclado | ✅ |
-| Lobby, tutorial e primeira fase jogáveis | ✅ |
-| Fases seguintes, chefes, o resto do jogo | ⬜ ainda não testado |
+| Terminal Area (lobby), tutorial, Central Area, Death Valley e Humid Cave jogáveis | ✅ |
+| Todas as áreas depois dessas, chefes, o resto do jogo | ⬜ nunca executado |
 | Multijogador (2 a 4 jogadores) | ⬜ ainda não testado |
 | Resolução interna até 4K e widescreen (16:9, 21:9): cenário mais largo, painel do jogador e minimapa nos cantos da tela, menus e diálogos em 4:3 | ✅ jogado nas primeiras fases |
 | Launcher com visual inspirado nos menus do jogo; limite de quadros (30 por padrão, a velocidade do console; em 60 fica mais fluido, mas o jogo roda no dobro da velocidade) | ✅ novo |
 | Remapear teclas | ⬜ não implementado |
+| Linux | ✅ o único sistema suportado hoje |
 | Windows e macOS | ⬜ planejado, não iniciado |
 | Steam Deck | ⬜ não testado |
 
@@ -286,5 +295,10 @@ cobre.
 
 ## Licença
 
-A definir antes de o projeto se tornar público. O toolkit xboxrecomp é MIT, com partes LGPL-2.1
-derivadas do xemu.
+O código deste projeto está sob a [licença MIT](LICENSE). Ela cobre o que está neste repositório:
+o host, os renderizadores, o launcher, os scripts e os patches.
+
+Ela não cobre o jogo. Digimon World 4, seu código, dados, nomes e artes pertencem aos seus
+detentores; nada disso está neste repositório, e o C gerado a partir do seu `default.xbe` é para
+ficar na sua máquina, não para redistribuir. O toolkit xboxrecomp (um submódulo) é MIT, com partes
+sob LGPL-2.1 derivadas do xemu; veja `LICENSE`, `NOTICE` e `LICENSES/` dele.
