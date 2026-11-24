@@ -41,7 +41,8 @@ EXTRA=()
 
 "$PY" -m tools.recomp "$XBE" --game-name "Digimon World 4" --all --split 250 \
     --gen-dir "$GEN" --disasm-dir "$A/disasm" --func-id-dir "$A/func_id" \
-    --abi-dir "$A/abi" -o "$A/recomp" "${EXTRA[@]}" > "$A/recomp.log" 2>&1
+    --abi-dir "$A/abi" -o "$A/recomp" "${EXTRA[@]}" \
+    --exclude-manual "$ROOT/src/hooks/recomp_manual.c" > "$A/recomp.log" 2>&1
 
 grep -E "functions \(|unresolved call|unimplemented" "$A/recomp.log" || true
 tr '\r' '\n' < "$A/disasm.log" | grep -A12 "Functions by section" || true

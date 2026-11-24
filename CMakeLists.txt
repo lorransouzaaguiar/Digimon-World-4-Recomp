@@ -74,7 +74,7 @@ endif()
 file(GLOB DW4_HOOK_SOURCES CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/hooks/*.c")
 # O renderizador vai numa biblioteca a parte (recarga a quente, ver gl_host.c).
-list(FILTER DW4_HOOK_SOURCES EXCLUDE REGEX "nv2a_gl_backend\\.c$")
+list(FILTER DW4_HOOK_SOURCES EXCLUDE REGEX "nv2a_(gl|vk)_backend\\.c$")
 
 add_executable(dw4_recomp
     src/main.c
@@ -138,3 +138,57 @@ target_compile_options(dw4_gl PRIVATE
     -Wall -Wextra -Wno-unused-parameter -fno-strict-aliasing -O2)
 target_link_libraries(dw4_gl PRIVATE ${DW4_EPOXY_LINK_LIBRARIES} m)
 add_dependencies(dw4_recomp dw4_gl)
+
+# ── Renderizador Vulkan (segunda API grafica, escolhida no launcher) ─────────
+# libdw4_vk.so, mesma interface e mesma recarga a quente do OpenGL:
+#   cmake --build build --target dw4_vk
+# Cabecalhos: third_party/Vulkan-Headers (submodulo fixado), para nao depender
+# do pacote vulkan-headers do sistema. Em tempo de execucao liga em
+# libvulkan.so.1 (o loader, que vem com qualquer driver Vulkan); se ela nao
+# existir o dlopen falha e o host cai no OpenGL. Shaders: GLSL -> SPIR-V como
+# vetor C, com glslc (pacote shaderc), como nos ports de referencia.
+option(DW4_VULKAN "Compila o renderizador Vulkan (libdw4_vk.so)" ON)
+if(DW4_VULKAN)
+    set(DW4_VK_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/Vulkan-Headers/include)
+    find_program(DW4_GLSLC glslc)
+    find_library(DW4_VULKAN_LIB NAMES vulkan libvulkan.so.1)
+    if(NOT EXISTS ${DW4_VK_HEADERS}/vulkan/vulkan_core.h)
+        message(WARNING "Vulkan desligado: falta o submodulo "
+            "(git submodule update --init third_party/Vulkan-Headers)")
+    elseif(NOT DW4_GLSLC)
+        message(WARNING "Vulkan desligado: falta o glslc (Arch/CachyOS: pacman -S shaderc)")
+    elseif(NOT DW4_VULKAN_LIB)
+        message(WARNING "Vulkan desligado: falta a libvulkan (pacman -S vulkan-icd-loader)")
+    else()
+        set(DW4_SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/hooks/shaders)
+        set(DW4_SPV_DIR ${CMAKE_BINARY_DIR}/shaders)
+        file(MAKE_DIRECTORY ${DW4_SPV_DIR})
+        set(DW4_SPV_OUT)
+        foreach(sh nv2a_vk.vert nv2a_vk.frag)
+            add_custom_command(
+                OUTPUT ${DW4_SPV_DIR}/${sh}.inc
+                COMMAND ${DW4_GLSLC} --target-env=vulkan1.0 -O -mfmt=c
+                        ${DW4_SHADER_DIR}/${sh} -o ${DW4_SPV_DIR}/${sh}.inc
+                DEPENDS ${DW4_SHADER_DIR}/${sh} ${DW4_SHADER_DIR}/nv2a_ubo.glsl
+                COMMENT "glslc ${sh}")
+            list(APPEND DW4_SPV_OUT ${DW4_SPV_DIR}/${sh}.inc)
+        endforeach()
+
+        add_library(dw4_vk MODULE src/hooks/nv2a_vk_backend.c ${DW4_SPV_OUT})
+        set_target_properties(dw4_vk PROPERTIES
+            PREFIX "lib"
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+            C_VISIBILITY_PRESET hidden)
+        target_include_directories(dw4_vk PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/hooks
+            ${XBOXRECOMP_DIR}/src/kernel
+            ${XBOXRECOMP_DIR}/src
+            ${DW4_VK_HEADERS}
+            ${DW4_SPV_DIR})
+        target_compile_options(dw4_vk PRIVATE
+            -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
+            -fno-strict-aliasing -O2)
+        target_link_libraries(dw4_vk PRIVATE ${DW4_VULKAN_LIB} m)
+        add_dependencies(dw4_recomp dw4_vk)
+    endif()
+endif()

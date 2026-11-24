@@ -49,9 +49,11 @@ DEFAULTS = {
     "game_dir": "",          # vazio = <raiz>/game_data
     "lang": "auto",          # auto | pt | en
     "fullscreen": False,
-    "scale": 2,              # janela = 640x480 x escala
     "vsync": True,
-    "renderer": "gpu",       # gpu | cpu
+    "renderer": "vulkan",    # vulkan | opengl | cpu  (API grafica; "gpu" antigo = opengl)
+    "res": 480,              # altura da imagem: 480 (original) | 720 | 1080 | 1440 | 2160
+    "aspect": "4:3",         # 4:3 (original) | 16:9 | 16:10 | 21:9
+    "fps": 30,               # limite de quadros: 30 (como rodava no Xbox) | 60
     "keyboard": True,
 }
 
@@ -76,10 +78,35 @@ STR = {
         "ended_ok": "O jogo foi fechado.",
         "ended_crash": "O jogo fechou com erro. O log foi guardado em: ",
         "window": "Janela", "fullscreen": "Tela cheia", "fullscreen_d": "Tela cheia sem borda, na resolução da área de trabalho.",
-        "scale": "Tamanho da janela", "scale_d": "Múltiplo de 640×480. A imagem do jogo continua em 640×480.",
+        "window_d": "Fora da tela cheia, a janela abre do tamanho da resolução interna escolhida abaixo (em 480p e "
+                    "720p, no dobro, para não ficar pequena). Se não couber no monitor, é reduzida mantendo a forma.",
         "vsync": "Sincronização vertical", "vsync_d": "Apresenta os quadros no ritmo do monitor. Desligue só para testes.",
-        "renderer": "Renderizador", "r_gpu": "GPU (OpenGL 3.3) — recomendado", "r_cpu": "CPU (referência, muito lento)",
-        "renderer_d": "O de CPU faz poucos quadros por segundo; serve para comparar quando a imagem parece errada.",
+        "image": "Imagem",
+        "res": "Resolução interna", "res_orig": "480p (original)",
+        "res_d": "Altura em que o jogo é desenhado. Use a do seu monitor para a imagem mais nítida; "
+                 "valores altos pedem mais da placa de vídeo.",
+        "aspect": "Proporção", "aspect_orig": "4:3 (original)",
+        "aspect_d": "Em 16:9, 16:10 ou 21:9 o cenário aparece mais largo, sem esticar; menus, vídeos e "
+                    "o painel de status continuam em 4:3 no meio da tela.",
+        "image_cpu": "Resolução e proporção valem para OpenGL e Vulkan; o renderizador de CPU as ignora.",
+        "fps": "Limite de quadros", "fps_30": "30 fps (original)", "fps_60": "60 fps (2× mais rápido)",
+        "fps_d": "No Xbox o jogo rodava a 30 quadros por segundo. A velocidade dele acompanha os quadros: "
+                 "em 60 fps a imagem fica mais fluida, mas tudo (movimento, combate, textos) anda duas vezes "
+                 "mais rápido que no console.",
+        "renderer": "API gráfica", "r_vk": "Vulkan — padrão", "r_gl": "OpenGL 3.3",
+        "r_cpu": "CPU (referência, muito lento)",
+        "renderer_d": "É a forma como o jogo fala com a placa de vídeo. Vulkan e OpenGL desenham a mesma imagem; "
+                      "a diferença de desempenho entre elas é pequena.",
+        "api_vk": "Vulkan (padrão) — a mais nova. No nosso teste usou um pouco menos de processador (até 9% menos "
+                  "em 1440p) e a mesma quantidade de placa de vídeo. Precisa de um driver com Vulkan.",
+        "api_gl": "OpenGL 3.3 — a mais antiga e compatível; funciona em praticamente qualquer placa e driver. "
+                  "Mesmo uso de placa de vídeo, um pouco mais de processador. Use se o Vulkan der problema.",
+        "api_cpu": "CPU — desenha tudo no processador, sem usar a placa de vídeo. Faz poucos quadros por segundo; "
+                   "serve só para comparar quando a imagem parece errada.",
+        "api_note": "O que pesa neste jogo é o processador (cerca de 2 núcleos ocupados), não a placa de vídeo: em "
+                    "1440p a placa ficou em 18% de uso com qualquer das duas (medido numa RTX 5070). Se a API "
+                    "escolhida não estiver disponível, o jogo abre com a outra.",
+        "vk_missing": "Vulkan não foi encontrado neste sistema: o jogo vai abrir com OpenGL.",
         "keyboard": "Teclado como controle 1", "keyboard_d": "Um controle conectado continua funcionando junto.",
         "pad_note": "Qualquer controle reconhecido como Xbox/XInput funciona sem configuração.",
         "key": "Tecla", "xbox": "Controle do Xbox",
@@ -120,10 +147,35 @@ STR = {
         "ended_ok": "The game was closed.",
         "ended_crash": "The game closed with an error. The log was kept at: ",
         "window": "Window", "fullscreen": "Fullscreen", "fullscreen_d": "Borderless fullscreen at the desktop resolution.",
-        "scale": "Window size", "scale_d": "A multiple of 640×480. The game still renders at 640×480.",
+        "window_d": "Outside fullscreen, the window opens at the internal resolution chosen below (doubled at 480p "
+                    "and 720p, so it is not tiny). If it does not fit the display it is shrunk, keeping its shape.",
         "vsync": "Vertical sync", "vsync_d": "Presents frames at the display's pace. Turn off for testing only.",
-        "renderer": "Renderer", "r_gpu": "GPU (OpenGL 3.3) — recommended", "r_cpu": "CPU (reference, very slow)",
-        "renderer_d": "The CPU one runs at a few frames per second; use it to compare when the picture looks wrong.",
+        "image": "Picture",
+        "res": "Internal resolution", "res_orig": "480p (original)",
+        "res_d": "The height the game is drawn at. Use your display's for the sharpest picture; "
+                 "high values ask more of the graphics card.",
+        "aspect": "Aspect ratio", "aspect_orig": "4:3 (original)",
+        "aspect_d": "At 16:9, 16:10 or 21:9 the scenery gets wider without stretching; menus, movies and "
+                    "the status panel stay 4:3 in the middle of the screen.",
+        "image_cpu": "Resolution and aspect ratio apply to OpenGL and Vulkan; the CPU renderer ignores them.",
+        "fps": "Frame rate limit", "fps_30": "30 fps (original)", "fps_60": "60 fps (2× faster)",
+        "fps_d": "On the Xbox the game ran at 30 frames per second. Its speed follows the frames: at 60 fps "
+                 "the picture is smoother, but everything (movement, combat, text) goes twice as fast as "
+                 "on the console.",
+        "renderer": "Graphics API", "r_vk": "Vulkan — default", "r_gl": "OpenGL 3.3",
+        "r_cpu": "CPU (reference, very slow)",
+        "renderer_d": "This is how the game talks to your graphics card. Vulkan and OpenGL draw the same picture; "
+                      "the performance difference between them is small.",
+        "api_vk": "Vulkan (default) — the newer one. In our test it used slightly less processor (up to 9% less "
+                  "at 1440p) and the same amount of graphics card. Needs a driver with Vulkan.",
+        "api_gl": "OpenGL 3.3 — the older, most compatible one; works on practically any card and driver. Same "
+                  "graphics card use, slightly more processor. Use it if Vulkan gives you trouble.",
+        "api_cpu": "CPU — draws everything on the processor, without the graphics card. A few frames per second; "
+                   "only for comparing when the picture looks wrong.",
+        "api_note": "What is heavy in this game is the processor (about 2 cores busy), not the graphics card: at "
+                    "1440p the card stayed at 18% use with either one (measured on an RTX 5070). If the chosen "
+                    "API is unavailable, the game starts with the other.",
+        "vk_missing": "Vulkan was not found on this system: the game will start with OpenGL.",
         "keyboard": "Keyboard as controller 1", "keyboard_d": "A connected controller keeps working alongside it.",
         "pad_note": "Any controller the system reports as Xbox/XInput works with no setup.",
         "key": "Key", "xbox": "Xbox control",
@@ -182,6 +234,15 @@ class Backend(QObject):
             self.cfg.update({k: v for k, v in saved.items() if k in DEFAULTS})
         except (OSError, ValueError):
             pass
+        if self.cfg["res"] not in (480, 720, 1080, 1440, 2160):
+            self.cfg["res"] = 480
+        if self.cfg["fps"] not in (60, 30):
+            self.cfg["fps"] = 30
+        if self.cfg["aspect"] not in ("4:3", "16:9", "16:10", "21:9"):
+            self.cfg["aspect"] = "4:3"
+        if self.cfg["renderer"] not in ("opengl", "vulkan", "cpu"):
+            self.cfg["renderer"] = "opengl"     # "gpu" das versoes ate 0.1.0
+        self._vulkan = self._detect_vulkan()
         self.proc = None
         self.log_file = None
         self.last_log = None
@@ -221,6 +282,17 @@ class Backend(QObject):
                 return m.group(1).strip()
         return "—"
 
+    def _detect_vulkan(self) -> bool:
+        """O renderizador Vulkan veio no pacote e o sistema tem o loader do Vulkan."""
+        if not any((d / "libdw4_vk.so").is_file() for d in (APP, APP / "build")):
+            return False
+        try:
+            import ctypes
+            ctypes.CDLL("libvulkan.so.1")
+            return True
+        except OSError:
+            return False
+
     def _save(self):
         self.cfg_path.parent.mkdir(parents=True, exist_ok=True)
         self.cfg_path.write_text(json.dumps(self.cfg, indent=2) + "\n")
@@ -244,6 +316,10 @@ class Backend(QObject):
     @Property(str, constant=True)
     def gpu(self):
         return self._gpu
+
+    @Property(bool, constant=True)
+    def vulkanAvailable(self):
+        return self._vulkan
 
     @Property(str, constant=True)
     def version(self):
@@ -386,8 +462,21 @@ class Backend(QObject):
         c = self.cfg
         env["RECOMP_SAVE_DIR"] = str(self.save_dir())
         env["RECOMP_KEYBOARD"] = "1" if c["keyboard"] else "0"
-        env["RECOMP_WINDOW_SCALE"] = str(int(c["scale"]))
+        # Janela do tamanho da resolucao interna (toolkit: RECOMP_WINDOW_SIZE; ele
+        # reduz se nao couber no monitor). 480p e 720p abrem no dobro.
+        h = int(c["res"]) * (2 if int(c["res"]) < 1080 else 1)
+        aw, ah = (int(x) for x in c["aspect"].split(":"))
+        env["RECOMP_WINDOW_SIZE"] = "%dx%d" % (round(h * aw / ah), h)
+        env.pop("RECOMP_WINDOW_SCALE", None)
         env["DW4_GL_NO_RELOAD"] = env.get("DW4_GL_NO_RELOAD", "1")
+        # Uma linha a cada 5 s no log com fps, draws e onde vai o tempo: e o que
+        # permite investigar uma queda de quadros depois, pelo relatorio.
+        env.setdefault("DW4_VK_STATS", "1")
+        env.setdefault("DW4_GL_STATS", "1")
+        env["DW4_RENDERER"] = c["renderer"]     # opengl | vulkan | cpu (src/hooks/gl_host.c)
+        env["DW4_RES"] = str(int(c["res"]))     # src/hooks/render_opts.h
+        env["DW4_ASPECT"] = c["aspect"]
+        env["DW4_FPS_LIMIT"] = str(int(c["fps"]))   # src/hooks/fps_limit.c
         for k, on in (("RECOMP_FULLSCREEN", c["fullscreen"]), ("DW4_SW_RENDER", c["renderer"] == "cpu")):
             if on:
                 env[k] = "1"
@@ -431,8 +520,10 @@ class Backend(QObject):
 
     def _config_header(self) -> str:
         c = self.cfg
-        return ("Config: launcher %s | renderer=%s fullscreen=%s scale=%s vsync=%s keyboard=%s | GPU: %s\n"
-                % (self.version, c["renderer"], c["fullscreen"], c["scale"], c["vsync"], c["keyboard"], self._gpu))
+        return ("Config: launcher %s | renderer=%s res=%s aspect=%s fps=%s fullscreen=%s vsync=%s "
+                "keyboard=%s | GPU: %s\n"
+                % (self.version, c["renderer"], c["res"], c["aspect"], c["fps"], c["fullscreen"],
+                   c["vsync"], c["keyboard"], self._gpu))
 
     @Slot()
     def play(self):

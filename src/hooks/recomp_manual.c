@@ -162,3 +162,22 @@ void recomp_unimpl(const char *text, uint32_t va)
     if (stop)
         abort();
 }
+
+/* ── Ganchos de entrada ───────────────────────────────────────────────────── *
+ * `void sub_XXXXXXXX_enter(void)` e chamado no topo da funcao gerada de mesmo
+ * endereco. O recompilador so emite a chamada se enxergar a definicao aqui:
+ * scripts/regen.sh passa este arquivo em --exclude-manual. Depois de criar ou
+ * remover um gancho: scripts/regen.sh --lift e recompilar tudo. */
+
+/* 0x000BC050: teste de descarte do igFrustCullTraversal. ecx = 8 cantos da
+ * caixa em espaco de clip (x, y, z, w). Em widescreen o x e encolhido para o
+ * teste aceitar o que cai na faixa lateral nova (ver widescreen.c). */
+void sub_000BC050_enter(void)
+{
+    float k = dw4_cull_x_scale();
+
+    if (k == 1.0f)
+        return;
+    for (uint32_t i = 0; i < 8; i++)
+        MEMF(g_ecx + i * 16) *= k;
+}

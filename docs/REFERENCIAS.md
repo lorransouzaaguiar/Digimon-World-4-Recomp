@@ -30,8 +30,12 @@ e BLiNX 2 também, mas o código de runtime deles não está nos clones (só doc
 - **Limite de quadros no vblank** (todos): flip preso a 60 Hz. Nós: `RECOMP_FLIP_PACING=1`.
 - **Back end de GPU com o rasterizador em CPU como referência** (todos): variável de ambiente
   para voltar à CPU e comparar frames. Nós: `DW4_SW_RENDER=1`.
-- **Escala de resolução interna** (SSX 3 ×2, Def Jam, BLiNX 2): renderizar a N× 640×480. Não temos.
-- **Widescreen** (SSX 3 bertibertig, Def Jam): hook na projeção da câmera. Não temos.
+- **Escala de resolução interna** (SSX 3 ×2, Amped 2, Def Jam, BLiNX 2): renderizar a N× 640×480.
+  Temos desde 2026-11-24 (`DW4_RES`, `src/hooks/render_opts.h`).
+- **Widescreen** (SSX 3 ×2, Amped 2, Def Jam): Amped 2 só comprime o x de todo vértice numa
+  superfície mais larga (sem patch no jogo); os SSX 3 também alargam a projeção com um hook na
+  câmera (corrige o culling nas laterais). Temos o do Amped 2 (`DW4_ASPECT`); o hook de câmera
+  fica para quando o culling incomodar.
 - **Cache de shaders/pipelines em disco** (Def Jam; SSX 3 koenhendriks compila em thread). Não
   precisamos ainda (um shader só).
 - **Mapa de teclas configurável** (`keys.ini`, SSX 3 koenhendriks) e tratamento do controle
@@ -91,6 +95,13 @@ e BLiNX 2 também, mas o código de runtime deles não está nos clones (só doc
 - Hipóteses a testar, na ordem: trava de DPC (Amped 2) · `RECOMP_GUEST_LOCK=1` · "fence hold"
   do Def Jam · corrida entre `xbox_FramebufferWindowPresent` e a thread da janela.
 
+- **2026-11-24: uma causa confirmada aqui** — plugar um controle com o jogo aberto. O
+  `sdl2-compat` libera e refaz uma lista global de joysticks em `SDL_NumJoysticks()` e na tradução
+  do evento de conexão, esta sem o lock; duas threads fazendo isso = double free. Corrigido abrindo
+  controles só na thread que bombeia eventos (`PORT_NOTES.md` §4.9). Os ports de referência
+  (`host_pad.c`, `ssx3_pad.c`) reescaneiam a cada 250 ms a partir da thread do USB: janela menor,
+  mesma exposição. O aborto do koenhendriks "na thread SDL" pode ser da mesma família.
+
 ## 5. Lições registradas por eles
 
 - O código do guest assume **uma CPU**; cada ponto extra de preempção é uma corrida em potencial.
@@ -109,6 +120,12 @@ patches de runtime de cada autor (toolkit v0.13/v0.14), então adotá-los não �
 é portar o patch deles para o v0.18, trazer Vulkan-Headers/volk/glslc e aceitar a GPL-3.
 Reavaliar se: (a) as fases ficarem abaixo de 60 fps por custo de draw, ou (b) quisermos
 escala de resolução/AA/quadros em voo já prontos e a GPL-3 for aceitável.
+
+**Atualização (2026-11-24):** temos um back end Vulkan próprio (`src/hooks/nv2a_vk_backend.c`,
+`PORT_NOTES.md` §7.5), escolhido no launcher ao lado do OpenGL. Das referências vieram as ideias
+(Vulkan-Headers fixado, `glslc -mfmt=c`, UBO de combiners por lote); nenhum código GPL-3 foi
+copiado, e o desenho difere em dois pontos: sem swapchain (leitura de volta, como o OpenGL) e
+Vulkan 1.0 com cache de pipelines em vez de 1.3 + EDS3.
 
 ## 7. Como eles publicam releases (estudado em 2026-11-24)
 

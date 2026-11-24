@@ -3,7 +3,7 @@
 **English** · [Português (Brasil)](README.pt-BR.md)
 
 Experimental **static recompilation of Digimon World 4 (original Xbox, 2005)** into a native
-Linux x86-64 program, built on [xboxrecomp](https://github.com/sp00nznet/xboxrecomp).
+x86-64 program (Linux today; Windows and macOS are planned), built on [xboxrecomp](https://github.com/sp00nznet/xboxrecomp).
 The game's own code is translated to C once and compiled natively; the xboxrecomp runtime and this
 project's code replace the Xbox kernel, GPU, audio and input. No emulator.
 
@@ -15,8 +15,8 @@ project's code replace the Xbox kernel, GPU, audio and input. No emulator.
 
 ## Status
 
-Playable from boot through the first stage at 60 fps on the test machine (CachyOS, NVIDIA).
-Early and experimental: expect bugs.
+Playable from boot through the first stage on the one machine it has been tested on (see
+[Test machine and results](#test-machine-and-results)). Early and experimental: expect bugs.
 
 | Milestone | |
 |---|---|
@@ -25,14 +25,56 @@ Early and experimental: expect bugs.
 | Boot, intro movies (CRI Sofdec), title screen | ✅ |
 | Menus, Digimon creation, saving and loading | ✅ |
 | OpenGL 3.3 renderer with texture cache: 60 fps in the lobby (CPU renderer ~3 fps, kept as the reference) | ✅ |
+| Vulkan renderer, the default; OpenGL stays selectable in the launcher (Graphics → Graphics API) and draws the same picture | ✅ new |
 | Controller (XInput-style pads) and keyboard | ✅ |
 | Lobby, tutorial and first stage playable | ✅ |
 | Later stages, bosses, the rest of the game | ⬜ not tested yet |
 | Multiplayer (2–4 players) | ⬜ not tested yet |
-| Higher internal resolution, widescreen, key remapping | ⬜ not implemented |
-| Windows, macOS, Steam Deck | ⬜ not planned yet / not tested |
+| Internal resolution up to 4K and widescreen (16:9, 16:10, 21:9: wider scenery, HUD and menus stay 4:3), in the launcher | ✅ new, checked up to the lobby |
+| Launcher restyled after the game's menus; frame-rate limit (30 by default, the console's speed; 60 is smoother but the game runs twice as fast) | ✅ new |
+| Key remapping | ⬜ not implemented |
+| Windows and macOS | ⬜ planned, not started |
+| Steam Deck | ⬜ not tested |
 
 Full details and the list of what is still missing: [STATUS.md](STATUS.md) (Portuguese).
+
+### Test machine and results
+
+Everything in this README was tested on **one** computer. Nothing else has been tried.
+
+| | |
+|---|---|
+| Graphics card | NVIDIA GeForce RTX 5070, 12 GB (driver 620.73.04) |
+| Processor | AMD Ryzen 7 5700X (8 cores / 16 threads) |
+| Memory | 32 GB |
+| System | CachyOS Linux (Arch-based), kernel 7.3 |
+
+Frame rate, with the limiter off (the game then runs at up to 60 fps, twice the console's speed):
+
+| Where | Result |
+|---|---|
+| Menus, Digimon creation, lobby | 60 fps, at 480p and at 2560×1440 16:9, on Vulkan and on OpenGL |
+| Central Area (heaviest place tried, 32–38 thousand draw calls per frame) | 34–50 fps at 2560×1440 16:9 |
+| CPU reference renderer | about 3 fps |
+
+In the one session played so far with the default 30 fps limit, the game held 30.
+
+Cost of the two graphics APIs on the same 92-second run (menus to the lobby, no window, one run
+each):
+
+| | Processor | Graphics card |
+|---|---|---|
+| Vulkan, 480p 4:3 | 195% of one core | 5% |
+| OpenGL, 480p 4:3 | 200% of one core | 5% |
+| Vulkan, 2560×1440 16:9 | 182% of one core | 18% |
+| OpenGL, 2560×1440 16:9 | 199% of one core | 18% |
+
+The game is limited by the processor, not the graphics card: about two cores are busy with either
+API, and the card stays mostly idle even at 1440p.
+
+Automated checks (no window, scripted input): the run from boot to the lobby matches the reference
+frames on both renderers; plugging a virtual controller in and out 400 times while the game reads
+it passes.
 
 ### Known issues
 
@@ -40,7 +82,12 @@ Full details and the list of what is still missing: [STATUS.md](STATUS.md) (Port
   tests). Start it again; letting the movie play avoids it.
 - Automatic texture-coordinate generation (reflections, shine effects) is not implemented; some
   objects may look flat.
-- Tested on a single machine. Other GPUs, drivers and distributions are untested.
+- The floor sometimes darkens for a fraction of a second in some areas (Central Area, caves), on
+  both renderers. Cosmetic; the cause has not been found yet.
+- At 60 fps the game runs twice as fast as on the console, because its logic advances per frame.
+  The default is 30.
+- Tested on a single machine (above). Other GPUs, drivers and distributions are untested; AMD and
+  Intel graphics have never been tried.
 
 ## Playing a release
 
@@ -57,7 +104,7 @@ The AppImage carries the launcher (with Qt), the recompiled game and the librari
 libepoxy, libcrypto). It does **not** carry the game data: that comes from your disc.
 
 Requirements: Linux x86-64 with glibc 2.38 or newer (Ubuntu 24.04+, Fedora 39+, Arch, SteamOS 3.6+)
-and a GPU with a working OpenGL 3.3 driver. If the AppImage does not start because FUSE is missing,
+and a GPU with a working OpenGL 3.3 or Vulkan driver (pick the API in the launcher, under Graphics). If the AppImage does not start because FUSE is missing,
 run it with `--appimage-extract-and-run`, or use the `.tar.gz` package (same content, unpack and run
 `./DigimonWorld4-Recomp`).
 
@@ -169,7 +216,10 @@ Run with a log and attach the file:
 - **Picture problem:** press **F9** with the problem on screen (source builds). It writes a
   screenshot and a list of every draw call to `build/shots/`.
 
-`DW4_SW_RENDER=1 ./run.sh` runs the CPU reference renderer, to tell a renderer bug from a game bug.
+`DW4_RES=1440 DW4_ASPECT=16:9 ./run.sh` sets the internal resolution (image height) and the aspect
+ratio without the launcher. `DW4_RENDERER=opengl ./run.sh` (or `vulkan`, the default) picks the graphics API;
+if the one asked for is unavailable the game falls back to the other. `DW4_SW_RENDER=1 ./run.sh` runs
+the CPU reference renderer, to tell a renderer bug from a game bug.
 
 ## For developers
 
@@ -189,8 +239,9 @@ These documents are in Portuguese for now.
 The Xbox CPU is an x86, so the game's machine code is lifted function by function to C and
 compiled for x86-64. The game talks to the Xbox kernel through 128 imports, which the toolkit
 implements on Linux. It drives the graphics chip (NV2A) by writing command buffers directly; the
-toolkit decodes those commands and this project's OpenGL back end draws them, with the register
-combiners turned into a shader and textures cached by guest address and content.
+toolkit decodes those commands and this project's back end draws them -- OpenGL 3.3 or Vulkan, two
+modules behind one interface (`src/hooks/gl_module.h`) -- with the register combiners turned into a
+shader and textures cached by guest address and content.
 
 ## Credits
 

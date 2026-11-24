@@ -184,6 +184,27 @@ menus; os cenários usam contagem de frames.
 **A versão com janela do quickstart não foi rodada depois da troca para frames** — o caminho foi
 validado só sem janela.
 
+## Back end Vulkan ✅ (2026-11-24, branch `DW4R-1`) — `src/hooks/nv2a_vk_backend.c`
+
+Segunda API gráfica, **ao lado** do OpenGL (que continua existindo). **Desde 2026-11-24 o Vulkan
+é o padrão** (launcher e binário; cai no OpenGL se não subir) — `soak.py` sem opção roda Vulkan,
+`--opengl` roda o outro. O jogador escolhe
+no launcher: Gráficos → **API gráfica** → OpenGL 3.3 / Vulkan / CPU. Sem launcher:
+`DW4_RENDERER=vulkan ./run.sh`. Se a API escolhida não sobe, o jogo abre com a outra (e, por último,
+com a CPU). Desenho e diferenças para os ports de referência em `PORT_NOTES.md` §7.5.
+
+- **Verificado sem janela** (RTX 5070): `scripts/soak.py --vulkan --golden` → os 4 frames de
+  referência conferem com os do OpenGL; lobby a 60 fps (~4.000 draws → ~20 lotes, 10 pipelines);
+  fallback Vulkan → OpenGL; recarga a quente (`cmake --build build --target dw4_vk`);
+  OpenGL sem regressão (`scripts/soak.py --golden`); launcher `--selftest` e captura da tela Gráficos.
+- **Confirmado pelo usuário (2026-11-24):** jogou com janela em Vulkan, "funcionando legal".
+- **Não verificado:** além do que o usuário jogou nessa sessão; AMD/Intel; pacote de release com `libdw4_vk.so` (o script foi atualizado, não rodado);
+  camadas de validação do Vulkan (não instaladas).
+- Só no OpenGL: captura F9 com rastreio e sonda de pixel. Bug de imagem se investiga no OpenGL e a
+  correção de shader é repetida em `shaders/nv2a_vk.frag`.
+- Build: precisa do `glslc` (pacote `shaderc`) e do submódulo `third_party/Vulkan-Headers`
+  (`git submodule update --init`); sem eles o CMake avisa e compila só o OpenGL.
+
 ## Recarga a quente do renderizador ✅ (2026-11-24)
 
 `cmake --build build --target dw4_gl` com o jogo aberto troca o renderizador no próximo flip
@@ -199,6 +220,53 @@ em `PORT_NOTES.md` §7.0. Validado sem janela (2 reloads durante o cenário do l
 
 - **Modelos 3D salpicados de preto na seleção de Digimon**: giro das tiras de triângulos + sentido
   de face no renderizador (`PORT_NOTES.md` §7.4). Validado sem janela e confirmado pelo usuário.
+
+## Resolução interna e widescreen ✅ (2026-11-24) — `src/hooks/render_opts.h`
+
+Launcher: Gráficos → **Imagem** → Resolução interna (480p original, 720p, 1080p, 1440p, 4K) e
+Proporção (4:3 original, 16:9, 16:10, 21:9). Sem launcher: `DW4_RES=1440 DW4_ASPECT=16:9`. Vale
+para Vulkan e OpenGL. Em widescreen o cenário fica mais largo sem esticar; HUD, menus e vídeos
+ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
+
+- **Verificado sem janela** em 2560×1440 16:9, nos dois renderizadores: seleção de Digimon, login
+  e lobby com imagem correta e 60 fps; `soak.py --golden` e `--vulkan --golden` continuam passando
+  na configuração original.
+- **Confirmado pelo usuário (2026-11-24):** jogando em 1440p 16:9, "rodando bem".
+- **A tela pisca distorcida por um quadro** (Vulkan; no OpenGL, "o chão pisca preto"), mais em
+  áreas pesadas. Causa achada com a caixa-preta de quadros (`PORT_NOTES.md` §7.7): a cada volta
+  do anel do pushbuffer o executor pulava os primeiros comandos (patch 4.11 no toolkit).
+  Verificado sem janela: nenhum clarão detectado e o estado misturado sumiu dos logs (1440p
+  16:9, Vulkan e OpenGL). **Aguardando o usuário confirmar jogando.**
+- **Confirmado pelo usuário (2026-11-24):** a piscada com distorção sumiu no Vulkan; "jogo mais
+  fluido, parecendo o original".
+- **Aberto: o chão escurece por alguns quadros** (Central Area, caverna; Vulkan e OpenGL).
+  Acontece também em 480p 4:3 (não é do widescreen). Causa não determinada; tudo o que foi medido
+  e descartado está em `PORT_NOTES.md` §7.8. **Defeito conhecido, não resolvido** (decisão do
+  usuário); cosmético.
+- **Launcher (2026-11-24):** visual novo inspirado nos menus do jogo, API gráfica como primeiro
+  item de Gráficos, limite de quadros **30 (padrão, a velocidade do jogo no Xbox segundo o
+  usuário)** / 60. A lógica do jogo anda por quadro: a 60 tudo roda no dobro da velocidade
+  (`PORT_NOTES.md` §7.9).
+- **4K (3840×2160) a 60: 30–48 fps na Central Area** (usuário, Vulkan). Causa medida: a cópia
+  do quadro da GPU para a janela custa ~15 ms por quadro em 4K (`PORT_NOTES.md` §7.6). Solução
+  conhecida e não feita: apresentar direto pela GPU (swapchain).
+- **Aberto: 60 → 34–47 fps em áreas pesadas** (32–38 mil draws por frame). Não investigado.
+- **Confirmado pelo usuário:** o popping nas laterais "melhorou bastante" com o gancho de descarte.
+- **Histórico:** objetos surgindo/sumindo nas laterais em widescreen — correção em
+  `src/hooks/widescreen.c` + gancho `sub_000BC050_enter` (alarga o teste de descarte do motor,
+  `PORT_NOTES.md` §7.6), compilada mas ainda não executada. A primeira tentativa (escala
+  `_outerFrustCullScale`) não resolveu.
+- **Não verificado:** 16:10 / 21:9 / 4K, fases além do que o usuário jogou.
+
+## Plugar o controle com o jogo aberto fechava o jogo — RESOLVIDO (2026-11-24)
+
+`malloc(): unaligned tcache chunk detected` ao conectar o controle. Corrida entre a thread da
+janela e a do USB emulado na lista de joysticks do `sdl2-compat` (patch 4.9 no toolkit,
+`PORT_NOTES.md` §4.9; achado pelo core dump). Reproduzido sem jogo com `scripts/test_pad.sh`
+(código antigo: 8/8 abortam; corrigido: 3/3 passam). **Falta o usuário confirmar com o controle de
+verdade.** Não tem relação com o Vulkan (aconteceu numa sessão em Vulkan, mas o defeito é da
+camada de entrada). É candidato a ser também a "corrida que corrompe o heap" nunca localizada
+(mesma mensagem) — **não confirmado**.
 
 ## Crash intermitente conhecido (aberto)
 
@@ -228,6 +296,18 @@ em `PORT_NOTES.md` §7.0. Validado sem janela (2 reloads durante o cenário do l
 
 `docs/REFERENCIAS.md` (2026-11-23): comparação dos 5 clones em `refs/`, o que têm em comum para
 jogar e para desenvolver, correções de runtime candidatas a portar e a discussão OpenGL × Vulkan.
+
+## Direção: Vulkan e três plataformas (decidido em 2026-11-24)
+
+- Alvo do projeto: **Linux, macOS e Windows**. Hoje só Linux funciona.
+- **Back end Vulkan em desenvolvimento** (`src/hooks/nv2a_vk_backend.c`, `src/hooks/shaders/`,
+  `third_party/Vulkan-Headers`); o OpenGL 3.3 segue como padrão e referência até o Vulkan passar
+  nos mesmos frames de referência.
+- Só Linux hoje, a portar: `CMakeLists.txt` (recusa Windows/macOS), `src/main.c` (sinais POSIX,
+  falha de MMIO), `gl_host.c` (EGL, `dlopen`), `stall_watch.c` (`/proc`), empacotamento
+  (AppImage), pasta de dados XDG do launcher. macOS em Apple Silicon precisa ainda de um decodificador
+  de falhas de MMIO para aarch64 (o nosso é x86-64); BLiNX 2 e Def Jam já rodam em macOS com o
+  mesmo toolkit (`docs/REFERENCIAS.md`).
 
 ## Próximos passos
 

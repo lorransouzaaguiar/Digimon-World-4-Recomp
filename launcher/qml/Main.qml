@@ -16,18 +16,51 @@ ApplicationWindow {
     property int page: 0
     property bool debugOpenCombo: false      // so para --screenshot --open-combo
     property var t: app.t
-    readonly property color bg: "#0e1320"
-    readonly property color panel: "#161d30"
-    readonly property color line: "#263150"
-    readonly property color ink: "#e8ecf6"
-    readonly property color dim: "#93a0bd"
+    // Visual tirado das telas do jogo: fundo azul-marinho com grade, paineis
+    // escuros com filete ciano e aba inclinada (a caixa de dialogo do Digi-Elf),
+    // laranja e amarelo do logo para o que e acao.
+    readonly property color bg: "#040a1c"
+    readonly property color panel: "#0a1638"
+    readonly property color line: "#1d3a78"
+    readonly property color ink: "#eef4ff"
+    readonly property color dim: "#8fa6d6"
     readonly property color accent: "#ff8a1f"
+    readonly property color gold: "#ffd23f"
+    readonly property color cyan: "#38dcff"
     readonly property color blue: "#3aa0ff"
+    readonly property color field: "#0f2152"
 
     // Cores dos controles prontos (ComboBox, Switch, menus) no estilo Basic.
-    palette { window: bg; windowText: ink; base: "#212b48"; alternateBase: panel; text: ink
-              button: "#212b48"; buttonText: ink; highlight: accent; highlightedText: "#10131c"
+    palette { window: bg; windowText: ink; base: field; alternateBase: panel; text: ink
+              button: field; buttonText: ink; highlight: accent; highlightedText: "#10131c"
               placeholderText: dim }
+
+    // Fundo: o "tunel digital" dos menus do jogo -- degrade azul, grade em
+    // perspectiva e um clarao embaixo. Pintado uma vez por tamanho de janela.
+    Canvas {
+        anchors.fill: parent
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+        onPaint: {
+            var c = getContext("2d"), w = width, h = height, cx = w * 0.62, cy = h * 1.05
+            var g = c.createLinearGradient(0, 0, 0, h)
+            g.addColorStop(0, "#030818"); g.addColorStop(0.55, "#06143a"); g.addColorStop(1, "#0a2468")
+            c.fillStyle = g; c.fillRect(0, 0, w, h)
+            c.lineWidth = 1
+            for (var i = 1; i <= 9; i++) {              // arcos da grade
+                c.strokeStyle = "rgba(90,170,255," + (0.035 + i * 0.006) + ")"
+                c.beginPath(); c.ellipse(cx - i * w * 0.16, cy - i * h * 0.13, i * w * 0.32, i * h * 0.26); c.stroke()
+            }
+            for (var a = 0; a < 24; a++) {              // raios
+                var t = Math.PI * (1 + a / 23)
+                c.strokeStyle = "rgba(90,170,255,0.05)"
+                c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(t) * w * 1.6, cy + Math.sin(t) * h * 1.6); c.stroke()
+            }
+            var r = c.createRadialGradient(cx, h, 0, cx, h, h * 0.75)
+            r.addColorStop(0, "rgba(120,200,255,0.28)"); r.addColorStop(1, "rgba(120,200,255,0)")
+            c.fillStyle = r; c.fillRect(0, 0, w, h)
+        }
+    }
 
     Connections {
         target: app
@@ -43,29 +76,86 @@ ApplicationWindow {
                  onAccepted: app.importSaves(selectedFile) }
 
     // ── pecas reutilizadas ───────────────────────────────────────────────────
-    component Card: Rectangle {
+    component Card: Item {
+        id: card
         default property alias content: inner.data
         property string heading: ""
+        readonly property int tabH: heading !== "" ? 26 : 0
         Layout.fillWidth: true
-        implicitHeight: inner.implicitHeight + 36
-        color: win.panel; radius: 10; border.color: win.line
+        Layout.topMargin: heading !== "" ? 4 : 0
+        implicitHeight: inner.implicitHeight + 34 + tabH
+        Canvas {
+            id: frame
+            anchors.fill: parent
+            property real tabW: Math.min(width - 60, tabLabel.implicitWidth + 44)
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            onTabWChanged: requestPaint()
+            onPaint: {
+                var c = getContext("2d"), w = width, h = height, y0 = card.tabH, cut = 14
+                c.clearRect(0, 0, w, h)
+                // corpo: canto inferior direito cortado
+                c.beginPath()
+                c.moveTo(0.5, y0 + 0.5); c.lineTo(w - 0.5, y0 + 0.5); c.lineTo(w - 0.5, h - cut)
+                c.lineTo(w - cut, h - 0.5); c.lineTo(0.5, h - 0.5); c.closePath()
+                var g = c.createLinearGradient(0, y0, 0, h)
+                g.addColorStop(0, "rgba(12,28,74,0.94)"); g.addColorStop(1, "rgba(7,16,46,0.94)")
+                c.fillStyle = g; c.fill()
+                c.strokeStyle = "#1d3a78"; c.lineWidth = 1; c.stroke()
+                // filete ciano em cima, como nas caixas de dialogo do jogo
+                var l = c.createLinearGradient(0, 0, w, 0)
+                l.addColorStop(0, "#38dcff"); l.addColorStop(0.7, "rgba(56,220,255,0.35)"); l.addColorStop(1, "rgba(56,220,255,0)")
+                c.fillStyle = l; c.fillRect(0, y0, w, 2)
+                if (card.tabH) {                    // aba inclinada com o titulo
+                    c.beginPath()
+                    c.moveTo(0.5, y0 + 1); c.lineTo(10, 0.5); c.lineTo(tabW, 0.5); c.lineTo(tabW - 12, y0 + 1); c.closePath()
+                    c.fillStyle = "#0c1c4a"; c.fill()
+                    c.strokeStyle = "#38dcff"; c.stroke()
+                }
+            }
+        }
+        Label { id: tabLabel; visible: heading !== ""; text: heading; x: 22; height: card.tabH
+                verticalAlignment: Text.AlignVCenter; color: win.cyan
+                font { pixelSize: 12; bold: true; italic: true; capitalization: Font.AllUppercase; letterSpacing: 1.5 } }
         ColumnLayout {
             id: inner
-            anchors { fill: parent; margins: 18 }
+            anchors { fill: parent; margins: 18; topMargin: 16 + card.tabH }
             spacing: 12
-            Label { visible: heading !== ""; text: heading; color: win.dim
-                    font { pixelSize: 12; bold: true; capitalization: Font.AllUppercase; letterSpacing: 1 } }
+        }
+    }
+    // Paralelogramo: os botoes e destaques do jogo sao inclinados.
+    component Slant: Canvas {
+        property color fill: "#000"
+        property color fill2: fill
+        property color stroke: "transparent"
+        property real lean: 10
+        onFillChanged: requestPaint()
+        onFill2Changed: requestPaint()
+        onStrokeChanged: requestPaint()
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+        onPaint: {
+            var c = getContext("2d"), w = width, h = height
+            c.clearRect(0, 0, w, h)
+            c.beginPath(); c.moveTo(lean, 0.5); c.lineTo(w - 0.5, 0.5); c.lineTo(w - lean, h - 0.5); c.lineTo(0.5, h - 0.5); c.closePath()
+            var g = c.createLinearGradient(0, 0, 0, h)
+            g.addColorStop(0, fill); g.addColorStop(1, fill2)
+            c.fillStyle = g; c.fill()
+            c.strokeStyle = stroke; c.lineWidth = 1; c.stroke()
         }
     }
     component Btn: Button {
         id: b
         property bool primary: false
         font.pixelSize: 14
-        contentItem: Label { text: b.text; color: b.enabled ? win.ink : win.dim; font: b.font
+        contentItem: Label { text: b.text; font: b.font
+                             color: !b.enabled ? win.dim : (b.primary ? "#1a0e00" : win.ink)
                              horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-        background: Rectangle { radius: 7; implicitHeight: 36; implicitWidth: 120
-                                color: b.primary ? (b.down ? "#d96f10" : win.accent) : (b.down ? "#2c3960" : "#212b48")
-                                opacity: b.enabled ? 1 : 0.45; border.color: b.primary ? "transparent" : win.line }
+        background: Slant { implicitHeight: 36; implicitWidth: 120
+                            opacity: b.enabled ? 1 : 0.45
+                            fill: b.primary ? (b.down ? "#ffb21f" : win.gold) : (b.down ? "#1b3a8a" : "#12296a")
+                            fill2: b.primary ? (b.down ? "#e06a00" : win.accent) : (b.down ? "#12296a" : "#0c1c4a")
+                            stroke: b.primary ? "#fff1b8" : (b.hovered ? win.cyan : "#2b55a8") }
     }
     // Select com cores proprias: no estilo padrao o item sob o cursor ficava
     // com fundo claro e texto claro, ilegivel.
@@ -77,8 +167,8 @@ ApplicationWindow {
                              verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
         indicator: Label { text: "▾"; color: win.dim; font.pixelSize: 15
                            x: cb.width - width - 12; y: (cb.height - height) / 2 }
-        background: Rectangle { radius: 7; color: cb.pressed || cb.popup.visible ? "#2c3960" : "#212b48"
-                                border.color: cb.popup.visible ? win.accent : win.line }
+        background: Rectangle { radius: 3; color: cb.pressed || cb.popup.visible ? "#17337c" : win.field
+                                border.color: cb.popup.visible ? win.cyan : (cb.hovered ? "#3a6fd0" : "#2b55a8") }
         delegate: ItemDelegate {
             id: it
             required property int index
@@ -90,7 +180,7 @@ ApplicationWindow {
                                  color: it.highlighted ? "#10131c" : win.ink
                                  font.bold: cb.currentIndex === it.index
                                  verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
-            background: Rectangle { radius: 5; color: it.highlighted ? win.accent : "transparent" }
+            background: Rectangle { radius: 2; color: it.highlighted ? win.gold : "transparent" }
         }
         popup: Popup {
             y: cb.height + 4
@@ -100,7 +190,7 @@ ApplicationWindow {
             contentItem: ListView { clip: true; implicitHeight: contentHeight
                                     model: cb.popup.visible ? cb.delegateModel : null
                                     currentIndex: cb.highlightedIndex }
-            background: Rectangle { radius: 8; color: "#1a2238"; border.color: win.line }
+            background: Rectangle { radius: 3; color: "#0a1638"; border.color: win.cyan }
         }
     }
     component Toggle: RowLayout {
@@ -121,7 +211,8 @@ ApplicationWindow {
             indicator: Rectangle {
                 implicitWidth: 46; implicitHeight: 24; radius: 12
                 x: sw.leftPadding; y: (sw.height - height) / 2
-                color: sw.checked ? win.accent : "#2a3554"
+                color: sw.checked ? "#1586b8" : "#12224f"
+                border.color: sw.checked ? win.cyan : "#2b55a8"
                 Rectangle { width: 18; height: 18; radius: 9; y: 3; x: sw.checked ? 25 : 3
                             color: sw.checked ? "#ffffff" : win.dim
                             Behavior on x { NumberAnimation { duration: 90 } } }
@@ -150,23 +241,41 @@ ApplicationWindow {
         // ── barra lateral ────────────────────────────────────────────────────
         Rectangle {
             Layout.fillHeight: true; Layout.preferredWidth: 220
-            color: "#0a0e19"
+            color: "#b0030818"
+            Rectangle { anchors { right: parent.right; top: parent.top; bottom: parent.bottom } width: 1
+                        gradient: Gradient { GradientStop { position: 0; color: "#0038dcff" }
+                                             GradientStop { position: 0.5; color: "#8038dcff" }
+                                             GradientStop { position: 1; color: "#0038dcff" } } }
             ColumnLayout {
                 anchors { fill: parent; margins: 16 }
                 spacing: 6
-                Label { text: "DIGIMON WORLD 4"; color: win.accent; font { pixelSize: 19; bold: true; letterSpacing: 1 } }
-                Label { text: "Recomp · " + app.version; color: win.dim; font.pixelSize: 12; Layout.bottomMargin: 18 }
+                // O logo do jogo em tipografia: laranja com contorno amarelo, inclinado.
+                Label { text: "DIGIMON"; color: win.accent; style: Text.Outline; styleColor: "#5a1a00"
+                        font { pixelSize: 30; bold: true; italic: true; letterSpacing: 2 } }
+                RowLayout {
+                    spacing: 8; Layout.topMargin: -8
+                    Label { text: "WORLD"; color: "#7fd0ff"; style: Text.Outline; styleColor: "#0a2a66"
+                            font { pixelSize: 19; bold: true; italic: true; letterSpacing: 3 } }
+                    Label { text: "4"; color: win.gold; style: Text.Outline; styleColor: "#7a4a00"
+                            font { pixelSize: 34; bold: true; italic: true } }
+                }
+                Label { text: "RECOMP · " + app.version; color: win.dim; Layout.bottomMargin: 16
+                        font { pixelSize: 11; letterSpacing: 2 } }
                 Repeater {
                     model: [t.play, t.graphics, t.controls, t.saves, t.support]
                     delegate: Rectangle {
                         required property int index
                         required property string modelData
-                        Layout.fillWidth: true; implicitHeight: 40; radius: 7
-                        color: win.page === index ? "#1d2742" : (hover.hovered ? "#141b2e" : "transparent")
-                        Rectangle { visible: win.page === index; width: 3; height: 20; radius: 2; color: win.accent
-                                    anchors { left: parent.left; verticalCenter: parent.verticalCenter } }
-                        Label { text: modelData; anchors { left: parent.left; leftMargin: 16; verticalCenter: parent.verticalCenter }
-                                color: win.page === index ? win.ink : win.dim; font.pixelSize: 15 }
+                        Layout.fillWidth: true; implicitHeight: 40; color: "transparent"
+                        Slant { anchors.fill: parent; lean: 8
+                                visible: win.page === index || hover.hovered
+                                fill: win.page === index ? "#17337c" : "#0f2152"
+                                fill2: win.page === index ? "#0c1c4a" : "#0a1638"
+                                stroke: win.page === index ? win.cyan : "#2b55a8" }
+                        Label { text: (win.page === index ? "▸ " : "") + modelData
+                                anchors { left: parent.left; leftMargin: 18; verticalCenter: parent.verticalCenter }
+                                color: win.page === index ? win.gold : win.dim
+                                font { pixelSize: 15; bold: win.page === index; italic: win.page === index } }
                         HoverHandler { id: hover }
                         TapHandler { onTapped: win.page = index }
                     }
@@ -203,14 +312,14 @@ ApplicationWindow {
                         visible: app.importing
                         Layout.fillWidth: true; spacing: 6
                         Label { text: t.iso_working + "  " + Math.round(app.importProgress * 100) + "%"; color: win.ink; font.pixelSize: 14 }
-                        Rectangle { Layout.fillWidth: true; height: 8; radius: 4; color: "#2a3554"
+                        Rectangle { Layout.fillWidth: true; height: 8; radius: 4; color: "#12224f"
                                     Rectangle { width: parent.width * app.importProgress; height: 8; radius: 4; color: win.accent } }
                     }
                 }
                 Card {
                     Info { k: t.gpu; v: app.gpu }
                     Info { k: t.version; v: app.version }
-                    Info { k: t.renderer; v: app.opt("renderer") === "cpu" ? t.r_cpu : t.r_gpu; property var dep: app.gameDir }
+                    Info { k: t.renderer; v: app.opt("renderer") === "cpu" ? t.r_cpu : (app.opt("renderer") === "vulkan" ? t.r_vk : t.r_gl); property var dep: app.gameDir }
                 }
                 Card {
                     RowLayout {
@@ -232,35 +341,91 @@ ApplicationWindow {
             // ── Graficos ─────────────────────────────────────────────────────
             Page {
                 Card {
+                    heading: t.renderer
+                    Combo {
+                        Layout.fillWidth: true
+                        id: apiCombo
+                        readonly property var apis: ["vulkan", "opengl", "cpu"]
+                        model: [t.r_vk, t.r_gl, t.r_cpu]
+                        currentIndex: Math.max(0, apis.indexOf(app.opt("renderer")))
+                        onActivated: i => app.setOpt("renderer", apis[i])
+                    }
+                    Label { visible: !app.vulkanAvailable && apiCombo.currentIndex === 0
+                            text: t.vk_missing; color: "#ffb454"; font.pixelSize: 12
+                            wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Label { text: t.renderer_d; color: win.ink; font.pixelSize: 13; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Repeater {
+                        model: [t.api_vk, t.api_gl, t.api_cpu]
+                        RowLayout {
+                            required property int index
+                            required property string modelData
+                            Layout.fillWidth: true; spacing: 8
+                            Label { text: "▸"; color: apiCombo.currentIndex === index ? win.gold : win.line
+                                    font.pixelSize: 13; Layout.alignment: Qt.AlignTop }
+                            Label { text: modelData; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true
+                                    color: apiCombo.currentIndex === index ? win.ink : win.dim }
+                        }
+                    }
+                    Label { text: t.api_note; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                }
+                Card {
                     heading: t.window
                     Toggle { optKey: "fullscreen"; label: t.fullscreen; hint: t.fullscreen_d }
+                    Label { text: t.window_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Toggle { optKey: "vsync"; label: t.vsync; hint: t.vsync_d }
+                }
+                Card {
+                    heading: t.image
                     RowLayout {
                         Layout.fillWidth: true; spacing: 14
                         ColumnLayout {
                             Layout.fillWidth: true; spacing: 2
-                            Label { text: t.scale; color: win.ink; font.pixelSize: 15 }
-                            Label { text: t.scale_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                            Label { text: t.res; color: win.ink; font.pixelSize: 15 }
+                            Label { text: t.res_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                         }
                         Combo {
                             implicitWidth: 170
-                            id: scaleCombo
-                            Connections { target: win; function onDebugOpenComboChanged() { scaleCombo.popup.open(); scaleCombo.incrementCurrentIndex() } }
-                            model: ["1× (640×480)", "2× (1280×960)", "3× (1920×1440)", "4× (2560×1920)"]
-                            currentIndex: app.opt("scale") - 1
-                            onActivated: i => app.setOpt("scale", i + 1)
+                            id: resCombo
+                            Connections { target: win; function onDebugOpenComboChanged() { resCombo.popup.open(); resCombo.incrementCurrentIndex() } }
+                            readonly property var heights: [480, 720, 1080, 1440, 2160]
+                            model: [t.res_orig, "720p", "1080p", "1440p", "2160p (4K)"]
+                            currentIndex: Math.max(0, heights.indexOf(app.opt("res")))
+                            onActivated: i => app.setOpt("res", heights[i])
                         }
                     }
-                    Toggle { optKey: "vsync"; label: t.vsync; hint: t.vsync_d }
-                }
-                Card {
-                    heading: t.renderer
-                    Combo {
-                        Layout.fillWidth: true
-                        model: [t.r_gpu, t.r_cpu]
-                        currentIndex: app.opt("renderer") === "cpu" ? 1 : 0
-                        onActivated: i => app.setOpt("renderer", i === 1 ? "cpu" : "gpu")
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 14
+                        ColumnLayout {
+                            Layout.fillWidth: true; spacing: 2
+                            Label { text: t.aspect; color: win.ink; font.pixelSize: 15 }
+                            Label { text: t.aspect_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                        }
+                        Combo {
+                            implicitWidth: 170
+                            readonly property var ratios: ["4:3", "16:9", "16:10", "21:9"]
+                            model: [t.aspect_orig, "16:9", "16:10", "21:9"]
+                            currentIndex: Math.max(0, ratios.indexOf(app.opt("aspect")))
+                            onActivated: i => app.setOpt("aspect", ratios[i])
+                        }
                     }
-                    Label { text: t.renderer_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 14
+                        ColumnLayout {
+                            Layout.fillWidth: true; spacing: 2
+                            Label { text: t.fps; color: win.ink; font.pixelSize: 15 }
+                            Label { text: t.fps_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                        }
+                        Combo {
+                            implicitWidth: 170
+                            readonly property var rates: [30, 60]
+                            model: [t.fps_30, t.fps_60]
+                            currentIndex: Math.max(0, rates.indexOf(app.opt("fps")))
+                            onActivated: i => app.setOpt("fps", rates[i])
+                        }
+                    }
+                    Label { visible: app.opt("renderer") === "cpu"; property var dep: app.gameDir
+                            text: t.image_cpu; color: "#ffb454"; font.pixelSize: 12
+                            wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 }
             }
 

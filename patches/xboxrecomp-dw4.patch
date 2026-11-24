@@ -1,3 +1,71 @@
+diff --git a/src/input/xinput_device.c b/src/input/xinput_device.c
+index 5175387..1a8bfe2 100644
+--- a/src/input/xinput_device.c
++++ b/src/input/xinput_device.c
+@@ -219,6 +219,7 @@ static void refresh_controllers_locked(void)
+             SDL_GameControllerClose(g_pads[slot]);
+             g_pads[slot] = NULL;
+             g_controller_connected[slot] = FALSE;
++            fprintf(stderr, "  [PAD] port %d unplugged\n", slot + 1);
+         }
+     }
+ 
+@@ -242,16 +243,38 @@ static void refresh_controllers_locked(void)
+         if (controller) {
+             g_pads[slot] = controller;
+             g_controller_connected[slot] = TRUE;
++            fprintf(stderr, "  [PAD] port %d <- \"%s\"\n", slot + 1,
++                    SDL_GameControllerName(controller));
+         }
+     }
+ }
+ 
++/* DW4 port: with a window, controllers are opened and closed ONLY on the
++ * thread that pumps SDL events (xbox_InputSdlDeviceEvent). Scanning from the
++ * USB/guest threads as well crashed the process when a pad was plugged in
++ * mid-game: under sdl2-compat (SDL2 API on SDL3) SDL_NumJoysticks() frees and
++ * rebuilds a global device list, and so does its translation of the
++ * device-added event on the pumping thread -- which frees the list before it
++ * takes the joystick lock. Two threads freed the same block ("malloc():
++ * unaligned tcache chunk detected"). One thread doing both cannot race. */
++void xbox_InputSdlDeviceEvent(const SDL_Event *ev)
++{
++    if (ev && ev->type != SDL_CONTROLLERDEVICEADDED
++            && ev->type != SDL_CONTROLLERDEVICEREMOVED
++            && ev->type != SDL_JOYDEVICEADDED && ev->type != SDL_JOYDEVICEREMOVED)
++        return;
++    SDL_LockJoysticks();
++    refresh_controllers_locked();
++    SDL_UnlockJoysticks();
++}
++
+ static SDL_GameController *controller_for_port_locked(DWORD port)
+ {
+     SDL_GameController *controller = g_pads[port];
+ 
+-    if (!controller || !SDL_GameControllerGetAttached(controller)) {
+-        refresh_controllers_locked();
++    if ((!controller || !SDL_GameControllerGetAttached(controller))
++            && !SDL_AtomicGet(&g_main_pump)) {
++        refresh_controllers_locked();   /* no window: this thread pumps too */
+         controller = g_pads[port];
+     }
+     g_controller_connected[port] =
+diff --git a/src/input/xinput_xbox.h b/src/input/xinput_xbox.h
+index 260fa3f..2650835 100644
+--- a/src/input/xinput_xbox.h
++++ b/src/input/xinput_xbox.h
+@@ -114,6 +114,10 @@ DWORD xbox_InputGetCapabilities(DWORD dwPort, DWORD dwFlags, XBOX_INPUT_CAPABILI
+  * active, and keeps SDL alive at shutdown while controller handles are open. */
+ void xbox_InputSetMainPump(int on);
+ int xbox_InputAnyOpen(void);
++/* DW4 port: called by the event-pumping thread for every SDL event (and once
++ * with NULL when it starts pumping); opens/closes pads on device events. */
++union SDL_Event;
++void xbox_InputSdlDeviceEvent(const union SDL_Event *ev);
+ #endif
+ 
+ #ifdef __cplusplus
 diff --git a/src/kernel/kernel_bridge.c b/src/kernel/kernel_bridge.c
 index b6e73e0..332d6d0 100644
 --- a/src/kernel/kernel_bridge.c
@@ -128,10 +196,20 @@ index 87788ed..acf6bd3 100644
 +
  #endif /* NV2A_BACKEND_H */
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index 57e8f8e..6d1eeac 100644
+index 57e8f8e..82eded7 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
-@@ -383,6 +383,16 @@ static float reg_f(uint32_t method)
+@@ -372,6 +372,9 @@ static struct {
+  * material colours, cull and clip state handed to a back end) is read from
+  * here. */
+ static uint32_t s_reg[0x2000 / 4];
++/* DW4 port: the register mirror, read-only, for a back end's diagnostics
++ * (called on the executor thread, inside draw()). Indexed by method / 4. */
++const uint32_t *nv2a_pb_exec_reg_mirror(void) { return s_reg; }
+ static float reg_f(uint32_t method)
+ {
+     float f;
+@@ -383,6 +386,16 @@ static float reg_f(uint32_t method)
  static uint32_t s_sem_va;
  void nv2a_pb_set_semaphore_target(uint32_t guest_va) { s_sem_va = guest_va; }
  
@@ -148,7 +226,7 @@ index 57e8f8e..6d1eeac 100644
  /* Unhandled methods, ranked. The interesting output is not that something was
   * skipped but which things dominate, because that is the order to implement
   * them in. */
-@@ -839,6 +849,9 @@ static void current_render_state(Nv2aRenderState *r)
+@@ -839,6 +852,9 @@ static void current_render_state(Nv2aRenderState *r)
      r->stencil_fail      = s_reg[0x0370 / 4];        /* SET_STENCIL_OP_FAIL */
      r->stencil_zfail     = s_reg[0x0374 / 4];        /* SET_STENCIL_OP_ZFAIL */
      r->stencil_zpass     = s_reg[0x0378 / 4];        /* SET_STENCIL_OP_ZPASS */
@@ -158,7 +236,7 @@ index 57e8f8e..6d1eeac 100644
  }
  
  static int sample_texture(uint32_t u, uint32_t v, uint32_t *argb);
-@@ -856,7 +869,7 @@ int nv2a_backend_decode_texture(const Nv2aTexture *tex, uint32_t *argb_out)
+@@ -856,7 +872,7 @@ int nv2a_backend_decode_texture(const Nv2aTexture *tex, uint32_t *argb_out)
      s_gpu.texs[0].color  = tex->color;
      s_gpu.texs[0].addr_u = 3;
      s_gpu.texs[0].addr_v = 3;
@@ -167,7 +245,7 @@ index 57e8f8e..6d1eeac 100644
      s_gpu.texs[0].levels = 1;
      s_gpu.texs[0].filter = 0;
      s_gpu.texs[0].cube   = 0;
-@@ -2057,6 +2070,33 @@ static int ffp_vertex(uint32_t index, Nv2aVshOutput *out)
+@@ -2057,6 +2073,33 @@ static int ffp_vertex(uint32_t index, Nv2aVshOutput *out)
      fetch_attr(texcoord_attr(), index, out->tex[0]);
      for (st = 1; st < 4; st++)
          fetch_attr(&s_gpu.attr[9 + st], index, out->tex[st]);
@@ -201,7 +279,7 @@ index 57e8f8e..6d1eeac 100644
      return 1;
  }
  
-@@ -2162,12 +2202,19 @@ static int s_xf_no_tex;
+@@ -2162,12 +2205,19 @@ static int s_xf_no_tex;
  #define NV_BACKEND_MAX_VERTS (NV_MAX_INDICES * 3)
  static Nv2aVertex *s_bverts;     /* about 5.5 MB: allocated by the first vertex */
  static uint32_t   s_bcount;
@@ -221,7 +299,7 @@ index 57e8f8e..6d1eeac 100644
      if (s_bcount + 3 > NV_BACKEND_MAX_VERTS)
          return NULL;
      return &s_bverts[s_bcount];
-@@ -2188,6 +2235,13 @@ static void backend_from_xf(const Nv2aVshOutput *v, Nv2aVertex *o)
+@@ -2188,6 +2238,13 @@ static void backend_from_xf(const Nv2aVshOutput *v, Nv2aVertex *o)
      o->diffuse = pack_color(v->d0);
      o->u = v->tex[0][0] * su;
      o->v = v->tex[0][1] * sv;
@@ -235,7 +313,7 @@ index 57e8f8e..6d1eeac 100644
  }
  
  /* `textured`: the batch carried texture coordinates, so the bound texture is
-@@ -2207,6 +2261,38 @@ static void backend_flush(int textured)
+@@ -2207,6 +2264,38 @@ static void backend_flush(int textured)
      batch.count = s_bcount;
      batch.texture = NULL;
      batch.state = &rs;
@@ -274,7 +352,7 @@ index 57e8f8e..6d1eeac 100644
      if (textured && s_gpu.texs[0].valid) {
          tex.offset = s_gpu.texs[0].offset;
          tex.width  = s_gpu.texs[0].width;
-@@ -2217,6 +2303,7 @@ static void backend_flush(int textured)
+@@ -2217,6 +2306,7 @@ static void backend_flush(int textured)
          tex.addr_v = s_gpu.texs[0].addr_v;
          tex.levels = s_gpu.texs[0].pitch ? 1 : s_gpu.texs[0].levels;
          tex.filter = s_gpu.texs[0].filter;
@@ -282,7 +360,7 @@ index 57e8f8e..6d1eeac 100644
          batch.texture = &tex;
      }
      s_backend->draw(&surf, &batch);
-@@ -3629,8 +3716,16 @@ static void draw_primitive(void)
+@@ -3629,8 +3719,16 @@ static void draw_primitive(void)
      if (!s_gpu.prim || !s_gpu.idx_count)
          return;
      s_gpu.draws++;
@@ -301,7 +379,7 @@ index 57e8f8e..6d1eeac 100644
      s_gpu.verts += s_gpu.idx_count;
  
      /* How many batches carry coordinates at all, and what range they span.
-@@ -4195,6 +4290,17 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -4195,6 +4293,17 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      if (subch == 0 && method == 0x1D70 && s_sem_va) {
          uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
          *(volatile uint32_t *)(mem + s_sem_va) = param;
@@ -319,7 +397,7 @@ index 57e8f8e..6d1eeac 100644
          return;
      }
      if (!s_exec_inited) {
-@@ -4467,6 +4573,8 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -4467,6 +4576,8 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
              s_gpu.idx[s_gpu.idx_count++] = param;
          break;
      case NV097_NO_OPERATION:
@@ -328,8 +406,121 @@ index 57e8f8e..6d1eeac 100644
          /* Non-zero, it is one of D3D's software methods, which the GPU traps
           * to D3D's interrupt handler on the console. Only the swap's interval
           * matters here (nv2a_flip_hold.h); the rest stays a no-op. */
+diff --git a/src/kernel/nv2a_pb_scan.c b/src/kernel/nv2a_pb_scan.c
+index 5fab4c3..022e5fc 100644
+--- a/src/kernel/nv2a_pb_scan.c
++++ b/src/kernel/nv2a_pb_scan.c
+@@ -478,6 +478,29 @@ int nv2a_pb_dma_walk(void)
+ static int s_in_call;
+ int nv2a_pb_scan_in_call(void) { return s_in_call; }
+ 
++/* DW4 port: where the JUMP that ended the last top-level segment points
++ * (physical), 0xFFFFFFFF when the segment ended some other way. The ring's
++ * wrap is such a JUMP, and its target is where the next lap's commands
++ * start -- see the caller in xbox_memory_layout.c. */
++static uint32_t s_seg_jump = 0xFFFFFFFFu;
++uint32_t nv2a_pb_scan_segment_jump(void) { return s_seg_jump; }
++
++/* DW4 port: a method the segment's end cut short. D3D streams large inline
++ * arrays across several kick-offs, so PUT routinely lands in the middle of a
++ * method's parameters; the DMA engine stalls there and carries on with the
++ * same method when PUT moves. The segment scan used to drop the method at the
++ * segment's end and read the rest of its parameters, at the start of the next
++ * segment, as command headers: vertex data decoded as commands, and a mesh
++ * drawn short or with stale state -- a patch of floor going black for a frame.
++ * So a top-level segment remembers the method it stopped inside and the next
++ * segment, if it starts exactly where that one ended, finishes it first. */
++static struct {
++    uint32_t next_va, left, i, method, subch;
++    int noninc;
++} s_seg_pend;
++static unsigned long s_seg_splits;
++unsigned long nv2a_pb_scan_segment_splits(void) { return s_seg_splits; }
++
+ static uint32_t pb_walk_segment(uint32_t va, uint32_t end_va, int in_call,
+                                 uint32_t *jumps, uint32_t *unknown)
+ {
+@@ -493,8 +516,10 @@ static uint32_t pb_walk_segment(uint32_t va, uint32_t end_va, int in_call,
+             uint32_t target = (w & 3u) == 1u ? (w & 0xFFFFFFFCu)
+                                              : (w & 0x1FFFFFFCu);
+             (*jumps)++;
+-            if (!in_call)
++            if (!in_call) {
++                s_seg_jump = target & 0x0FFFFFFCu;
+                 break;                        /* the ring: a jump ends it */
++            }
+             va = 0x80000000u | (target & 0x0FFFFFFFu);
+             end_va = va + 0x400000u;
+             continue;
+@@ -520,7 +545,9 @@ static uint32_t pb_walk_segment(uint32_t va, uint32_t end_va, int in_call,
+             uint32_t method =  w & 0x1FFCu;
+             int noninc = (w & 0xE0000000u) == 0x40000000u;
+ 
+-            for (uint32_t i = 0; i < count && va < end_va; i++) {
++            uint32_t i;
++
++            for (i = 0; i < count && va < end_va; i++) {
+                 uint32_t m = noninc ? method : method + i * 4;
+                 note(subch, m);
+                 if (s_exec_enabled)
+@@ -528,6 +555,14 @@ static uint32_t pb_walk_segment(uint32_t va, uint32_t end_va, int in_call,
+                 va += 4;
+                 words++;
+             }
++            if (i < count && !in_call) {      /* cut by the segment's end */
++                s_seg_pend.next_va = va;
++                s_seg_pend.left = count - i;
++                s_seg_pend.i = i;
++                s_seg_pend.method = method;
++                s_seg_pend.subch = subch;
++                s_seg_pend.noninc = noninc;
++            }
+             continue;
+         }
+         (*unknown)++;
+@@ -539,6 +574,7 @@ void nv2a_pb_scan_segment(uint32_t start_va, uint32_t end_va)
+ {
+     uint32_t words, jumps = 0, unknown = 0;
+ 
++    s_seg_jump = 0xFFFFFFFFu;
+     if (!pb_walk_enabled() || end_va <= start_va)
+         return;
+     if (end_va - start_va > 0x400000u)        /* a sane single-frame bound */
+@@ -548,7 +584,31 @@ void nv2a_pb_scan_segment(uint32_t start_va, uint32_t end_va)
+         extern void nv2a_pb_exec_walk_begin(void);
+         nv2a_pb_exec_walk_begin();      /* the flip hold's vblank */
+     }
+-    words = pb_walk_segment(start_va, end_va, 0, &jumps, &unknown);
++    words = 0;
++    if (s_seg_pend.left && s_seg_pend.next_va == start_va) {
++        /* Finish the method the previous segment stopped inside. */
++        const uint8_t *mem = (const uint8_t *)xbox_GetMemoryOffset();
++
++        s_seg_splits++;
++        while (s_seg_pend.left && start_va < end_va) {
++            uint32_t m = s_seg_pend.noninc ? s_seg_pend.method
++                                           : s_seg_pend.method + s_seg_pend.i * 4;
++            note(s_seg_pend.subch, m);
++            if (s_exec_enabled)
++                exec_word(s_seg_pend.subch, m, *(const uint32_t *)(mem + start_va));
++            start_va += 4;
++            s_seg_pend.i++;
++            s_seg_pend.left--;
++            words++;
++        }
++        s_seg_pend.next_va = start_va;        /* still short: the next segment */
++        if (s_seg_pend.left)
++            goto done;
++    } else {
++        s_seg_pend.left = 0;                  /* not contiguous: a wrap or a reset */
++    }
++    words += pb_walk_segment(start_va, end_va, 0, &jumps, &unknown);
++done:
+ 
+     s_tot_words += words;
+     s_tot_unknown += unknown;
 diff --git a/src/kernel/xbox_memory_layout.c b/src/kernel/xbox_memory_layout.c
-index 0f1c02e..ac73001 100644
+index 0f1c02e..158f99f 100644
 --- a/src/kernel/xbox_memory_layout.c
 +++ b/src/kernel/xbox_memory_layout.c
 @@ -746,7 +746,12 @@ static void ac97_arm_write_trap(void)
@@ -346,6 +537,70 @@ index 0f1c02e..ac73001 100644
      (void)old;
      g_ac97_hsize = (size_t)sysconf(_SC_PAGESIZE);
      if (g_ac97_hsize < AC97_TRAP_BYTES)
+@@ -1567,14 +1572,58 @@ static DWORD WINAPI nv2a_ack_thread(LPVOID param)
+                             nv2a_pb_scan_segment(XBOX_CONTIG_BASE | (last_put & 0x0FFFFFFFu),
+                                                  XBOX_CONTIG_BASE | (put      & 0x0FFFFFFFu));
+                         } else if (last_put && put < last_put) {
+-                            if (put_hi > last_put)
++                            /* DW4 port: follow the wrap the way the DMA engine
++                             * does. This used to scan [last_put, put_hi) and
++                             * then [put_lo, put) -- the ring's bounds as
++                             * guessed from the highest and lowest PUT ever
++                             * seen. But a lap ends wherever the title wrote
++                             * its JUMP, and the next one starts at the JUMP's
++                             * target, the ring's first byte, which is below
++                             * any PUT: everything the title wrote before the
++                             * lap's first kick-off, [target, put_lo), was
++                             * never executed, and neither was the tail of a
++                             * lap that ran past put_hi. Each wrap dropped a
++                             * handful of commands -- a render-target switch,
++                             * a texture bind -- and one frame drew with stale
++                             * state: a screen that flashes garbage, the more
++                             * often the more the title submits per frame.
++                             *
++                             * So: walk on from last_put until the JUMP (the
++                             * walk stops there), then from the JUMP's target
++                             * to PUT. If the title reset the ring instead
++                             * (it writes GET as well as PUT), there is no
++                             * JUMP to find: start from its GET. */
++                            extern uint32_t nv2a_pb_scan_segment_jump(void);
++                            uint32_t get_now = *(volatile uint32_t *)
++                                               ((char *)regs + NV2A_USER_DMA_GET);
++                            uint32_t from = put_lo;
++
++                            if (get_written != 0xFFFFFFFFu && get_now != get_written) {
++                                from = get_now & 0x0FFFFFFCu;       /* ring reset */
++                            } else {
++                                uint32_t tail_end = (put_hi > last_put ? put_hi : last_put)
++                                                  + 0x10000u;
++                                uint32_t jump;
++
+                                 nv2a_pb_scan_segment(
+                                     XBOX_CONTIG_BASE | (last_put & 0x0FFFFFFFu),
+-                                    XBOX_CONTIG_BASE | (put_hi   & 0x0FFFFFFFu));
+-                            if (put > put_lo)
++                                    XBOX_CONTIG_BASE | (tail_end & 0x0FFFFFFFu));
++                                jump = nv2a_pb_scan_segment_jump();
++                                if (jump != 0xFFFFFFFFu && jump <= put) {
++                                    from = jump;
++                                } else {
++                                    static unsigned warned;
++                                    if (warned++ < 8)
++                                        fprintf(stderr, "  [PB] wrap without a usable JUMP "
++                                                "(last_put %08X put %08X jump %08X); "
++                                                "resuming at %08X\n", last_put, put,
++                                                jump, put_lo);
++                                }
++                            }
++                            if (put > from)
+                                 nv2a_pb_scan_segment(
+-                                    XBOX_CONTIG_BASE | (put_lo & 0x0FFFFFFFu),
+-                                    XBOX_CONTIG_BASE | (put    & 0x0FFFFFFFu));
++                                    XBOX_CONTIG_BASE | (from & 0x0FFFFFFFu),
++                                    XBOX_CONTIG_BASE | (put  & 0x0FFFFFFFu));
+                         }
+                     }
+                     /* Periodic, because what the title submits at init is not
 diff --git a/src/platform/mmio_decode_x86_64.h b/src/platform/mmio_decode_x86_64.h
 index 1f9836e..1a39f42 100644
 --- a/src/platform/mmio_decode_x86_64.h
@@ -559,3 +814,202 @@ index 1f9836e..1a39f42 100644
          goto undecoded;
      }
  
+diff --git a/src/video/fb_present_sdl.c b/src/video/fb_present_sdl.c
+index b9b8c3e..895275a 100644
+--- a/src/video/fb_present_sdl.c
++++ b/src/video/fb_present_sdl.c
+@@ -60,6 +60,7 @@ struct fb_slot {
+     uint8_t *px;
+     size_t   cap;
+     uint32_t bpp;
++    uint32_t w, h;                      /* DW4 port: frames of any size */
+ };
+ 
+ /* What the window takes from SDL, and gives back on every way out. */
+@@ -127,6 +128,49 @@ static void publish(uint32_t bpp)
+     }
+ }
+ 
++/* DW4 port: a GPU back end that renders above 640x480 (internal resolution,
++ * widescreen) hands its finished frame over directly -- w x h, 4 bytes per
++ * pixel (B,G,R,X), top row first -- instead of going through the 640x480
++ * guest surface. Called on the executor's thread, like the flip's present.
++ * Once a back end has done this the flip's own guest-surface present is
++ * ignored: the window shows the back end's frames only. */
++static volatile int s_external;
++
++void xbox_FramebufferWindowPresentPixels(const void *pixels, uint32_t w,
++                                         uint32_t h, uint32_t pitch)
++{
++    s_external = 1;
++    if (!__atomic_load_n(&s_running, __ATOMIC_SEQ_CST) || !pixels || !w || !h
++            || pitch < w * 4)
++        return;
++    __atomic_add_fetch(&s_in_present, 1, __ATOMIC_SEQ_CST);
++    if (__atomic_load_n(&s_running, __ATOMIC_SEQ_CST)) {
++        struct fb_slot *s = &s_slot[s_back];
++        size_t need = (size_t)w * h * 4;
++
++        if (s->cap < need) {
++            uint8_t *n = (uint8_t *)realloc(s->px, need);
++            if (n) {
++                s->px = n;
++                s->cap = need;
++            }
++        }
++        if (s->cap >= need) {
++            if (pitch == w * 4) {
++                memcpy(s->px, pixels, need);
++            } else {
++                for (uint32_t y = 0; y < h; y++)
++                    memcpy(s->px + (size_t)y * w * 4,
++                           (const uint8_t *)pixels + (size_t)y * pitch, (size_t)w * 4);
++            }
++            s->w = w;
++            s->h = h;
++            publish(4);
++        }
++    }
++    __atomic_sub_fetch(&s_in_present, 1, __ATOMIC_SEQ_CST);
++}
++
+ static void present_copy(uint32_t fb_va, uint32_t pitch)
+ {
+     struct fb_slot *s = &s_slot[s_back];
+@@ -148,6 +192,8 @@ static void present_copy(uint32_t fb_va, uint32_t pitch)
+     for (y = 0; y < FB_H; y++)
+         memcpy(s->px + (size_t)y * FB_W * bpp, src + (size_t)y * pitch,
+                (size_t)FB_W * bpp);
++    s->w = FB_W;
++    s->h = FB_H;
+     publish(bpp);
+ }
+ 
+@@ -157,7 +203,8 @@ void xbox_FramebufferWindowPresent(uint32_t fb_va, uint32_t pitch)
+     /* Dekker-style handshake with the close path: each side stores its own
+      * flag and then loads the other's, all seq_cst, so either the window sees
+      * this present in flight or this present sees the window closing. */
+-    if (!__atomic_load_n(&s_running, __ATOMIC_SEQ_CST) || !fb_va || !pitch)
++    if (!__atomic_load_n(&s_running, __ATOMIC_SEQ_CST) || !fb_va || !pitch
++            || s_external)              /* the back end presents its own frames */
+         return;
+     __atomic_add_fetch(&s_in_present, 1, __ATOMIC_SEQ_CST);
+     if (__atomic_load_n(&s_running, __ATOMIC_SEQ_CST))
+@@ -274,7 +321,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+     SDL_Window *win;
+     SDL_Renderer *ren;
+     SDL_Texture *tex = NULL;
+-    uint32_t tex_bpp = 0;
++    uint32_t tex_bpp = 0, tex_w = FB_W, tex_h = FB_H;
+     uint64_t shown_seq = 0, t_title = 0, flips_title = 0;
+     const char *e;
+     int vsync, scale, quit = 0, guest_done = 0, dirty = 1;
+@@ -304,8 +351,31 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+     if (env_on("RECOMP_FULLSCREEN"))
+         window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+ 
++    /* DW4 port: RECOMP_WINDOW_SIZE=<w>x<h> sizes the window exactly (the
++     * launcher passes the internal resolution), shrunk to fit the display's
++     * usable area with its shape kept. RECOMP_WINDOW_SCALE still works. */
++    int win_w = (int)FB_W * scale, win_h = (int)FB_H * scale;
++    {
++        const char *ws = getenv("RECOMP_WINDOW_SIZE");
++        int w = 0, h = 0;
++        SDL_Rect use;
++
++        if (ws && sscanf(ws, "%dx%d", &w, &h) == 2 && w >= 160 && h >= 120) {
++            win_w = w;
++            win_h = h;
++        }
++        if (SDL_GetDisplayUsableBounds(0, &use) == 0 && use.w > 0 && use.h > 0
++                && (win_w > use.w || win_h > use.h)) {
++            double k = (double)use.w / win_w;
++            if ((double)use.h / win_h < k)
++                k = (double)use.h / win_h;
++            k *= 0.94;                      /* room for the title bar and borders */
++            win_w = (int)(win_w * k);
++            win_h = (int)(win_h * k);
++        }
++    }
+     win = SDL_CreateWindow(s_title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+-                           (int)FB_W * scale, (int)FB_H * scale,
++                           win_w, win_h,
+                            window_flags);
+     ren = win ? SDL_CreateRenderer(win, -1,
+                                    vsync ? SDL_RENDERER_PRESENTVSYNC : 0)
+@@ -341,6 +411,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+      * game controllers; the input layer then only reads them. */
+     xbox_InputSetMainPump(1);
+     xbox_InputSdlInit();
++    xbox_InputSdlDeviceEvent(NULL);     /* pads already plugged in at boot */
+     s_running = 1;
+     if (!start_guest()) {
+         fprintf(stderr, "  [FBWIN] cannot start the guest thread; running headless\n");
+@@ -356,7 +427,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+         SDL_Event ev;
+         uint64_t seq, now;
+         const uint8_t *px = NULL;
+-        uint32_t bpp = 0, pitch = 0;
++        uint32_t bpp = 0, pitch = 0, fw = FB_W, fh = FB_H;
+ 
+         /* Before the first flip, poll at the display rate: the window then
+          * reads the display surface itself. After, the flip's event wakes
+@@ -366,6 +437,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+                 /* Keys for the pad stand-in, and the window events that
+                  * release them; it only reads the event. */
+                 xbox_InputSdlEvent(&ev);
++                xbox_InputSdlDeviceEvent(&ev);  /* pad plugged in / pulled out */
+                 if (ev.type == SDL_QUIT)
+                     quit = 1;
+                 else if (ev.type == s_guest_done_event)
+@@ -392,7 +464,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+             shown_seq = seq;
+             px = s_slot[s_front].px;
+             bpp = s_slot[s_front].bpp;
+-            pitch = FB_W * bpp;
++            fw = s_slot[s_front].w ? s_slot[s_front].w : FB_W;
++            fh = s_slot[s_front].h ? s_slot[s_front].h : FB_H;
++            pitch = fw * bpp;
+         } else if (!shown_seq && s_fb_va && s_fb_pitch) {
+             /* No flip yet: the display surface, as the GDI window reads it. */
+             bpp = s_fb_pitch / FB_W;
+@@ -401,14 +475,37 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+                 px = (const uint8_t *)((uintptr_t)s_fb_va + xbox_GetMemoryOffset());
+         }
+         if (px) {
+-            if (!tex || bpp != tex_bpp) {
++            if (!tex || bpp != tex_bpp || fw != tex_w || fh != tex_h) {
+                 if (tex)
+                     SDL_DestroyTexture(tex);
+                 tex = SDL_CreateTexture(ren, bpp == 4 ? SDL_PIXELFORMAT_RGB888
+                                                       : SDL_PIXELFORMAT_RGB565,
+                                         SDL_TEXTUREACCESS_STREAMING,
+-                                        (int)FB_W, (int)FB_H);
++                                        (int)fw, (int)fh);
+                 tex_bpp = bpp;
++                /* DW4 port: a frame of another size or shape. The renderer
++                 * letterboxes to the frame's shape; a window (not fullscreen)
++                 * takes that shape too, keeping its height. A frame that is
++                 * not the Xbox's own 640x480 is scaled smoothly. */
++                if (fw != tex_w || fh != tex_h) {
++                    SDL_RenderSetLogicalSize(ren, (int)fw, (int)fh);
++                    if (!(SDL_GetWindowFlags(win)
++                            & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP
++                               | SDL_WINDOW_MAXIMIZED))) {
++                        int ww = 0, wh = 0;
++                        SDL_GetWindowSize(win, &ww, &wh);
++                        if (wh > 0 && ww != (int)((uint64_t)wh * fw / fh)) {
++                            SDL_SetWindowSize(win, (int)((uint64_t)wh * fw / fh), wh);
++                            SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED,
++                                                  SDL_WINDOWPOS_CENTERED);
++                        }
++                    }
++                    fprintf(stderr, "  [FBWIN] frame size %ux%u\n", fw, fh);
++                }
++                if (tex && (fw != FB_W || fh != FB_H))
++                    SDL_SetTextureScaleMode(tex, SDL_ScaleModeLinear);
++                tex_w = fw;
++                tex_h = fh;
+             }
+             if (tex)
+                 SDL_UpdateTexture(tex, NULL, px, (int)pitch);
