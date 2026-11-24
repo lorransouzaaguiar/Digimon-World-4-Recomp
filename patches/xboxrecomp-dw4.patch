@@ -1,3 +1,71 @@
+diff --git a/src/input/xinput_device.c b/src/input/xinput_device.c
+index 5175387..1a8bfe2 100644
+--- a/src/input/xinput_device.c
++++ b/src/input/xinput_device.c
+@@ -219,6 +219,7 @@ static void refresh_controllers_locked(void)
+             SDL_GameControllerClose(g_pads[slot]);
+             g_pads[slot] = NULL;
+             g_controller_connected[slot] = FALSE;
++            fprintf(stderr, "  [PAD] port %d unplugged\n", slot + 1);
+         }
+     }
+ 
+@@ -242,16 +243,38 @@ static void refresh_controllers_locked(void)
+         if (controller) {
+             g_pads[slot] = controller;
+             g_controller_connected[slot] = TRUE;
++            fprintf(stderr, "  [PAD] port %d <- \"%s\"\n", slot + 1,
++                    SDL_GameControllerName(controller));
+         }
+     }
+ }
+ 
++/* DW4 port: with a window, controllers are opened and closed ONLY on the
++ * thread that pumps SDL events (xbox_InputSdlDeviceEvent). Scanning from the
++ * USB/guest threads as well crashed the process when a pad was plugged in
++ * mid-game: under sdl2-compat (SDL2 API on SDL3) SDL_NumJoysticks() frees and
++ * rebuilds a global device list, and so does its translation of the
++ * device-added event on the pumping thread -- which frees the list before it
++ * takes the joystick lock. Two threads freed the same block ("malloc():
++ * unaligned tcache chunk detected"). One thread doing both cannot race. */
++void xbox_InputSdlDeviceEvent(const SDL_Event *ev)
++{
++    if (ev && ev->type != SDL_CONTROLLERDEVICEADDED
++            && ev->type != SDL_CONTROLLERDEVICEREMOVED
++            && ev->type != SDL_JOYDEVICEADDED && ev->type != SDL_JOYDEVICEREMOVED)
++        return;
++    SDL_LockJoysticks();
++    refresh_controllers_locked();
++    SDL_UnlockJoysticks();
++}
++
+ static SDL_GameController *controller_for_port_locked(DWORD port)
+ {
+     SDL_GameController *controller = g_pads[port];
+ 
+-    if (!controller || !SDL_GameControllerGetAttached(controller)) {
+-        refresh_controllers_locked();
++    if ((!controller || !SDL_GameControllerGetAttached(controller))
++            && !SDL_AtomicGet(&g_main_pump)) {
++        refresh_controllers_locked();   /* no window: this thread pumps too */
+         controller = g_pads[port];
+     }
+     g_controller_connected[port] =
+diff --git a/src/input/xinput_xbox.h b/src/input/xinput_xbox.h
+index 260fa3f..2650835 100644
+--- a/src/input/xinput_xbox.h
++++ b/src/input/xinput_xbox.h
+@@ -114,6 +114,10 @@ DWORD xbox_InputGetCapabilities(DWORD dwPort, DWORD dwFlags, XBOX_INPUT_CAPABILI
+  * active, and keeps SDL alive at shutdown while controller handles are open. */
+ void xbox_InputSetMainPump(int on);
+ int xbox_InputAnyOpen(void);
++/* DW4 port: called by the event-pumping thread for every SDL event (and once
++ * with NULL when it starts pumping); opens/closes pads on device events. */
++union SDL_Event;
++void xbox_InputSdlDeviceEvent(const union SDL_Event *ev);
+ #endif
+ 
+ #ifdef __cplusplus
 diff --git a/src/kernel/kernel_bridge.c b/src/kernel/kernel_bridge.c
 index b6e73e0..332d6d0 100644
 --- a/src/kernel/kernel_bridge.c
@@ -559,3 +627,23 @@ index 1f9836e..1a39f42 100644
          goto undecoded;
      }
  
+diff --git a/src/video/fb_present_sdl.c b/src/video/fb_present_sdl.c
+index b9b8c3e..db57e71 100644
+--- a/src/video/fb_present_sdl.c
++++ b/src/video/fb_present_sdl.c
+@@ -341,6 +341,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+      * game controllers; the input layer then only reads them. */
+     xbox_InputSetMainPump(1);
+     xbox_InputSdlInit();
++    xbox_InputSdlDeviceEvent(NULL);     /* pads already plugged in at boot */
+     s_running = 1;
+     if (!start_guest()) {
+         fprintf(stderr, "  [FBWIN] cannot start the guest thread; running headless\n");
+@@ -366,6 +367,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+                 /* Keys for the pad stand-in, and the window events that
+                  * release them; it only reads the event. */
+                 xbox_InputSdlEvent(&ev);
++                xbox_InputSdlDeviceEvent(&ev);  /* pad plugged in / pulled out */
+                 if (ev.type == SDL_QUIT)
+                     quit = 1;
+                 else if (ev.type == s_guest_done_event)

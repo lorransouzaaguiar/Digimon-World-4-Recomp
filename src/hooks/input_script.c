@@ -20,6 +20,8 @@
  *   wait_flips:<n>     espera <n> flips (frames apresentados)
  *   shot:<nome>        grava <DW4_SHOT_DIR>/<nome>.bmp (padrao build/shots)
  *   mark:<texto>       linha "[SCRIPT] mark <texto>" no log
+ *   vpad / vpad_off    conecta / desconecta um controle virtual (teste de
+ *                      plugar o controle com o jogo aberto, sem hardware)
  *   quit               encerra o processo com codigo 0 (run automatizado OK)
  *   <t>:<tecla>[*seg]  forma antiga: toque no instante absoluto <t> s do boot
  *
@@ -38,6 +40,7 @@
  */
 
 #include <ctype.h>
+#include <SDL.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -165,6 +168,35 @@ static void run_step(char *tok, double t0)
     char *colon = strchr(tok, ':');
     size_t len = strlen(tok);
 
+    if (strcasecmp(tok, "vpad") == 0 || strcasecmp(tok, "vpad_off") == 0) {
+        /* Conecta / desconecta um controle virtual da SDL (Xbox 360): o mesmo
+         * caminho de plugar um controle com o jogo aberto, sem hardware. */
+        static int vpad_index = -1;
+
+        if (!SDL_WasInit(SDL_INIT_JOYSTICK))
+            SDL_InitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
+        if (tok[4] == '\0' && vpad_index < 0) {
+            SDL_VirtualJoystickDesc d;
+
+            SDL_zero(d);
+            d.version = SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
+            d.type = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
+            d.naxes = SDL_CONTROLLER_AXIS_MAX;
+            d.nbuttons = SDL_CONTROLLER_BUTTON_MAX;
+            d.vendor_id = 0x045E;
+            d.product_id = 0x028E;
+            d.name = "DW4 virtual pad";
+            vpad_index = SDL_JoystickAttachVirtualEx(&d);
+            fprintf(stderr, "[SCRIPT] vpad: controle virtual %s (t=%.1fs)\n",
+                    vpad_index < 0 ? SDL_GetError() : "conectado", now_s() - t0);
+        } else if (tok[4] != '\0' && vpad_index >= 0) {
+            SDL_JoystickDetachVirtual(vpad_index);
+            vpad_index = -1;
+            fprintf(stderr, "[SCRIPT] vpad_off: controle virtual desconectado (t=%.1fs)\n",
+                    now_s() - t0);
+        }
+        return;
+    }
     if (strcasecmp(tok, "quit") == 0) {
         fprintf(stderr, "[SCRIPT] quit (t=%.1fs, %llu flips)\n", now_s() - t0,
                 (unsigned long long)dw4_frame_count());

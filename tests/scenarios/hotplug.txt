@@ -1,0 +1,18 @@
+# Plugar e desplugar um controle com o jogo aberto (controle virtual da SDL).
+# Rodar com janela "dummy" para exercitar a thread que bombeia eventos:
+#   SDL_VIDEODRIVER=dummy scripts/soak.py --window --scenario tests/scenarios/hotplug.txt
+f1000:enter         # pula o FMV de abertura
+f1600:enter         # "Press START" -> Game Start / Option
+wait_flips:90
+vpad
+wait_flips:120
+vpad_off
+wait_flips:60
+vpad
+wait_flips:120
+vpad_off
+wait_flips:60
+vpad
+wait_flips:180
+mark:hotplug  shot:01_hotplug
+quit
