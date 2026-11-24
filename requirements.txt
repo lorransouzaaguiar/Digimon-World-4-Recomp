@@ -1,0 +1,3 @@
+# Pipeline de recompilacao (tools/ do xboxrecomp) e build.
+capstone>=5.0
+ninja>=1.11        # so e usado se nao houver ninja no sistema

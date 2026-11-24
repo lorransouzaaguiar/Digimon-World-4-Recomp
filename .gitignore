@@ -1,0 +1,40 @@
+# ── Conteudo do jogo (protegido por direito autoral: NUNCA versionar) ────────
+# O disco do jogo:
+/game_data/
+# C gerado pelo recompilador a partir do default.xbe:
+/src/recompiled/
+# Desmontagem, mapas de funcoes e logs do pipeline:
+/analysis/
+# Saves e imagens de particao do guest:
+/save_data/
+# Capturas de tela de referencia; cada um gera as suas (scripts/golden.py --update):
+/tests/golden/*.bmp
+
+# ── Gerado localmente ───────────────────────────────────────────────────────
+/build/
+/build-*/
+/.venv/
+# Clones dos ports de referencia (ver docs/REFERENCIAS.md):
+/refs/
+xbox_kernel.log
+*.log
+__pycache__/
+*.pyc
+
+# ── Editor / sistema ────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+.claude/settings.local.json
+
+# Pacotes de release (contem o binario com codigo derivado do jogo):
+/dist/
+
+# Gravados pelo launcher:
+/config/launcher.json
+/logs/
+/backups/
+
+# Ferramentas baixadas para empacotar (appimagetool, Python portatil):
+/tools/

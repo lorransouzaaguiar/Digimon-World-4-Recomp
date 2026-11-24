@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Digimon World 4 - Recomp
+Comment=Native Linux port of Digimon World 4 (Xbox); bring your own game disc
+Comment[pt_BR]=Port nativo para Linux de Digimon World 4 (Xbox); use o seu proprio disco
+Exec=dw4-launcher
+Icon=dw4-recomp
+Categories=Game;
+Terminal=false

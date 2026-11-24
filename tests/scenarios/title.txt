@@ -1,0 +1,6 @@
+# Boot ate o menu da tela titulo (teste rapido, ~30 s).
+f1000:enter         # pula o FMV de abertura
+f1600:enter         # "Press START" -> Game Start / Option
+wait_flips:90
+mark:titulo  shot:01_titulo_menu
+quit

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Ponto de entrada do AppImage / pacote: abre o launcher, que inicia o jogo.
+HERE="$(dirname "$(readlink -f "$0")")"
+export DW4_APP_DIR="$HERE/game"
+exec "$HERE/launcher/dw4-launcher" "$@"
