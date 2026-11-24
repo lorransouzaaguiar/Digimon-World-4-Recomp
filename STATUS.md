@@ -243,6 +243,13 @@ ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
   Acontece também em 480p 4:3 (não é do widescreen). Causa não determinada; tudo o que foi medido
   e descartado está em `PORT_NOTES.md` §7.8. **Defeito conhecido, não resolvido** (decisão do
   usuário); cosmético.
+- **Fade / escurecimento em 4:3 no widescreen — corrigido (2026-11-24, DW4R-2); confirmado pelo
+  usuário jogando ("melhorou muito os efeitos"):** o fade de troca de cenário e o escurecimento atrás de menus cobriam só o
+  meio da tela (`PORT_NOTES.md` §7.6). Verificado sem janela na transição login → lobby, Vulkan e
+  OpenGL. A tela de loading agora ocupa a tela larga, esticada.
+- **Launcher (2026-11-24, DW4R-2):** Gráficos na ordem API → Imagem → Janela → Desempenho; a
+  janela abre maior (até 1120×940, limitada pelo monitor) e a barra de rolagem fica sempre à
+  vista quando há mais conteúdo; só a descrição da API escolhida aparece.
 - **Launcher (2026-11-24):** visual novo inspirado nos menus do jogo, API gráfica como primeiro
   item de Gráficos, limite de quadros **30 (padrão, a velocidade do jogo no Xbox segundo o
   usuário)** / 60. A lógica do jogo anda por quadro: a 60 tudo roda no dobro da velocidade

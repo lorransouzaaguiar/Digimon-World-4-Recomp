@@ -1464,6 +1464,13 @@ static void flush_pending(void)
         s_pcount = 0;
         return;
     }
+    /* 16:9: comprime em x, com o lote inteiro a vista (render_opts.h). */
+    if (k->surf->wide)
+        ro_squeeze(s_pv, s_pcount, (float)k->surf->w, (float)ro_display_rows(k->surf->h),
+                   k->view[0] != s_white.view || k->view[1] != s_white.view
+                   || k->view[2] != s_white.view || k->view[3] != s_white.view,
+                   (k->tsurf[0] && k->tsurf[0]->wide) || (k->tsurf[1] && k->tsurf[1]->wide)
+                   || (k->tsurf[2] && k->tsurf[2]->wide) || (k->tsurf[3] && k->tsurf[3]->wide));
     frame_begin();
     if (s_vtx_used + s_pcount > VTX_CAP || s_ubo_used + s_ubo_step > UBO_CAP
             || s_sets_used >= MAX_SETS) {
@@ -1694,9 +1701,6 @@ static void enqueue(const DrawKey *key, const Nv2aVertex *v, const Nv2aVertexExt
         }
     }
     memcpy(s_pv + s_pcount, v, count * sizeof *s_pv);
-    if (key->surf->wide)                /* 16:9: comprime em x (render_opts.h) */
-        ro_squeeze(s_pv + s_pcount, count, (float)key->surf->w,
-                   (float)ro_display_rows(key->surf->h));
     if (x)
         memcpy(s_pe + s_pcount, x, count * sizeof *s_pe);
     s_pcount += count;

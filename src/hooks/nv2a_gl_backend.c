@@ -547,6 +547,17 @@ static uint64_t hash_bytes(const uint8_t *p, size_t n)
     return h;
 }
 
+/* A textura e a imagem de uma superficie de tela alargada (render_opts.h)? */
+static int tex_is_wide_surface(GLuint tex)
+{
+    if (tex == s_white)
+        return 0;
+    for (int i = 0; i < s_nsurf; i++)
+        if (s_surf[i].color == tex && s_surf[i].fbo)
+            return s_surf[i].wide;
+    return 0;
+}
+
 static GLuint texture_get(const Nv2aTexture *t, const Surface *target)
 {
     uint32_t va = tex_va(t->offset);
@@ -807,6 +818,13 @@ static void flush_pending(void)
         s_pcount = 0;
         return;
     }
+    /* 16:9: comprime em x, com o lote inteiro a vista (render_opts.h). */
+    if (k->surf->wide)
+        ro_squeeze(s_pv, s_pcount, (float)k->surf->w, (float)ro_display_rows(k->surf->h),
+                   k->tex[0] != s_white || k->tex[1] != s_white
+                   || k->tex[2] != s_white || k->tex[3] != s_white,
+                   tex_is_wide_surface(k->tex[0]) || tex_is_wide_surface(k->tex[1])
+                   || tex_is_wide_surface(k->tex[2]) || tex_is_wide_surface(k->tex[3]));
     surface_bind(k->surf, rs->zeta_va);
     glUseProgram(s_prog);
     glUniform3f(u_surf, (float)k->surf->w, (float)k->surf->h, zmax_of(rs));
@@ -1147,9 +1165,6 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
         }
     }
     memcpy(s_pv + s_pcount, b->vertices, b->count * sizeof *s_pv);
-    if (e->wide)                        /* 16:9: comprime em x (render_opts.h) */
-        ro_squeeze(s_pv + s_pcount, b->count, (float)e->w,
-                   (float)ro_display_rows(e->h));
     if (b->ext)
         memcpy(s_pe + s_pcount, b->ext->vertices, b->count * sizeof *s_pe);
     s_pcount += b->count;

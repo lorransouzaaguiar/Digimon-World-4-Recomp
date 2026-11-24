@@ -575,6 +575,30 @@ comum). Desenho tirado do Amped 2 e dos dois SSX 3 (`docs/REFERENCIAS.md`), cód
   seja, em 4K o gargalo é a leitura de volta, não o desenho: apresentar direto da GPU (swapchain
   Vulkan na janela, como os ports de referência) tiraria ~14 ms por quadro. É o próximo passo de
   desempenho para resoluções altas; nas áreas pesadas sobra ainda o custo de CPU do executor.
+- **Fade e escurecimento presos em 4:3 (2026-11-24, DW4R-2):** em widescreen, ao trocar de
+  cenário aparecia um "quadrado 4:3" escuro no meio com o cenário visível nas laterais, e o
+  escurecimento atrás de menus (ex.: portal do Commander Room) cobria só o meio.
+  - *Como foi achado:* cenário de teste com capturas a cada 20 flips entre o login e o lobby em
+    16:9 (reproduz sem janela), depois `DW4_FRAME_RING=1` + `ringdump` para listar os lotes do
+    quadro exato. Hipóteses descartadas pelo rastreio (`DW4_RO_TRACE=1`): quadro 2D quase de tela
+    inteira (existem — 29,6..611,4 de 640 com uv constante — e também foram tratados, mas não eram
+    o quadrado); foto do próprio quadro como textura (o quadro 640×480 com uv 0..640 é o **vídeo**
+    de abertura, textura 1024×512 em 0x81000000); malha 2D de quadradinhos (não existe).
+  - *Causa:* o fade é uma **malha 3D presa à câmera** (1086 vértices, rhw constante
+    0,00136..0,00138, blend 302/303, teste de z ligado), centrada na tela, com miolo escuro de
+    ±424 px — o tamanho exato para cobrir 4:3 — e moldura clara até ±516 px. Espremida em x como
+    o resto do 3D, o miolo virava o retângulo 4:3 e a moldura aparecia nas laterais.
+  - *Correção (`ro_squeeze`, agora chamada no **flush do lote**, nos dois renderizadores):* lote
+    em que todo vértice tem o mesmo rhw (±3%), caixa cobrindo a tela 4:3 inteira, centrada, e
+    área somada ≥ 90% da tela não é espremido. Vale também para malha 2D. Quadro 2D de altura
+    inteira, ≥ 70% da largura e uv constante é alargado até as bordas.
+  - *Efeito colateral aceito:* a tela de "Now Loading" (faixas de texto em lote que cobre a tela)
+    passou a ocupar a tela larga, esticada 1,33× em 16:9; antes ficava em 4:3 com faixas pretas.
+  - *Risco:* um chão visto exatamente de cima (rhw constante, cobrindo a tela) deixaria de ser
+    espremido e sairia esticado. Não visto.
+  - Verificado sem janela em 16:9 nos dois renderizadores (fade de saída do login e de entrada
+    no lobby); goldens 4:3 iguais. **Confirmado pelo usuário jogando (2026-11-24):** "melhorou
+    muito os efeitos".
 - **Limites conhecidos:** menus e vídeos ficam com faixas laterais; a sonda de pixel do F9 só
   funciona em 480 + 4:3; os frames de referência (`tests/golden`) só valem para 480 + 4:3.
 - **Verificado sem janela:** 1440 + 16:9 nos dois renderizadores (seleção de Digimon, login,
