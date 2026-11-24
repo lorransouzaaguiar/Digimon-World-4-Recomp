@@ -6,8 +6,9 @@ o toolkit [sp00nznet/xboxrecomp](https://github.com/sp00nznet/xboxrecomp) (v0.18
 do toolkit, com renderizador próprio. Responda em português.
 
 **Objetivo: rodar em Linux, macOS e Windows.** Hoje só o Linux funciona; os outros dois ainda
-não foram começados. O renderizador que funciona é o OpenGL 3.3; um **back end Vulkan está em
-desenvolvimento** e é o caminho para as três plataformas (macOS via MoltenVK).
+não foram começados. Há **dois renderizadores, OpenGL 3.3 e Vulkan**, e o jogador escolhe entre
+eles no launcher (Gráficos → API gráfica). O OpenGL é o padrão; o Vulkan (1.0, sem extensões) é o
+caminho para as três plataformas (macOS via MoltenVK).
 
 ## Estado (atualize ao mudar)
 
@@ -15,9 +16,9 @@ desenvolvimento** e é o caminho para as três plataformas (macOS via MoltenVK).
   a 60 fps (CachyOS, NVIDIA). Fases seguintes, chefes e multijogador **não foram testados**.
 - **Publicado:** release v0.1.0 (AppImage + tar.gz) em
   `github.com/lorransouzaaguiar/Digimon-World-4-Recomp` (privado; vai ser público e open source).
-- **Em andamento:** back end Vulkan (`src/hooks/nv2a_vk_backend.c`, `src/hooks/shaders/`,
-  `third_party/Vulkan-Headers`). Confira no `STATUS.md` e no código até onde ele chegou antes de
-  assumir que funciona.
+- **Vulkan (branch `DW4R-1`):** `src/hooks/nv2a_vk_backend.c` passa nos mesmos frames de
+  referência do OpenGL sem janela, até o lobby, a 60 fps, e o usuário jogou com janela em
+  2026-11-24 sem problemas. Não testado fora de NVIDIA — veja `STATUS.md` antes de afirmar mais que isso.
 - **Aberto:** crash intermitente ao pular o vídeo de abertura com START (assinatura no
   `STATUS.md`); texgen não implementado; sem resolução interna maior nem widescreen; licença do
   projeto ainda não escolhida.
@@ -31,8 +32,30 @@ desenvolvimento** e é o caminho para as três plataformas (macOS via MoltenVK).
 | `docs/REFERENCIAS.md` | estudo de outros ports com o mesmo toolkit (o que reaproveitar, licenças, como publicam) |
 | `README.md` / `README.pt-BR.md` | visão para jogador e contribuidor (en e pt-BR) |
 
-Antes de escrever algo grande do zero, veja se o toolkit ou `docs/REFERENCIAS.md` já resolve.
-Clones de referência, se precisar, vão em `refs/` com `--depth 1` (ignorado pelo git).
+## Não reinventar a roda: os ports de referência
+
+Quatro jogos já foram portados com o mesmo toolkit. **Antes de implementar qualquer coisa não
+trivial** (renderizador, shader, áudio, entrada, pacing, correção de runtime, launcher,
+empacotamento, port para outro sistema, ferramenta de teste), veja como eles resolveram:
+
+| Jogo | Repositório | Clone local |
+|---|---|---|
+| Amped 2 | `github.com/bertibertig/Amped2-Recomp` | `refs/bertibertig_Amped2-Recomp` |
+| SSX 3 | `github.com/bertibertig/SSX3-Recomp` e `github.com/koenhendriks/SSX3-recomp` | `refs/bertibertig_SSX3-Recomp`, `refs/koenhendriks_SSX3-recomp` |
+| Def Jam: Fight for NY | `github.com/vyanhursky/DefJamFFNY-recomp` | `refs/vyanhursky_DefJamFFNY-recomp` |
+| BLiNX 2 | `github.com/apexJCL/blinx2-recomp` | `refs/apexJCL_blinx2-recomp` |
+
+1. Leia primeiro `docs/REFERENCIAS.md` (estudo já feito: o que cada um tem, correções de runtime
+   candidatas, licenças). Depois abra os clones: `grep` em `refs/` pelo tema e os documentos de
+   desenho deles (`docs/vulkan-backend.md`, `docs/VULKAN.html`, READMEs, `PROGRESS.md`).
+2. Falta um clone ou está velho? `git clone --depth 1 <url> refs/<dono>_<repo>` (ignorado pelo git).
+3. **Licença:** Amped 2 e os dois SSX 3 são **GPL-3** — aproveite ideias, formatos e correções
+   reescritas, **nunca copie código** (a licença deste projeto ainda não foi escolhida). Def Jam,
+   BLiNX 2 e o toolkit são MIT.
+4. Ao terminar, diga ao usuário o que veio das referências e onde o nosso desenho difere e por
+   quê; o que aprender de novo sobre eles vai para `docs/REFERENCIAS.md`.
+5. Vale também para o toolkit (`xboxrecomp/`): confira se ele já tem a função ou a variável
+   `RECOMP_*` antes de escrever um hook.
 
 ## Onde fica cada coisa
 
@@ -40,8 +63,10 @@ Clones de referência, se precisar, vão em `refs/` com `--depth 1` (ignorado pe
 src/main.c                    host POSIX: sinais, crash report, log, boot do guest
 src/hooks/                    todo o código próprio do runtime
   nv2a_gl_backend.c           renderizador OpenGL  -> build/libdw4_gl.so (recarrega a quente)
-  nv2a_vk_backend.c, shaders/ renderizador Vulkan (em desenvolvimento)
-  gl_host.c                   contexto EGL, carga/recarga do renderizador (fica no executável)
+  nv2a_vk_backend.c           renderizador Vulkan  -> build/libdw4_vk.so (recarrega a quente)
+  shaders/                    GLSL do Vulkan (glslc -> SPIR-V embutido); porte do shader do OpenGL
+  gl_module.h                 interface comum aos dois renderizadores (ABI)
+  gl_host.c                   escolhe a API (DW4_RENDERER), contexto EGL, carga/recarga (no executável)
   recomp_manual.c             defaults de ambiente (RECOMP_*), overrides, init dos hooks
   d3d_fence.c  input_script.c  screenshot.c  stall_watch.c
 src/recompiled/               C GERADO do default.xbe (ignorado; scripts/regen.sh)
@@ -50,6 +75,7 @@ packaging/                    AppRun, .desktop, ícone, README do pacote
 scripts/                      setup, regen, soak, triage, golden, f9_diff, package_release...
 tests/scenarios/              roteiros de entrada (sintaxe em src/hooks/input_script.c)
 patches/xboxrecomp-dw4.patch  todas as mudanças no toolkit
+third_party/Vulkan-Headers    submódulo fixado (só cabeçalhos; dispensa o SDK do Vulkan)
 config/                       sementes de funções para o recompilador
 game_data/ analysis/ save_data/ build*/ dist/ tools/ refs/ .venv/   locais, ignorados
 ```
@@ -59,11 +85,15 @@ game_data/ analysis/ save_data/ build*/ dist/ tools/ refs/ .venv/   locais, igno
 ```bash
 export PATH=$PWD/.venv/bin:$PATH                 # ninja e capstone ficam no .venv
 cmake --build build -j$(nproc)                   # tudo
-cmake --build build --target dw4_gl              # só o renderizador (jogo aberto recarrega sozinho)
-scripts/soak.py --golden                         # teste sem janela + frames de referência (~95 s)
+cmake --build build --target dw4_gl              # só o renderizador OpenGL (jogo aberto recarrega sozinho)
+cmake --build build --target dw4_vk              # só o renderizador Vulkan (idem)
+scripts/soak.py --golden                         # teste sem janela + frames de referência (~95 s), OpenGL
+scripts/soak.py --vulkan --golden                # o mesmo com o renderizador Vulkan
+DW4_RENDERER=vulkan ./run.sh                     # escolhe a API sem o launcher: opengl | vulkan | cpu
 scripts/soak.py --scenario <arquivo> --runs N    # outro roteiro / repetir
 scripts/triage.py <log>                          # resumo e veredito de um log
 scripts/regen.sh                                 # regenera src/recompiled/ (após mudar sementes)
+scripts/test_pad.sh                              # plugar/desplugar controle virtual (sem jogo, ~5 s)
 ./launcher.sh --selftest                         # launcher fora da tela
 scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
 ```
@@ -81,16 +111,18 @@ scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
    nas outras plataformas. Nada de DirectX. Hoje `CMakeLists.txt` recusa Windows e macOS, e
    `main.c`, `gl_host.c`, `stall_watch.c` e o empacotamento são só Linux: isso é dívida conhecida,
    não regra.
-3a. **Dois renderizadores, um shader:** o fragment shader Vulkan é porte do OpenGL. Uma correção
-   de imagem feita em um tem de ser repetida no outro. O OpenGL continua sendo o padrão e a
-   referência até o Vulkan passar nos mesmos frames de referência; o de CPU (`DW4_SW_RENDER=1`)
-   segue como árbitro.
+3a. **Dois renderizadores, um shader, os dois ficam:** o jogador escolhe a API no launcher; nunca
+   remova uma para implementar a outra. O fragment shader Vulkan é porte do OpenGL: uma correção
+   de imagem (estado, shader, textura) feita em um tem de ser repetida no outro e testada com
+   `soak.py --golden` **e** `soak.py --vulkan --golden`. O OpenGL continua sendo o padrão até o
+   Vulkan ser jogado com janela pelo usuário; o de CPU (`DW4_SW_RENDER=1`) segue como árbitro.
+   O Vulkan fica no 1.0 sem extensões (MoltenVK, drivers antigos).
 4. **Código próprio em `src/hooks/`.** Não edite `src/recompiled/` à mão (é regenerado): corrija
    com override em `recomp_manual.c`, semente em `config/` ou patch no toolkit.
 5. **Mudou algo em `xboxrecomp/`?** Atualize o patch
    (`git -C xboxrecomp diff > patches/xboxrecomp-dw4.patch`) e descreva em `PORT_NOTES.md` §4.
-6. **Reiniciar ou não:** mudança em `nv2a_gl_backend.c` chega ao jogo aberto por recarga a
-   quente; qualquer outra (executável, toolkit) exige reiniciar o jogo. Diga qual é o caso.
+6. **Reiniciar ou não:** mudança em `nv2a_gl_backend.c` / `nv2a_vk_backend.c` (e `shaders/`) chega
+   ao jogo aberto por recarga a quente; qualquer outra (executável, toolkit) exige reiniciar o jogo. Diga qual é o caso.
 7. **Dois idiomas:** textos do launcher (`STR` em `dw4_launcher.py`), READMEs e notas de release
    sempre em pt-BR e en-US.
 8. **Pacotes:** nenhum caminho da máquina de build e nenhuma biblioteca acima da glibc 2.38
@@ -101,7 +133,7 @@ scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
 
 ## Ao terminar uma tarefa
 
-- Rode `scripts/soak.py --golden`; se a imagem mudou de propósito, confira e atualize as
+- Rode `scripts/soak.py --golden` (e `--vulkan --golden` se mexeu em renderização); se a imagem mudou de propósito, confira e atualize as
   referências (`scripts/golden.py <shots> --update`).
 - Atualize `STATUS.md`; em `PORT_NOTES.md` registre causa de bug, patch ou endereço novo.
 - Diga o que foi verificado e o que não foi.

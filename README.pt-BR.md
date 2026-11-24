@@ -26,12 +26,12 @@ Inicial e experimental: espere bugs.
 | Boot, vídeos de abertura (CRI Sofdec), tela título | ✅ |
 | Menus, criação do Digimon, salvar e carregar | ✅ |
 | Renderizador OpenGL 3.3 com cache de texturas: 60 fps no lobby (o de CPU faz ~3 fps e fica como referência) | ✅ |
+| Renderizador Vulkan, escolhido no launcher (Gráficos → API gráfica); mesma imagem do OpenGL | ✅ novo, conferido até o lobby |
 | Controle (padrão Xbox/XInput) e teclado | ✅ |
 | Lobby, tutorial e primeira fase jogáveis | ✅ |
 | Fases seguintes, chefes, o resto do jogo | ⬜ ainda não testado |
 | Multijogador (2 a 4 jogadores) | ⬜ ainda não testado |
 | Resolução interna maior, widescreen, remapear teclas | ⬜ não implementado |
-| Renderizador Vulkan | 🔧 em desenvolvimento |
 | Windows e macOS | ⬜ planejado, não iniciado |
 | Steam Deck | ⬜ não testado |
 
@@ -60,7 +60,7 @@ O AppImage traz o launcher (com o Qt), o jogo recompilado e as bibliotecas neces
 libepoxy, libcrypto). Ele **não** traz os dados do jogo: esses vêm do seu disco.
 
 Requisitos: Linux x86-64 com glibc 2.38 ou mais nova (Ubuntu 24.04+, Fedora 39+, Arch, SteamOS
-3.6+) e placa de vídeo com driver OpenGL 3.3 funcionando. Se o AppImage não abrir por falta de
+3.6+) e placa de vídeo com driver OpenGL 3.3 ou Vulkan funcionando (a API é escolhida no launcher, em Gráficos). Se o AppImage não abrir por falta de
 FUSE, rode com `--appimage-extract-and-run` ou use o pacote `.tar.gz` (mesmo conteúdo: extraia e
 rode `./DigimonWorld4-Recomp`).
 
@@ -174,8 +174,9 @@ Rode guardando o log e anexe o arquivo:
 - **Defeito de imagem:** aperte **F9** com o defeito na tela (builds a partir do código). Ele grava
   uma captura e a lista de todos os draws em `build/shots/`.
 
-`DW4_SW_RENDER=1 ./run.sh` usa o renderizador de referência em CPU, para separar bug do
-renderizador de bug do jogo.
+`DW4_RENDERER=vulkan ./run.sh` (ou `opengl`, o padrão) escolhe a API gráfica sem o launcher; se a
+pedida não estiver disponível o jogo cai na outra. `DW4_SW_RENDER=1 ./run.sh` usa o renderizador de
+referência em CPU, para separar bug do renderizador de bug do jogo.
 
 ## Para quem desenvolve
 
@@ -194,7 +195,8 @@ renderizador de bug do jogo.
 A CPU do Xbox é um x86, então o código de máquina do jogo é traduzido função por função para C e
 compilado para x86-64. O jogo conversa com o kernel do Xbox por 128 chamadas importadas, que o
 toolkit implementa no Linux. Ele comanda o chip gráfico (NV2A) escrevendo buffers de comandos
-diretamente; o toolkit decodifica esses comandos e o back end OpenGL deste projeto os desenha, com
+diretamente; o toolkit decodifica esses comandos e o back end deste projeto os desenha -- OpenGL 3.3 ou
+Vulkan, dois módulos atrás de uma interface só (`src/hooks/gl_module.h`) --, com
 os register combiners convertidos em shader e as texturas guardadas em cache por endereço e
 conteúdo.
 

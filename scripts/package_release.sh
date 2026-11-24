@@ -10,7 +10,7 @@
 # O pacote traz tudo: launcher congelado (PyInstaller: Python + Qt), o jogo
 # recompilado e as bibliotecas (SDL2, libepoxy, libcrypto). O jogador so
 # precisa do proprio disco. Dentro do pacote:
-#   AppRun  launcher/ (PyInstaller)  game/{dw4_recomp,libdw4_gl.so,lib/}  licenses/
+#   AppRun  launcher/ (PyInstaller)  game/{dw4_recomp,libdw4_gl.so,libdw4_vk.so,lib/}  licenses/
 #
 # Precisa de: codigo gerado (scripts/regen.sh), .venv com pyinstaller e
 # pysdl2-dll (scripts/setup.sh), e tools/appimagetool-x86_64.AppImage
@@ -57,10 +57,12 @@ cmake -S . -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release -DDW4_RELEASE=ON \
 cmake --build "$BUILD" -j"${JOBS:-$(nproc)}"
 
 rm -rf "$APPDIR"; mkdir -p "$APPDIR/game/lib" "$APPDIR/licenses"
-cp "$BUILD/dw4_recomp" "$BUILD/libdw4_gl.so" "$APPDIR/game/"
+cp "$BUILD/dw4_recomp" "$BUILD/libdw4_gl.so" "$BUILD/libdw4_vk.so" "$APPDIR/game/"
 # So a informacao de depuracao sai: os simbolos sub_XXXXXXXX ficam (relatorio
 # de crash, e o renderizador resolve simbolos do executavel).
-strip --strip-debug "$APPDIR/game/dw4_recomp" "$APPDIR/game/libdw4_gl.so"
+strip --strip-debug "$APPDIR/game/dw4_recomp" "$APPDIR/game/libdw4_gl.so" "$APPDIR/game/libdw4_vk.so"
+# libvulkan (o loader) NAO entra no pacote: tem de ser a do sistema, a mesma do
+# driver. Sem ela o renderizador Vulkan nao carrega e o jogo abre com OpenGL.
 
 # Bibliotecas do jogo. SDL2 vem da roda pysdl2-dll (SDL2 de verdade, compilada
 # para glibc antiga); a do CachyOS e o sdl2-compat, que exige SDL3 e glibc nova.

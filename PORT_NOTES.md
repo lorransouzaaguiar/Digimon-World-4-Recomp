@@ -135,6 +135,39 @@ Mesma ideia do patch dos ports Amped 2 / SSX 3.
 `nv2a_backend_decode_texture` passou a usá-lo; antes zerava a paleta e recusava toda textura
 formato `0x0B`, que é a maior parte do que o Alchemy desenha.
 
+### 4.9 `src/input/xinput_device.c`, `xinput_xbox.h`, `src/video/fb_present_sdl.c` — plugar o controle fechava o jogo (2026-11-24)
+
+**Sintoma:** conectar o controle com o jogo aberto → o processo aborta com
+`malloc(): unaligned tcache chunk detected`, sem relatório `[CRASH]` no log.
+
+**Como foi achado:** `coredumpctl info <pid>` (o systemd guarda o core). Thread que abortou:
+`ohci_run_periodic_list → usb_gamepad_report → controller_for_port_locked →
+refresh_controllers_locked → SDL_GameControllerOpen → malloc`. Thread da janela, no mesmo instante:
+`xbox_HostWindowMain → SDL_WaitEventTimeout → (tradução do evento "joystick conectado") →
+função 0x2c000 do sdl2-compat`, parada no lock de joysticks **depois** de já ter dado `free` na lista.
+
+**Causa:** no CachyOS a SDL2 é o `sdl2-compat` (API da SDL2 sobre a SDL3). Ele mantém uma lista
+global de joysticks que `SDL_NumJoysticks()` libera e refaz; a tradução do evento de
+conexão/remoção, na thread que bombeia eventos, faz o mesmo — e dá o `free` **antes** de pegar o
+lock (visto no desmonte: `free(lista)` → `SDL_GetJoysticks()` → guarda). O toolkit chamava
+`SDL_NumJoysticks()` na thread do USB emulado a cada relatório enquanto a porta estava sem
+controle, ou seja, o tempo todo para quem joga no teclado. Ao plugar, as duas threads liberavam o
+mesmo bloco (double free entre dois tcaches).
+
+**Correção:** com janela, abrir/fechar controles acontece **só na thread que bombeia eventos**
+(`xbox_InputSdlDeviceEvent`, chamada por `fb_present_sdl.c` a cada evento e uma vez ao começar);
+as outras threads só leem o controle já aberto. Sem janela (headless) continua como antes: a
+própria thread que lê também bombeia. O log ganhou `[PAD] port N <- "nome"` / `unplugged`.
+
+**Teste:** `scripts/test_pad.sh` (`tests/pad_hotplug.c`, ideia do `test_pad.sh` do Amped 2/SSX 3):
+controle virtual da SDL plugado/desplugado 400× com outra thread lendo sem parar — sem jogo, sem
+janela, sem hardware. Código antigo: aborta com a mesma mensagem em 8 de 8 execuções. Corrigido:
+3 de 3 passam (400/400 conexões vistas). No jogo: `tests/scenarios/hotplug.txt` (passo `vpad` do
+roteiro). **Não verificado com controle de verdade** — só o usuário pode confirmar.
+
+O pacote de release leva a SDL2 "de verdade" (`pysdl2-dll`), não o sdl2-compat; se ela tem a mesma
+corrida não foi verificado, mas a correção vale para as duas.
+
 ## 5. Hooks (`src/hooks/`)
 
 | Arquivo | Função |
@@ -144,7 +177,8 @@ formato `0x0B`, que é a maior parte do que o Alchemy desenha.
 | `screenshot.c` | `DW4_SHOT=<prefixo>` grava BMPs do scanout (depuração sem olhar a janela) |
 | `input_script.c` | `DW4_INPUT_SCRIPT="22:enter 30:z 40:d*3"` injeta teclas por tempo (mesma tabela do teclado) |
 | `nv2a_gl_backend.c` | renderizador OpenGL 3.3, compilado como `libdw4_gl.so` (recarga a quente) |
-| `gl_host.c`, `gl_module.h` | contexto EGL, carga/recarga do renderizador, seletor `DW4_SW_RENDER=1` |
+| `nv2a_vk_backend.c`, `shaders/` | renderizador Vulkan, compilado como `libdw4_vk.so` (§7.5) |
+| `gl_host.c`, `gl_module.h` | escolha da API (`DW4_RENDERER=opengl\|vulkan\|cpu`), contexto EGL, carga/recarga do renderizador, `DW4_SW_RENDER=1` |
 | `stall_watch.c` | amostrador de travamento (`DW4_STALL_MS`) |
 | `dw4_hooks.h` | `LOG_ONCE`, protótipos |
 
@@ -194,7 +228,7 @@ recebe `clear`/`draw`/`flip` pela `nv2a_backend.h` e rasteriza na GPU.
 
 Referência: `bertibertig/SSX3-Recomp` e `bertibertig/Amped2-Recomp` (`src/render/vk_backend.c`,
 `docs/vulkan-backend.md`, GPL-3) fazem o mesmo em Vulkan e estendem o `Nv2aBatch` com o estado dos
-combiners — é o caminho se efeitos multitextura fizerem falta. Nenhum código deles foi copiado.
+combiners. Nenhum código deles foi copiado. Desde 2026-11-24 temos o nosso back end Vulkan (§7.5).
 
 ### 7.0 Recarga a quente do renderizador (2026-11-24)
 
@@ -269,6 +303,48 @@ Digimon; o lobby desenha com culling desligado):
    `front_face` (F5 → "giro cru" mostra o valor sem troca).
 Só (1) deixava o modelo do avesso; (1)+(2) dá o modelo correto. Conferido sem janela nas três
 combinações; referências atualizadas.
+
+### 7.5 Back end Vulkan (2026-11-24) — `src/hooks/nv2a_vk_backend.c` → `libdw4_vk.so`
+
+Segunda API gráfica, ao lado do OpenGL (que continua o padrão). O jogador escolhe no launcher
+(Gráficos → API gráfica), que grava `renderer` em `launcher.json` e passa `DW4_RENDERER` ao jogo.
+
+- **Seleção** (`gl_host.c`): `DW4_RENDERER=opengl|vulkan|cpu`. Se a API pedida não sobe (sem
+  `libvulkan.so.1`, sem driver, sem placa acelerada), tenta a outra e por último a CPU. O log traz
+  `[GL] renderizador ativo: <OpenGL|Vulkan> (...)`.
+- **Interface** (`gl_module.h`, ABI 2): `name`, `needs_gl`, `init`, `shutdown` + os quatro
+  callbacks. O módulo OpenGL usa o contexto EGL do host; o Vulkan cria e destrói o próprio
+  dispositivo. A recarga a quente vale para os dois (`cmake --build build --target dw4_vk`).
+- **O que veio dos ports de referência** (Amped 2 / SSX 3, só as ideias — são GPL-3):
+  Vulkan-Headers fixado em `third_party/` (submódulo, v1.4.363), GLSL → SPIR-V em vetor C com
+  `glslc -mfmt=c`, estado dos combiners num UBO por lote reaproveitado enquanto não muda.
+- **O que é diferente deles, de propósito:**
+  - *sem swapchain*: o frame é lido de volta para a memória do guest, como no OpenGL, e a janela
+    SDL do toolkit apresenta. Janela, tela cheia, `DW4_SHOT`, soak sem janela e goldens funcionam
+    iguais nas duas APIs;
+  - *Vulkan 1.0 puro, sem extensões*: eles usam 1.3 + `VK_EXT_extended_dynamic_state3` + push
+    descriptors. Aqui blend/depth/stencil/cull/máscara de cor entram num **cache de pipelines**
+    (10 pipelines no lobby) e os descritores num cache por frame — roda em qualquer driver Vulkan.
+- **Convenções:** y do NDC para baixo, então a linha 0 da imagem é a linha 0 da superfície e o
+  sentido de giro da NV2A vale direto (o OpenGL precisa trocar CW/CCW, §7.4); z em [0,1];
+  z-bias = `vkCmdSetDepthBias(constante = bias, slope = fator)`.
+- **Frame:** dois command buffers, "upload" (texturas) e "draw", enviados nessa ordem no flip, com
+  espera (um frame em voo — a leitura de volta precisa disso). Cada textura é reenviada no máximo
+  uma vez por frame, no primeiro uso, por isso o upload pode rodar antes de todos os draws.
+  Anéis por envio: 524 mil vértices, 8 MB de UBO, 16 MB de staging; cheio → envia e continua.
+- **Superfícies** ficam em layout `GENERAL` (são alvo e textura no mesmo frame); uma barreira
+  separa "desenhou" de "amostrou". Clear de só alguns canais sai como retângulo (o
+  `vkCmdClearAttachments` ignora a máscara de escrita).
+- **Shader:** `shaders/nv2a_vk.frag` é o mesmo porte de `nv2a_rc_eval` do OpenGL. **Correção num
+  tem de ser repetida no outro.**
+- **Opções:** `DW4_VK_DEVICE=<n>`, `DW4_VK_ALLOW_SW=1` (lavapipe), `DW4_VK_CULL=0|inv`,
+  `DW4_VK_STATS=1`, `DW4_VK_DBG=<bits>` (os mesmos do `DW4_GL_DBG`); F5–F8, F10, F11. A captura F9
+  e a sonda de pixel existem só no OpenGL — para investigar bug de imagem, use o OpenGL.
+- **Validado sem janela** (RTX 5070, driver 620.73): `scripts/soak.py --vulkan --golden` — os 4
+  frames de referência (gerados com OpenGL) conferem, lobby a 60 fps com ~4.000 draws → ~20 lotes;
+  fallback Vulkan → OpenGL (`DW4_VK_DEVICE=99`); recarga a quente.
+- **Não verificado:** jogar com janela; AMD/Intel (lá o depth é `D32F+S8`, o que muda a
+  resolução do z-bias); camadas de validação (`vulkan-validation-layers` não está instalado).
 
 ### 7.1 Opções de depuração do renderizador
 

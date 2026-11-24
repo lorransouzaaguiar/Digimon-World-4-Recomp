@@ -25,7 +25,8 @@ bibliotecas ja vem no pacote. O jogo NAO vem junto.
 Nothing else needs to be installed. The game itself is NOT included.
 
 Requisitos / Requirements: Linux x86-64, glibc @GLIBC@+, placa de video com
-OpenGL 3.3 / a GPU with OpenGL 3.3.
+OpenGL 3.3 ou Vulkan / a GPU with OpenGL 3.3 or Vulkan (escolha no launcher,
+em Graficos / pick it in the launcher, under Graphics).
 
 Saves, opcoes e logs / saves, settings and logs:  ~/.local/share/dw4-recomp/
 

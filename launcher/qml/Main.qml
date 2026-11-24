@@ -210,7 +210,7 @@ ApplicationWindow {
                 Card {
                     Info { k: t.gpu; v: app.gpu }
                     Info { k: t.version; v: app.version }
-                    Info { k: t.renderer; v: app.opt("renderer") === "cpu" ? t.r_cpu : t.r_gpu; property var dep: app.gameDir }
+                    Info { k: t.renderer; v: app.opt("renderer") === "cpu" ? t.r_cpu : (app.opt("renderer") === "vulkan" ? t.r_vk : t.r_gl); property var dep: app.gameDir }
                 }
                 Card {
                     RowLayout {
@@ -256,10 +256,15 @@ ApplicationWindow {
                     heading: t.renderer
                     Combo {
                         Layout.fillWidth: true
-                        model: [t.r_gpu, t.r_cpu]
-                        currentIndex: app.opt("renderer") === "cpu" ? 1 : 0
-                        onActivated: i => app.setOpt("renderer", i === 1 ? "cpu" : "gpu")
+                        id: apiCombo
+                        readonly property var apis: ["opengl", "vulkan", "cpu"]
+                        model: [t.r_gl, t.r_vk, t.r_cpu]
+                        currentIndex: Math.max(0, apis.indexOf(app.opt("renderer")))
+                        onActivated: i => app.setOpt("renderer", apis[i])
                     }
+                    Label { visible: !app.vulkanAvailable && apiCombo.currentIndex === 1
+                            text: t.vk_missing; color: "#ffb454"; font.pixelSize: 12
+                            wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Label { text: t.renderer_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 }
             }

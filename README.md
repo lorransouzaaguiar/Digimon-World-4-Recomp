@@ -25,12 +25,12 @@ Early and experimental: expect bugs.
 | Boot, intro movies (CRI Sofdec), title screen | ✅ |
 | Menus, Digimon creation, saving and loading | ✅ |
 | OpenGL 3.3 renderer with texture cache: 60 fps in the lobby (CPU renderer ~3 fps, kept as the reference) | ✅ |
+| Vulkan renderer, selectable in the launcher (Graphics → Graphics API); same picture as OpenGL | ✅ new, checked up to the lobby |
 | Controller (XInput-style pads) and keyboard | ✅ |
 | Lobby, tutorial and first stage playable | ✅ |
 | Later stages, bosses, the rest of the game | ⬜ not tested yet |
 | Multiplayer (2–4 players) | ⬜ not tested yet |
 | Higher internal resolution, widescreen, key remapping | ⬜ not implemented |
-| Vulkan renderer | 🔧 in development |
 | Windows and macOS | ⬜ planned, not started |
 | Steam Deck | ⬜ not tested |
 
@@ -59,7 +59,7 @@ The AppImage carries the launcher (with Qt), the recompiled game and the librari
 libepoxy, libcrypto). It does **not** carry the game data: that comes from your disc.
 
 Requirements: Linux x86-64 with glibc 2.38 or newer (Ubuntu 24.04+, Fedora 39+, Arch, SteamOS 3.6+)
-and a GPU with a working OpenGL 3.3 driver. If the AppImage does not start because FUSE is missing,
+and a GPU with a working OpenGL 3.3 or Vulkan driver (pick the API in the launcher, under Graphics). If the AppImage does not start because FUSE is missing,
 run it with `--appimage-extract-and-run`, or use the `.tar.gz` package (same content, unpack and run
 `./DigimonWorld4-Recomp`).
 
@@ -171,7 +171,9 @@ Run with a log and attach the file:
 - **Picture problem:** press **F9** with the problem on screen (source builds). It writes a
   screenshot and a list of every draw call to `build/shots/`.
 
-`DW4_SW_RENDER=1 ./run.sh` runs the CPU reference renderer, to tell a renderer bug from a game bug.
+`DW4_RENDERER=vulkan ./run.sh` (or `opengl`, the default) picks the graphics API without the launcher;
+if the one asked for is unavailable the game falls back to the other. `DW4_SW_RENDER=1 ./run.sh` runs
+the CPU reference renderer, to tell a renderer bug from a game bug.
 
 ## For developers
 
@@ -191,8 +193,9 @@ These documents are in Portuguese for now.
 The Xbox CPU is an x86, so the game's machine code is lifted function by function to C and
 compiled for x86-64. The game talks to the Xbox kernel through 128 imports, which the toolkit
 implements on Linux. It drives the graphics chip (NV2A) by writing command buffers directly; the
-toolkit decodes those commands and this project's OpenGL back end draws them, with the register
-combiners turned into a shader and textures cached by guest address and content.
+toolkit decodes those commands and this project's back end draws them -- OpenGL 3.3 or Vulkan, two
+modules behind one interface (`src/hooks/gl_module.h`) -- with the register combiners turned into a
+shader and textures cached by guest address and content.
 
 ## Credits
 

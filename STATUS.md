@@ -184,6 +184,25 @@ menus; os cenários usam contagem de frames.
 **A versão com janela do quickstart não foi rodada depois da troca para frames** — o caminho foi
 validado só sem janela.
 
+## Back end Vulkan ✅ (2026-11-24, branch `DW4R-1`) — `src/hooks/nv2a_vk_backend.c`
+
+Segunda API gráfica, **ao lado** do OpenGL (que continua existindo e é o padrão). O jogador escolhe
+no launcher: Gráficos → **API gráfica** → OpenGL 3.3 / Vulkan / CPU. Sem launcher:
+`DW4_RENDERER=vulkan ./run.sh`. Se a API escolhida não sobe, o jogo abre com a outra (e, por último,
+com a CPU). Desenho e diferenças para os ports de referência em `PORT_NOTES.md` §7.5.
+
+- **Verificado sem janela** (RTX 5070): `scripts/soak.py --vulkan --golden` → os 4 frames de
+  referência conferem com os do OpenGL; lobby a 60 fps (~4.000 draws → ~20 lotes, 10 pipelines);
+  fallback Vulkan → OpenGL; recarga a quente (`cmake --build build --target dw4_vk`);
+  OpenGL sem regressão (`scripts/soak.py --golden`); launcher `--selftest` e captura da tela Gráficos.
+- **Confirmado pelo usuário (2026-11-24):** jogou com janela em Vulkan, "funcionando legal".
+- **Não verificado:** além do que o usuário jogou nessa sessão; AMD/Intel; pacote de release com `libdw4_vk.so` (o script foi atualizado, não rodado);
+  camadas de validação do Vulkan (não instaladas).
+- Só no OpenGL: captura F9 com rastreio e sonda de pixel. Bug de imagem se investiga no OpenGL e a
+  correção de shader é repetida em `shaders/nv2a_vk.frag`.
+- Build: precisa do `glslc` (pacote `shaderc`) e do submódulo `third_party/Vulkan-Headers`
+  (`git submodule update --init`); sem eles o CMake avisa e compila só o OpenGL.
+
 ## Recarga a quente do renderizador ✅ (2026-11-24)
 
 `cmake --build build --target dw4_gl` com o jogo aberto troca o renderizador no próximo flip
@@ -199,6 +218,16 @@ em `PORT_NOTES.md` §7.0. Validado sem janela (2 reloads durante o cenário do l
 
 - **Modelos 3D salpicados de preto na seleção de Digimon**: giro das tiras de triângulos + sentido
   de face no renderizador (`PORT_NOTES.md` §7.4). Validado sem janela e confirmado pelo usuário.
+
+## Plugar o controle com o jogo aberto fechava o jogo — RESOLVIDO (2026-11-24)
+
+`malloc(): unaligned tcache chunk detected` ao conectar o controle. Corrida entre a thread da
+janela e a do USB emulado na lista de joysticks do `sdl2-compat` (patch 4.9 no toolkit,
+`PORT_NOTES.md` §4.9; achado pelo core dump). Reproduzido sem jogo com `scripts/test_pad.sh`
+(código antigo: 8/8 abortam; corrigido: 3/3 passam). **Falta o usuário confirmar com o controle de
+verdade.** Não tem relação com o Vulkan (aconteceu numa sessão em Vulkan, mas o defeito é da
+camada de entrada). É candidato a ser também a "corrida que corrompe o heap" nunca localizada
+(mesma mensagem) — **não confirmado**.
 
 ## Crash intermitente conhecido (aberto)
 

@@ -51,7 +51,7 @@ DEFAULTS = {
     "fullscreen": False,
     "scale": 2,              # janela = 640x480 x escala
     "vsync": True,
-    "renderer": "gpu",       # gpu | cpu
+    "renderer": "opengl",    # opengl | vulkan | cpu  (API grafica; "gpu" antigo = opengl)
     "keyboard": True,
 }
 
@@ -78,8 +78,12 @@ STR = {
         "window": "Janela", "fullscreen": "Tela cheia", "fullscreen_d": "Tela cheia sem borda, na resolução da área de trabalho.",
         "scale": "Tamanho da janela", "scale_d": "Múltiplo de 640×480. A imagem do jogo continua em 640×480.",
         "vsync": "Sincronização vertical", "vsync_d": "Apresenta os quadros no ritmo do monitor. Desligue só para testes.",
-        "renderer": "Renderizador", "r_gpu": "GPU (OpenGL 3.3) — recomendado", "r_cpu": "CPU (referência, muito lento)",
-        "renderer_d": "O de CPU faz poucos quadros por segundo; serve para comparar quando a imagem parece errada.",
+        "renderer": "API gráfica", "r_gl": "OpenGL 3.3 — padrão", "r_vk": "Vulkan",
+        "r_cpu": "CPU (referência, muito lento)",
+        "renderer_d": "OpenGL e Vulkan desenham a mesma imagem com a placa de vídeo; escolha a que funcionar melhor "
+                      "no seu sistema. Se a escolhida não estiver disponível, o jogo abre com a outra. A de CPU faz "
+                      "poucos quadros por segundo; serve para comparar quando a imagem parece errada.",
+        "vk_missing": "Vulkan não foi encontrado neste sistema: o jogo vai abrir com OpenGL.",
         "keyboard": "Teclado como controle 1", "keyboard_d": "Um controle conectado continua funcionando junto.",
         "pad_note": "Qualquer controle reconhecido como Xbox/XInput funciona sem configuração.",
         "key": "Tecla", "xbox": "Controle do Xbox",
@@ -122,8 +126,12 @@ STR = {
         "window": "Window", "fullscreen": "Fullscreen", "fullscreen_d": "Borderless fullscreen at the desktop resolution.",
         "scale": "Window size", "scale_d": "A multiple of 640×480. The game still renders at 640×480.",
         "vsync": "Vertical sync", "vsync_d": "Presents frames at the display's pace. Turn off for testing only.",
-        "renderer": "Renderer", "r_gpu": "GPU (OpenGL 3.3) — recommended", "r_cpu": "CPU (reference, very slow)",
-        "renderer_d": "The CPU one runs at a few frames per second; use it to compare when the picture looks wrong.",
+        "renderer": "Graphics API", "r_gl": "OpenGL 3.3 — default", "r_vk": "Vulkan",
+        "r_cpu": "CPU (reference, very slow)",
+        "renderer_d": "OpenGL and Vulkan draw the same picture on your graphics card; pick whichever works best on "
+                      "your system. If the chosen one is unavailable, the game starts with the other. The CPU one "
+                      "runs at a few frames per second; use it to compare when the picture looks wrong.",
+        "vk_missing": "Vulkan was not found on this system: the game will start with OpenGL.",
         "keyboard": "Keyboard as controller 1", "keyboard_d": "A connected controller keeps working alongside it.",
         "pad_note": "Any controller the system reports as Xbox/XInput works with no setup.",
         "key": "Key", "xbox": "Xbox control",
@@ -182,6 +190,9 @@ class Backend(QObject):
             self.cfg.update({k: v for k, v in saved.items() if k in DEFAULTS})
         except (OSError, ValueError):
             pass
+        if self.cfg["renderer"] not in ("opengl", "vulkan", "cpu"):
+            self.cfg["renderer"] = "opengl"     # "gpu" das versoes ate 0.1.0
+        self._vulkan = self._detect_vulkan()
         self.proc = None
         self.log_file = None
         self.last_log = None
@@ -221,6 +232,17 @@ class Backend(QObject):
                 return m.group(1).strip()
         return "—"
 
+    def _detect_vulkan(self) -> bool:
+        """O renderizador Vulkan veio no pacote e o sistema tem o loader do Vulkan."""
+        if not any((d / "libdw4_vk.so").is_file() for d in (APP, APP / "build")):
+            return False
+        try:
+            import ctypes
+            ctypes.CDLL("libvulkan.so.1")
+            return True
+        except OSError:
+            return False
+
     def _save(self):
         self.cfg_path.parent.mkdir(parents=True, exist_ok=True)
         self.cfg_path.write_text(json.dumps(self.cfg, indent=2) + "\n")
@@ -244,6 +266,10 @@ class Backend(QObject):
     @Property(str, constant=True)
     def gpu(self):
         return self._gpu
+
+    @Property(bool, constant=True)
+    def vulkanAvailable(self):
+        return self._vulkan
 
     @Property(str, constant=True)
     def version(self):
@@ -388,6 +414,7 @@ class Backend(QObject):
         env["RECOMP_KEYBOARD"] = "1" if c["keyboard"] else "0"
         env["RECOMP_WINDOW_SCALE"] = str(int(c["scale"]))
         env["DW4_GL_NO_RELOAD"] = env.get("DW4_GL_NO_RELOAD", "1")
+        env["DW4_RENDERER"] = c["renderer"]     # opengl | vulkan | cpu (src/hooks/gl_host.c)
         for k, on in (("RECOMP_FULLSCREEN", c["fullscreen"]), ("DW4_SW_RENDER", c["renderer"] == "cpu")):
             if on:
                 env[k] = "1"
