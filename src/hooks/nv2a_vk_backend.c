@@ -1319,6 +1319,7 @@ typedef struct {
     Nv2aCombiner rc;
     float fogc[4];
     uint32_t clip_mode;
+    uint32_t sc[4];                     /* recorte do guest (x, y, l, a); zeros = inteira */
 } DrawKey;
 
 static DrawKey s_key;
@@ -1470,7 +1471,8 @@ static void flush_pending(void)
                    k->view[0] != s_white.view || k->view[1] != s_white.view
                    || k->view[2] != s_white.view || k->view[3] != s_white.view,
                    (k->tsurf[0] && k->tsurf[0]->wide) || (k->tsurf[1] && k->tsurf[1]->wide)
-                   || (k->tsurf[2] && k->tsurf[2]->wide) || (k->tsurf[3] && k->tsurf[3]->wide));
+                   || (k->tsurf[2] && k->tsurf[2]->wide) || (k->tsurf[3] && k->tsurf[3]->wide),
+                   k->sc);
     frame_begin();
     if (s_vtx_used + s_pcount > VTX_CAP || s_ubo_used + s_ubo_step > UBO_CAP
             || s_sets_used >= MAX_SETS) {
@@ -1500,6 +1502,18 @@ static void flush_pending(void)
         return;
     }
     k->surf->dirty = 1;
+    {
+        /* Recorte do guest (begin_pass deixa o da superficie inteira). */
+        VkRect2D sr = { { 0, 0 }, { k->surf->pw, k->surf->ph } };
+        int32_t r[4];
+
+        if (ro_scissor(k->sc, k->surf->wide, k->surf->w, k->surf->h, k->surf->pw,
+                       k->surf->ph, r)) {
+            sr.offset.x = r[0]; sr.offset.y = r[1];
+            sr.extent.width = (uint32_t)r[2]; sr.extent.height = (uint32_t)r[3];
+        }
+        vkCmdSetScissor(s_cmd, 0, 1, &sr);
+    }
 
     /* ── pipeline ── */
     memset(&pk, 0, sizeof pk);
@@ -1812,6 +1826,11 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
          * views ja guardadas nesta chave morreram: resolve tudo de novo. */
         gen = s_tex_gen;
         key_init(&key, e, b->state);
+        /* Recorte menor que a superficie (sub-viewport: o minimapa). */
+        if (s->width && s->height && (s->width < e->w || s->height < e->h)) {
+            key.sc[0] = s->clip_x; key.sc[1] = s->clip_y;
+            key.sc[2] = s->width;  key.sc[3] = s->height;
+        }
         if (b->ext) {
             const Nv2aBatchExt *x = b->ext;
 

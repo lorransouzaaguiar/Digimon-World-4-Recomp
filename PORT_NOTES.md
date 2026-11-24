@@ -300,6 +300,12 @@ frame (testado no gamescope com `DW4_VK_DEVICE=99`: cai no OpenGL e o log mostra
 `no Vulkan presenter: SDL renderer after all`; a imagem nesse caso não foi vista).
 Ao fechar com um swapchain vivo a janela é deixada para o `exit()`.
 
+### 4.15 `nv2a_backend.h`, `nv2a_pb_exec.c` — origem do recorte da superfície (2026-11-24, DW4R-2)
+
+`Nv2aSurface.clip_x` / `clip_y` (de `s_gpu.clip_x/y`, pixels reais). A interface só dava o
+tamanho do recorte; sem a origem o back end não tinha como cortar um sub-viewport (o minimapa das
+fases, `PORT_NOTES` §7.6).
+
 ## 5. Hooks (`src/hooks/`)
 
 | Arquivo | Função |
@@ -599,6 +605,49 @@ comum). Desenho tirado do Amped 2 e dos dois SSX 3 (`docs/REFERENCIAS.md`), cód
   - Verificado sem janela em 16:9 nos dois renderizadores (fade de saída do login e de entrada
     no lobby); goldens 4:3 iguais. **Confirmado pelo usuário jogando (2026-11-24):** "melhorou
     muito os efeitos".
+- **HUD ancorado nas bordas (2026-11-24, DW4R-2):** em tela larga o HUD (retrato, HP/MP, nível)
+  ficava em 4:3 no meio, com a faixa escura acabando antes das bordas. Rastreio
+  (`DW4_RO_TRACE=<flip>[,<flip>]` lista os lotes de um quadro): todo o 2D do jogo tem rhw = 1; o
+  HUD é uma **faixa** de 3 quadros (-18..659 × 393..485, encostada na borda de baixo) seguida dos
+  elementos do jogador; a caixa de diálogo é um painel -54..695 × 295..463 (não encosta na borda).
+  Regra em `ro_squeeze`: lote 2D da largura da tela, baixo (≤ 40% da altura) e encostado na borda
+  de cima ou de baixo = faixa, não é espremido; o lote 2D seguinte na altura da faixa e todo de
+  um lado da tela é ancorado na borda desse lado (escala em x em torno da borda). Diálogo e menus
+  continuam em 4:3. Verificado sem janela: Vulkan 16:9 e 21:9, OpenGL 16:10 (1 jogador, lobby).
+  **Menu rápido de itens (captura `f9-014` do usuário, 16:9):** o painel e os textos foram para o
+  canto, mas a barra de seleção (55..171 × 317..341, textura e blend próprios) ficou no meio —
+  ela está toda acima da faixa e o teste era pelo centro do lote. Agora cada lado tem uma zona
+  de altura que começa na faixa e **cresce com cada lote ancorado** (o painel, 317..440, é
+  desenhado antes da barra). Não reproduz sem janela (no lobby, com personagem novo, o menu não
+  abre): aguardando o usuário.
+  **Não verificado:** 2–4 jogadores (um lote que junte elementos dos dois lados fica no meio),
+  HUD de chefe / outros elementos de borda, fases.
+- **Minimapa das fases enorme — recorte do guest não era aplicado (2026-11-24, DW4R-2):** o
+  painel do mapa ocupava do meio da tela até além da borda direita. Não é do widescreen: vale em
+  qualquer proporção.
+  - *Como foi achado:* captura F9 do usuário no OpenGL (`build/shots/f9-011.txt`): os 70 draws do
+    mapa vêm com `clip=120x120` na superfície 640×480, e o conteúdo é desenhado 5× maior (painel
+    de 606×606 centrado em 588,134; salas até x = 721). A NV2A corta o que sai do recorte
+    (`SET_SURFACE_CLIP_*`); os dois renderizadores só usavam o tamanho do recorte, sem origem e
+    sem cortar.
+  - *Correção:* `Nv2aSurface` ganhou `clip_x`/`clip_y` (toolkit, patch 4.15); a chave do lote
+    guarda o recorte quando ele é menor que a superfície e o flush aplica scissor
+    (`vkCmdSetScissor` / `glScissor`; o clear não é afetado). `DW4_GL_MODULE_ABI` = 3.
+  - *Em tela larga* (`ro_clip_mode` / `ro_scissor` em `render_opts.h`): um recorte estreito é um
+    elemento só — vértices e retângulo passam pela mesma transformação em x; encostado na borda
+    lateral da tela 4:3 é ancorado na borda da tela larga (o minimapa vai para o canto), senão é
+    espremido em torno do centro. Recorte da largura inteira só corta na vertical.
+  - *Verificado sem janela:* goldens 4:3 iguais nos dois renderizadores (a seleção de Digimon usa
+    um recorte para o modelo 3D e o alvo de sombra usa 498×498 em 512×512); 16:9 sem regressão.
+    **Confirmado em 4:3 por captura F9 do usuário** (`build/shots/f9-012.bmp`): o minimapa
+    aparece como um quadrado de 120×120 em 468..588 × 36..156, no canto superior direito. Essa
+    posição mostrou que o limiar de "encostado na borda" (92%) não pegava o mapa; passou a 85%.
+    **Confirmado pelo usuário jogando (2026-11-24, OpenGL):** 4:3, 16:9 e 21:9 normais.
+    Depois também no Vulkan em 21:9.
+- **ABERTO: menu do START quebra em 21:9** (usuário, Vulkan, 2026-11-24): aparece esticado; em
+  16:9 está certo. Sem captura ainda (o F9 com lista de draws só existe no OpenGL); o usuário vai
+  mandar. Suspeitas a conferir na captura: as regras de `ro_squeeze` com limiar em fração da
+  largura (lote de tela inteira, faixa do HUD) pegando um painel do menu só em 21:9.
 - **Limites conhecidos:** menus e vídeos ficam com faixas laterais; a sonda de pixel do F9 só
   funciona em 480 + 4:3; os frames de referência (`tests/golden`) só valem para 480 + 4:3.
 - **Verificado sem janela:** 1440 + 16:9 nos dois renderizadores (seleção de Digimon, login,

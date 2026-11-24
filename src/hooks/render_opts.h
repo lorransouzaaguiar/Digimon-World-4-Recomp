@@ -99,17 +99,117 @@ static inline void ro_extent(uint32_t guest_w, uint32_t guest_h, int wide,
 
 /* Comprime em x, em torno do centro, os vertices de um lote desenhado numa
  * superficie alargada (ver o topo do arquivo). `v` e a copia do back end. */
+/* DW4_RO_TRACE=<flip>[,<flip>...]: lista os lotes desses quadros (um quadro
+ * de cada superficie: o flip dado e o seguinte). */
+static inline int ro_trace_flip(uint64_t flip)
+{
+    const char *e = getenv("DW4_RO_TRACE");
+
+    while (e && *e) {
+        uint64_t f = strtoull(e, NULL, 10);
+        if (f > 1 && flip >= f && flip < f + 2)
+            return 1;
+        e = strchr(e, ',');
+        if (e) e++;
+    }
+    return 0;
+}
+
+/* ── Recorte (sub-viewport) ────────────────────────────────────────────────
+ * O jogo desenha o minimapa das fases com a superficie recortada num
+ * quadrado de 120x120 no canto: o conteudo e desenhado bem maior e a NV2A
+ * corta o que sai do recorte. `clip` = {x, y, largura, altura} em pixels do
+ * guest, ou tudo zero quando o recorte e a superficie inteira.
+ *
+ * Em tela larga um recorte estreito e tratado como UM elemento: tudo o que e
+ * desenhado nele (e o proprio retangulo) passa pela mesma transformacao em
+ * x. Encostado numa borda lateral da tela 4:3, fica ancorado na borda da
+ * tela larga (o minimapa vai para o canto); senao e espremido em torno do
+ * centro, como o resto. */
+enum { RO_CLIP_NONE = 0, RO_CLIP_CENTER, RO_CLIP_LEFT, RO_CLIP_RIGHT };
+
+static inline int ro_clip_mode(const uint32_t clip[4], float guest_w)
+{
+    float x0 = (float)clip[0], x1 = (float)(clip[0] + clip[2]);
+
+    if (!clip[2] || (float)clip[2] >= guest_w * 0.9f)
+        return RO_CLIP_NONE;                /* largura inteira: nao e um elemento */
+    /* O minimapa fica em 468..588 de 640 (captura do usuario em 4:3): a
+     * margem ate a borda e de 52 pixels, que a ancoragem preserva. */
+    if (x1 >= guest_w * 0.85f && x0 > guest_w * 0.5f)
+        return RO_CLIP_RIGHT;
+    if (x0 <= guest_w * 0.15f && x1 < guest_w * 0.5f)
+        return RO_CLIP_LEFT;
+    return RO_CLIP_CENTER;
+}
+
+static inline float ro_clip_x(float x, int mode, float guest_w)
+{
+    const float k = 1.0f / ro_wide;
+
+    switch (mode) {
+    case RO_CLIP_LEFT:   return x * k;
+    case RO_CLIP_RIGHT:  return guest_w - (guest_w - x) * k;
+    case RO_CLIP_CENTER: return guest_w * 0.5f + (x - guest_w * 0.5f) * k;
+    default:             return x;
+    }
+}
+
+/* Retangulo de recorte em pixels da imagem da GPU (pw x ph) para uma
+ * superficie do guest (gw x gh). 0 se nao ha o que recortar. */
+static inline int ro_scissor(const uint32_t clip[4], int wide, uint32_t gw, uint32_t gh,
+                             uint32_t pw, uint32_t ph, int32_t out[4])
+{
+    float x0, x1, y0, y1;
+    int mode;
+
+    if (!clip[2] || !clip[3] || !gw || !gh)
+        return 0;
+    x0 = (float)clip[0]; x1 = (float)(clip[0] + clip[2]);
+    y0 = (float)clip[1]; y1 = (float)(clip[1] + clip[3]);
+    if (wide) {
+        mode = ro_clip_mode(clip, (float)gw);
+        if (mode == RO_CLIP_NONE) {         /* so recorta na vertical */
+            x0 = 0.0f; x1 = (float)gw;
+        } else {
+            x0 = ro_clip_x(x0, mode, (float)gw);
+            x1 = ro_clip_x(x1, mode, (float)gw);
+        }
+    }
+    x0 = x0 * (float)pw / (float)gw; x1 = x1 * (float)pw / (float)gw;
+    y0 = y0 * (float)ph / (float)gh; y1 = y1 * (float)ph / (float)gh;
+    if (x0 < 0.0f) x0 = 0.0f;
+    if (y0 < 0.0f) y0 = 0.0f;
+    if (x1 > (float)pw) x1 = (float)pw;
+    if (y1 > (float)ph) y1 = (float)ph;
+    out[0] = (int32_t)(x0 + 0.5f); out[1] = (int32_t)(y0 + 0.5f);
+    out[2] = (int32_t)(x1 + 0.5f) - out[0]; out[3] = (int32_t)(y1 + 0.5f) - out[1];
+    if (out[2] < 0) out[2] = 0;
+    if (out[3] < 0) out[3] = 0;
+    return 1;
+}
+
 /* textured: o lote tem textura (so para o rastreio DW4_RO_TRACE).
  * screen_tex: o lote amostra uma superficie de tela alargada -- uma copia do
  * proprio quadro (transicoes de loading, pausa). */
 static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, float guest_h,
-                              int textured, int screen_tex)
+                              int textured, int screen_tex, const uint32_t clip[4])
 {
     const float k = 1.0f / ro_wide, cx = guest_w * 0.5f, e = 0.51f;
     static int trace = -1;
 
-    if (trace < 0)
-        trace = getenv("DW4_RO_TRACE") != NULL;
+    {
+        int mode = ro_clip_mode(clip, guest_w);
+
+        if (mode != RO_CLIP_NONE) {         /* sub-viewport: um elemento so */
+            for (uint32_t i = 0; i < count; i++)
+                v[i].x = ro_clip_x(v[i].x, mode, guest_w);
+            return;
+        }
+    }
+    if (trace < 0)                      /* DW4_RO_TRACE=<flip>: lista os lotes desse quadro */
+        trace = getenv("DW4_RO_TRACE") ? (atoi(getenv("DW4_RO_TRACE")) > 1
+                                          ? atoi(getenv("DW4_RO_TRACE")) : 1) : 0;
     /* Regras do LOTE inteiro (draws seguidos com o mesmo estado; por isso
      * esta funcao e chamada no flush do lote, nao a cada draw).
      *
@@ -144,6 +244,11 @@ static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, floa
             area += fabsf((t[1].x - t[0].x) * (t[2].y - t[0].y)
                         - (t[1].y - t[0].y) * (t[2].x - t[0].x)) * 0.5f;
         }
+        if (trace > 1 && ro_trace_flip(dw4_frame_count()))
+            fprintf(stderr, "[ROB] f%llu n=%u rhw %.5f..%.5f bb %.0f,%.0f-%.0f,%.0f area %.1f%% "
+                    "tex=%d z %.1f\n", (unsigned long long)dw4_frame_count(), count, (double)r0,
+                    (double)r1, (double)bx0, (double)by0, (double)bx1, (double)by1,
+                    (double)(100.0f * area / (guest_w * guest_h)), textured, (double)v[0].z);
         if (r0 > 0.0f && r1 - r0 <= r1 * 0.03f
                 && bx0 <= 1.0f && bx1 >= guest_w - 1.0f && by0 <= 1.0f && by1 >= guest_h - 1.0f
                 && fabsf((bx0 + bx1) * 0.5f - cx) < guest_w * 0.1f
@@ -157,6 +262,57 @@ static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, floa
                             (double)(100.0f * area / (guest_w * guest_h)), textured, screen_tex);
             }
             return;
+        }
+        /* HUD do jogo (retrato, HP/MP, nivel) em tela larga.
+         *
+         * Todo o 2D deste jogo tem rhw = 1. O HUD e uma FAIXA escura da
+         * largura da tela encostada na borda de baixo (-18..659 x 393..485)
+         * e, desenhados logo depois dela, os elementos de cada jogador. Em
+         * 4:3 no meio de uma tela 16:9 a faixa acabava antes das bordas e o
+         * retrato ficava longe do canto.
+         *   - a faixa (cobre a largura, toca a borda de cima ou de baixo,
+         *     baixa) nao e espremida: vai de borda a borda;
+         *   - o lote 2D seguinte que cai na altura da faixa e fica todo de um
+         *     lado da tela e ancorado na borda desse lado, com o tamanho
+         *     certo (escala em x em torno da borda, nao do centro).
+         * A caixa de dialogo nao encosta na borda (termina em y = 463) e
+         * continua em 4:3, inteira, no meio; menus tambem. */
+        if (r0 == 1.0f && r1 == 1.0f) {
+            /* zona[0] = lado esquerdo, zona[1] = direito: a faixa de altura
+             * em que um lote 2D daquele lado pertence ao HUD. Comeca na
+             * faixa e CRESCE com cada lote ancorado: o menu rapido de itens
+             * sobe a partir do HUD (painel 317..440), e a barra de selecao
+             * dele (317..341) fica toda acima da faixa -- sem isto ela nao
+             * acompanhava o painel e aparecia deslocada para a direita
+             * (captura f9-014 do usuario). */
+            static uint64_t band_frame;
+            static float zone[2][2];
+            uint64_t frame = dw4_frame_count();
+            float bh = by1 - by0;
+
+            if (bx0 <= 1.0f && bx1 >= guest_w - 1.0f && bh <= guest_h * 0.4f
+                    && (by1 >= guest_h - 1.0f || by0 <= 1.0f)) {
+                float m = bh * 0.5f;
+
+                if (band_frame != frame + 1) {  /* +1: 0 = nenhuma faixa ainda */
+                    band_frame = frame + 1;
+                    zone[0][0] = zone[1][0] = by0 - m;
+                    zone[0][1] = zone[1][1] = by1 + m;
+                }
+                return;
+            }
+            if (band_frame == frame + 1 && bx1 - bx0 < guest_w * 0.6f
+                    && (bx1 <= cx || bx0 >= cx)) {
+                int side = bx1 <= cx ? 0 : 1;
+
+                if (by1 >= zone[side][0] && by0 <= zone[side][1]) {
+                    if (by0 < zone[side][0]) zone[side][0] = by0;
+                    if (by1 > zone[side][1]) zone[side][1] = by1;
+                    for (uint32_t i = 0; i < count; i++)
+                        v[i].x = side == 0 ? v[i].x * k : guest_w - (guest_w - v[i].x) * k;
+                    return;
+                }
+            }
         }
     }
     for (uint32_t i = 0; i + 2 < count; i += 3) {

@@ -247,6 +247,16 @@ ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
   usuário jogando ("melhorou muito os efeitos"):** o fade de troca de cenário e o escurecimento atrás de menus cobriam só o
   meio da tela (`PORT_NOTES.md` §7.6). Verificado sem janela na transição login → lobby, Vulkan e
   OpenGL. A tela de loading agora ocupa a tela larga, esticada.
+- **HUD em widescreen (2026-11-24, DW4R-2), aguardando o usuário confirmar:** a faixa do HUD vai
+  de borda a borda e o retrato/HP/MP ficam ancorados no canto, com a proporção certa
+  (`PORT_NOTES.md` §7.6). Verificado sem janela em 16:9, 21:9 e 16:10, 1 jogador.
+- **Minimapa das fases enorme — corrigido (2026-11-24, DW4R-2); confirmado pelo usuário em 4:3,
+  16:9 e 21:9 no OpenGL, e em 21:9 no Vulkan:**
+  o recorte de 120×120 do mapa não era aplicado (valia também em 4:3). Agora os dois
+  renderizadores cortam, e em tela larga o minimapa fica ancorado no canto (`PORT_NOTES.md`
+  §7.6, patch 4.15). Goldens iguais; o mapa em si só o usuário alcança.
+- **Aberto: o menu do START aparece esticado em 21:9** (em 16:9 está certo). Aguardando uma
+  captura F9 do usuário no OpenGL (`PORT_NOTES.md` §7.6).
 - **Launcher (2026-11-24, DW4R-2):** Gráficos na ordem API → Imagem → Janela → Desempenho; a
   janela abre maior (até 1120×940, limitada pelo monitor) e a barra de rolagem fica sempre à
   vista quando há mais conteúdo; só a descrição da API escolhida aparece.
