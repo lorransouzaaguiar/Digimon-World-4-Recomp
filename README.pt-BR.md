@@ -3,7 +3,7 @@
 [English](README.md) · **Português (Brasil)**
 
 **Recompilação estática experimental de Digimon World 4 (Xbox original, 2005)** em um programa
-nativo para Linux x86-64, feita com o [xboxrecomp](https://github.com/sp00nznet/xboxrecomp).
+nativo x86-64 (Linux hoje; Windows e macOS estão planejados), feito com o [xboxrecomp](https://github.com/sp00nznet/xboxrecomp).
 O código do próprio jogo é traduzido para C uma vez e compilado nativamente; o runtime do
 xboxrecomp e o código deste projeto substituem o kernel, a GPU, o áudio e a entrada do Xbox.
 Não é um emulador.
@@ -31,7 +31,9 @@ Inicial e experimental: espere bugs.
 | Fases seguintes, chefes, o resto do jogo | ⬜ ainda não testado |
 | Multijogador (2 a 4 jogadores) | ⬜ ainda não testado |
 | Resolução interna maior, widescreen, remapear teclas | ⬜ não implementado |
-| Windows, macOS, Steam Deck | ⬜ sem plano por enquanto / não testado |
+| Renderizador Vulkan | 🔧 em desenvolvimento |
+| Windows e macOS | ⬜ planejado, não iniciado |
+| Steam Deck | ⬜ não testado |
 
 Detalhes e a lista do que falta: [STATUS.md](STATUS.md).
 
