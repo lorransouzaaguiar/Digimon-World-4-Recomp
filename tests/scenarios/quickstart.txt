@@ -1,0 +1,25 @@
+# Atalho para jogar: mesmo caminho do lobby.txt ate o lobby, sem capturas e sem encerrar.
+# Usado por ./quickstart.sh.
+f1000:enter              # pula o FMV de abertura (os logos antes nao sao pulaveis)
+f1600:enter              # "Press START" -> Game Start / Option
+wait_flips:100  z        # Game Start -> carrega o menu Entry
+wait_flips:260  z        # Controller 1: Join -> Player 1
+wait_flips:100  enter    # Confirm -> "Player selection complete, go to game? OK?"
+wait_flips:100  z        # -> Yes / No
+wait_flips:100  z        # Yes -> paineis dos 4 jogadores
+wait_flips:150  mark:paineis
+z                        # Create Digimon -> "Select a Digimon" (Dorumon)
+wait_flips:120
+z                        # escolhe Dorumon -> teclado do nome
+wait_flips:120  z        # letra "a"
+wait_flips:120  enter    # nome pronto -> "Do you want to assign this name?"
+wait_flips:120  z        # -> Yes, assign / No, change
+wait_flips:120  z        # Yes -> "To log into the Digital World press START"
+wait_flips:150  mark:login
+enter                    # entra no lobby
+wait_flips:600  mark:lobby
+z  wait_flips:120  z  wait_flips:120  z  wait_flips:120  z  wait_flips:120
+z  wait_flips:120  z  wait_flips:120  z  wait_flips:120  z  wait_flips:120
+mark:dialogo
+wait_flips:60  mark:fim
+mark:pronto  # daqui em diante o controle e seu

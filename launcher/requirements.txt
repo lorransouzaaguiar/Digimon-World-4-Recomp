@@ -1,0 +1,2 @@
+# Launcher (Qt Quick). So os modulos essenciais: QtCore, QtGui, QtQml, QtQuick.
+PySide6-Essentials>=6.7

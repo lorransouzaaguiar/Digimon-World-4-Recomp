@@ -1,0 +1,29 @@
+# Boot -> titulo -> cria o Digimon (Dorumon, nome "a") -> lobby -> dialogo -> anda.
+# Um passo por tela, ancorado em FLIPS (frames apresentados): deterministico.
+# Conferido tela a tela em 2026-11-23 (ver tests/golden/).
+#   scripts/soak.py                 # roda este cenario sem janela
+#   scripts/soak.py --golden        # e compara com tests/golden/
+f1000:enter              # pula o FMV de abertura (os logos antes nao sao pulaveis)
+f1600:enter              # "Press START" -> Game Start / Option
+wait_flips:100  z        # Game Start -> carrega o menu Entry
+wait_flips:260  z        # Controller 1: Join -> Player 1
+wait_flips:100  enter    # Confirm -> "Player selection complete, go to game? OK?"
+wait_flips:100  z        # -> Yes / No
+wait_flips:100  z        # Yes -> paineis dos 4 jogadores
+wait_flips:150  mark:paineis
+z                        # Create Digimon -> "Select a Digimon" (Dorumon)
+wait_flips:120  shot:01_select_digimon
+z                        # escolhe Dorumon -> teclado do nome
+wait_flips:120  z        # letra "a"
+wait_flips:120  enter    # nome pronto -> "Do you want to assign this name?"
+wait_flips:120  z        # -> Yes, assign / No, change
+wait_flips:120  z        # Yes -> "To log into the Digital World press START"
+wait_flips:150  mark:login  shot:02_login
+enter                    # entra no lobby
+wait_flips:600  mark:lobby  shot:03_lobby_dialogo
+z  wait_flips:120  z  wait_flips:120  z  wait_flips:120  z  wait_flips:120
+z  wait_flips:120  z  wait_flips:120  z  wait_flips:120  z  wait_flips:120
+mark:dialogo  shot:04_lobby_apos_dialogo
+w*2  d*2  s*2  a*2       # anda um pouco (analogico esquerdo)
+wait_flips:60  mark:fim
+quit

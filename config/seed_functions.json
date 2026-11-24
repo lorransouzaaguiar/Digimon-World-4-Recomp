@@ -1,0 +1,1362 @@
+[
+ {
+  "start": "0x0001101E",
+  "observed": false,
+  "note": "ponteiro em .data @0x003ACE50 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0001101F",
+  "observed": false,
+  "note": "ponteiro em .data @0x003ACE5C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00015D1B",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0030AAC8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00015F15",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0030AAD8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0001848C",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F80CC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00020009",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00369F64 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002005F",
+  "observed": false,
+  "note": "ponteiro em .data @0x0038B83C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002007B",
+  "observed": false,
+  "note": "ponteiro em .data @0x0038B8AC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002007C",
+  "observed": false,
+  "note": "ponteiro em .data @0x0038B8B0 (2 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x0002007D",
+  "observed": false,
+  "note": "ponteiro em .data @0x0038B8B4 (2 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x0002007E",
+  "observed": false,
+  "note": "ponteiro em .data @0x0038B8B8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002008E",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x00301A38 (5 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x00020202",
+  "observed": false,
+  "note": "ponteiro em .text @0x0012A1D0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00020307",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F4EE4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00020687",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FDB4C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002088E",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x00301BB0 (2 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x00021004",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD36C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00021005",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD378 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00021007",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD384 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00021008",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD390 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00021009",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD39C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002100A",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD3A8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002100B",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD3B4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002100C",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD3C0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002100D",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD3CC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002100E",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD3D8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002100F",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD3E4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00023FF0",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0031489C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002800C",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003687A0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0002FFFF",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003695C4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003000E",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FFE2C (2 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x00030513",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD87C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00030515",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD888 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00030517",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD894 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00030519",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FD98C (2 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x0003051B",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD8AC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003051C",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD8B8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003051D",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD8C4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003051F",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD8D0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00031007",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD9B4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00031008",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD9C0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00031009",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD9CC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003100A",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD9D8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003100B",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD9E4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003100C",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD9F0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003100D",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD9FC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003100E",
+  "observed": false,
+  "note": "ponteiro em .data @0x003ADA08 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003100F",
+  "observed": false,
+  "note": "ponteiro em .data @0x003ADA14 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003302C",
+  "observed": false,
+  "note": "ponteiro em .data @0x003ADCD8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003302D",
+  "observed": false,
+  "note": "ponteiro em .data @0x003ADCE4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003302E",
+  "observed": false,
+  "note": "ponteiro em .data @0x003ADCF0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00033BB0",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0031304C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00040A8C",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00309F24 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00040ACC",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00309F64 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00040F8A",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F154C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000514CE",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F2348 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00057787",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F6934 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0005951B",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FABCC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0005971D",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F7A8C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0005F407",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F7888 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0005F408",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F5AD8 (4 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x0005F409",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F5DE4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0005F40A",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F5EBC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0005F40B",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F84F8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0005F417",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F66FC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0005F41A",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F5B84 (2 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x0006020D",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x0030022C (2 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x00060266",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00368CB8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00070006",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0030A8EC (12 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x00070007",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0033B578 (5 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x00070008",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00335A98 (6 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x00070009",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00369DF8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0007000A",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0033B570 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0007000C",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AE7B8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0007000D",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AE848 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0007000F",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0033B2CC (2 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x00070016",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0033B328 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00070018",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00335AA8 (2 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x0007001A",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0033B340 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0007001E",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0036A6DC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00070028",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00335AA0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00070038",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00335AB0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00070064",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00335AC4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00070068",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00335AA4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00070078",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00335AB4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00070309",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002EFA0C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0007E885",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F2CA8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00081270",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0031EE7C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0008958D",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F77CC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00090053",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003358C8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00090057",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003359C8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0009005B",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00335948 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0009005F",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00335A48 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000900D3",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003358D0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000900D7",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003359D0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000900DB",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00335950 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000900DF",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00335A50 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0009614F",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00368BB0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000A1D2D",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FA4B8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000A8B0C",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FAF0C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000B0919",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FD88C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000B0C0C",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F408C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000B8584",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F3B4C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000B9087",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F4A0C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000B9299",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x00300420 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000BE007",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00368778 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000C0008",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00369CEC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000C000A",
+  "observed": false,
+  "note": "ponteiro em .data @0x003B498C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000C000B",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002EEE68 (4 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x000C000C",
+  "observed": false,
+  "note": "ponteiro em .data @0x003B4828 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000C000D",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0036A64C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000C0038",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0033B684 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000C003A",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0033B690 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000C003C",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0033B69C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000C003E",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0033B6A8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000C1D2E",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F4724 (42 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x000C1E9C",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F27D0 (2 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x000C1E9D",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F2824 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000C2628",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0036895C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000D0D1A",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F044C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000D212A",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FC18C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000D212D",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FA478 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000E182A",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FB44C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000F0319",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F0C0C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000F080A",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FF5EC (2 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x00100105",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FD9CC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00100E88",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F060C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00101417",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FBB0C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00109207",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F25CC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00122078",
+  "observed": false,
+  "note": "ponteiro em .data @0x00397700 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00150383",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FEC0C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00150385",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F214C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0017292B",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FC84C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00188C87",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F178C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x001A0019",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AE7C8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x001B0008",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0033B360 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x001B000C",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AE6AC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x001B8F83",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F0F8C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x001E001C",
+  "observed": false,
+  "note": "ponteiro em .data @0x003B49F8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x001E001D",
+  "observed": false,
+  "note": "ponteiro em .data @0x0038B5D0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x001E232B",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FCA0C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x002400D2",
+  "observed": false,
+  "note": "ponteiro em DOLBY @0x004F488C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0024648D",
+  "observed": false,
+  "note": "ponteiro em .text @0x0029390C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00251297",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002F2E8C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0025292A",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x002FC30C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0029208F",
+  "observed": false,
+  "note": "ponteiro em DSOUND @0x0030059C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00292B6E",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383200 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x002936BE",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383250 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0029377B",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383260 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00293ABE",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383280 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00293E66",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003832BC (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00293FAB",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003832E8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x002940B4",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383308 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0029413A",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383318 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x002942AB",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383338 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00295C7C",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003833C8 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00295E3E",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003833F0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0029651C",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383418 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00298774",
+  "observed": false,
+  "note": "ponteiro em .data @0x003B2C00 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x002994F9",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383AB0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0029972F",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383AC0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0029984C",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383AD0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x002999CD",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383AE0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0029A7D0",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383B10 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0029AAB1",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383B20 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0029AC77",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383B40 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0029C47F",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383F60 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0029C580",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383F7C (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x002B002A",
+  "observed": false,
+  "note": "ponteiro em .data @0x003B4DF0 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x002B002B",
+  "observed": false,
+  "note": "ponteiro em .data @0x003B5138 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x002B002C",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0033B3A4 (5 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x002B002D",
+  "observed": false,
+  "note": "ponteiro em .data @0x003B5120 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000166E9",
+  "observed": false,
+  "note": "ponteiro em imm @0x0016002A (2 refs); dentro de sub_00016686; decodifica como funcao"
+ },
+ {
+  "start": "0x0001682C",
+  "observed": false,
+  "note": "ponteiro em imm @0x00216FD8 (4 refs); dentro de sub_00016823; decodifica como funcao"
+ },
+ {
+  "start": "0x0001A5AA",
+  "observed": false,
+  "note": "ponteiro em imm @0x00271311 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000200A2",
+  "observed": false,
+  "note": "ponteiro em .data @0x0038B948 (2 refs); dentro de sub_00020090; decodifica como funcao"
+ },
+ {
+  "start": "0x00020401",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD1A4 (1 ref); dentro de sub_00020370; decodifica como funcao"
+ },
+ {
+  "start": "0x0002C14C",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00368B84 (1 ref); dentro de sub_0002C140; decodifica como funcao"
+ },
+ {
+  "start": "0x0002FFFE",
+  "observed": false,
+  "note": "ponteiro em imm @0x002DC447 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x0003052C",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AD948 (1 ref); dentro de sub_00030521; decodifica como funcao"
+ },
+ {
+  "start": "0x00040208",
+  "observed": false,
+  "note": "ponteiro em imm @0x002AA588 (3 refs); dentro de sub_0003FFB0; decodifica como funcao"
+ },
+ {
+  "start": "0x00040210",
+  "observed": false,
+  "note": "ponteiro em imm @0x002AC09D (2 refs); dentro de sub_0003FFB0; decodifica como funcao"
+ },
+ {
+  "start": "0x000402B4",
+  "observed": false,
+  "note": "ponteiro em imm @0x002AD0F9 (2 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x0004195C",
+  "observed": false,
+  "note": "ponteiro em imm @0x002AB89A (1 ref); dentro de sub_000418E0; decodifica como funcao"
+ },
+ {
+  "start": "0x00041E5C",
+  "observed": false,
+  "note": "ponteiro em .text @0x00041F04 (2 refs); dentro de sub_00041DB8; decodifica como funcao"
+ },
+ {
+  "start": "0x00041EA0",
+  "observed": false,
+  "note": "ponteiro em imm @0x002AB534 (4 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x000442FC",
+  "observed": false,
+  "note": "ponteiro em imm @0x002B0098 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00050010",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00335AFC (1 ref); dentro de sub_0004FB70; decodifica como funcao"
+ },
+ {
+  "start": "0x0006F1CB",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0031ABB8 (1 ref); dentro de sub_0006F1C5; decodifica como funcao"
+ },
+ {
+  "start": "0x00070106",
+  "observed": false,
+  "note": "ponteiro em imm @0x002831B4 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00070107",
+  "observed": false,
+  "note": "ponteiro em imm @0x0028319B (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00080061",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003357D0 (2 refs); dentro de sub_0007F780; decodifica como funcao"
+ },
+ {
+  "start": "0x0008007E",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003357B0 (1 ref); dentro de sub_0007F780; decodifica como funcao"
+ },
+ {
+  "start": "0x000800BE",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003357AC (1 ref); dentro de sub_0007F780; decodifica como funcao"
+ },
+ {
+  "start": "0x000800FD",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003358B4 (2 refs); dentro de sub_0007F780; decodifica como funcao"
+ },
+ {
+  "start": "0x00080202",
+  "observed": false,
+  "note": "ponteiro em imm @0x0028315F (1 ref); dentro de sub_0007F780; decodifica como funcao"
+ },
+ {
+  "start": "0x000A2046",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00368B48 (1 ref); dentro de sub_000A2010; decodifica como funcao"
+ },
+ {
+  "start": "0x000B2320",
+  "observed": false,
+  "note": "ponteiro em imm @0x000B7208 (1 ref); dentro de sub_000B20C0; decodifica como funcao"
+ },
+ {
+  "start": "0x000C0022",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0033B600 (1 ref); dentro de sub_000C001C; decodifica como funcao"
+ },
+ {
+  "start": "0x000C1D8C",
+  "observed": false,
+  "note": "ponteiro em imm @0x002AE899 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x000FFFFF",
+  "observed": false,
+  "note": "ponteiro em imm @0x0015E3BC (28 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x00108E48",
+  "observed": false,
+  "note": "ponteiro em imm @0x002B3CFB (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00123F95",
+  "observed": false,
+  "note": "ponteiro em imm @0x00123F8F (1 ref); dentro de sub_00123F75; decodifica como funcao"
+ },
+ {
+  "start": "0x0012743F",
+  "observed": false,
+  "note": "ponteiro em imm @0x00127439 (1 ref); dentro de sub_00127425; decodifica como funcao"
+ },
+ {
+  "start": "0x001277D9",
+  "observed": false,
+  "note": "ponteiro em imm @0x001277D3 (1 ref); dentro de sub_001277BF; decodifica como funcao"
+ },
+ {
+  "start": "0x00127922",
+  "observed": false,
+  "note": "ponteiro em imm @0x0012791C (1 ref); dentro de sub_00127908; decodifica como funcao"
+ },
+ {
+  "start": "0x0012A1AD",
+  "observed": false,
+  "note": "ponteiro em imm @0x0012A1A7 (1 ref); dentro de sub_0012A194; decodifica como funcao"
+ },
+ {
+  "start": "0x0012A2D0",
+  "observed": false,
+  "note": "ponteiro em imm @0x0012ADDF (1 ref); dentro de sub_0012A2B0; decodifica como funcao"
+ },
+ {
+  "start": "0x0012B56D",
+  "observed": false,
+  "note": "ponteiro em imm @0x0012B567 (1 ref); dentro de sub_0012B532; decodifica como funcao"
+ },
+ {
+  "start": "0x0012C143",
+  "observed": false,
+  "note": "ponteiro em imm @0x0012C13D (1 ref); dentro de sub_0012BC20; decodifica como funcao"
+ },
+ {
+  "start": "0x0012D4C0",
+  "observed": false,
+  "note": "ponteiro em imm @0x0012D67D (1 ref); dentro de sub_0012D4A0; decodifica como funcao"
+ },
+ {
+  "start": "0x0012D64E",
+  "observed": false,
+  "note": "ponteiro em imm @0x0012D5A0 (1 ref); dentro de sub_0012D58D; decodifica como funcao"
+ },
+ {
+  "start": "0x0012D6F0",
+  "observed": false,
+  "note": "ponteiro em imm @0x0012DABA (2 refs); dentro de sub_0012D6C0; decodifica como funcao"
+ },
+ {
+  "start": "0x0012DC66",
+  "observed": false,
+  "note": "ponteiro em imm @0x0012DC60 (1 ref); dentro de sub_0012DC53; decodifica como funcao"
+ },
+ {
+  "start": "0x0012DEFB",
+  "observed": false,
+  "note": "ponteiro em imm @0x0012DEF5 (2 refs); dentro de sub_0012DEE1; decodifica como funcao"
+ },
+ {
+  "start": "0x0012EB80",
+  "observed": false,
+  "note": "ponteiro em .text @0x0012EBA0 (2 refs); dentro de sub_0012EB67; decodifica como funcao"
+ },
+ {
+  "start": "0x0012F229",
+  "observed": false,
+  "note": "ponteiro em .text @0x0012F248 (2 refs); dentro de sub_0012F210; decodifica como funcao"
+ },
+ {
+  "start": "0x0012F516",
+  "observed": false,
+  "note": "ponteiro em .text @0x0012F538 (2 refs); dentro de sub_0012F4FD; decodifica como funcao"
+ },
+ {
+  "start": "0x00140022",
+  "observed": false,
+  "note": "ponteiro em .data @0x003B4A58 (1 ref); dentro de sub_0013FCB0; decodifica como funcao"
+ },
+ {
+  "start": "0x00150390",
+  "observed": false,
+  "note": "ponteiro em imm @0x001444E6 (1 ref); dentro de sub_00150385; decodifica como funcao"
+ },
+ {
+  "start": "0x00151710",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140EFF (3 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x00151800",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140F16 (4 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x001518F0",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140F25 (3 refs); decodifica como funcao"
+ },
+ {
+  "start": "0x001519E0",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140F3C (4 refs); dentro de sub_0015198F; decodifica como funcao"
+ },
+ {
+  "start": "0x00151AC0",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140F4B (3 refs); dentro de sub_0015198F; decodifica como funcao"
+ },
+ {
+  "start": "0x00151BA0",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140F62 (4 refs); dentro de sub_0015198F; decodifica como funcao"
+ },
+ {
+  "start": "0x00151C70",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140F71 (3 refs); dentro de sub_0015198F; decodifica como funcao"
+ },
+ {
+  "start": "0x00151D50",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140F88 (4 refs); dentro de sub_0015198F; decodifica como funcao"
+ },
+ {
+  "start": "0x00151E30",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140F97 (3 refs); dentro de sub_0015198F; decodifica como funcao"
+ },
+ {
+  "start": "0x00151F10",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140FE6 (3 refs); dentro de sub_0015198F; decodifica como funcao"
+ },
+ {
+  "start": "0x00151FF0",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140FF5 (3 refs); dentro de sub_0015198F; decodifica como funcao"
+ },
+ {
+  "start": "0x001520D0",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140FC0 (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x001521B0",
+  "observed": false,
+  "note": "ponteiro em imm @0x00140FCF (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152290",
+  "observed": false,
+  "note": "ponteiro em imm @0x00141024 (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152380",
+  "observed": false,
+  "note": "ponteiro em imm @0x00141033 (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152470",
+  "observed": false,
+  "note": "ponteiro em imm @0x0014104A (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152560",
+  "observed": false,
+  "note": "ponteiro em imm @0x00141059 (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152650",
+  "observed": false,
+  "note": "ponteiro em imm @0x00141070 (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152730",
+  "observed": false,
+  "note": "ponteiro em imm @0x0014107F (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152810",
+  "observed": false,
+  "note": "ponteiro em imm @0x00141096 (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x001528E0",
+  "observed": false,
+  "note": "ponteiro em imm @0x001410A5 (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x001529C0",
+  "observed": false,
+  "note": "ponteiro em imm @0x001410EE (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152AA0",
+  "observed": false,
+  "note": "ponteiro em imm @0x001410FA (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152B80",
+  "observed": false,
+  "note": "ponteiro em imm @0x001410CE (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152C60",
+  "observed": false,
+  "note": "ponteiro em imm @0x001410DA (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152D40",
+  "observed": false,
+  "note": "ponteiro em imm @0x0014113C (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152E20",
+  "observed": false,
+  "note": "ponteiro em imm @0x00141148 (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152F00",
+  "observed": false,
+  "note": "ponteiro em imm @0x0014111C (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00152FE0",
+  "observed": false,
+  "note": "ponteiro em imm @0x00141128 (3 refs); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x001530C0",
+  "observed": false,
+  "note": "ponteiro em imm @0x00142C3A (1 ref); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00153190",
+  "observed": false,
+  "note": "ponteiro em imm @0x00142C46 (1 ref); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00153260",
+  "observed": false,
+  "note": "ponteiro em imm @0x00142C52 (1 ref); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x00153320",
+  "observed": false,
+  "note": "ponteiro em imm @0x00142C5E (1 ref); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x001533E0",
+  "observed": false,
+  "note": "ponteiro em imm @0x00142C6A (1 ref); dentro de sub_00152078; decodifica como funcao"
+ },
+ {
+  "start": "0x0017062C",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003549C8 (1 ref); dentro de sub_00170626; decodifica como funcao"
+ },
+ {
+  "start": "0x001707BA",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003549D8 (1 ref); dentro de sub_001707A7; decodifica como funcao"
+ },
+ {
+  "start": "0x00180190",
+  "observed": false,
+  "note": "ponteiro em imm @0x002AFF6C (1 ref); dentro de sub_00180170; decodifica como funcao"
+ },
+ {
+  "start": "0x00181E28",
+  "observed": false,
+  "note": "ponteiro em imm @0x002B5387 (1 ref); decodifica como funcao"
+ },
+ {
+  "start": "0x00188C90",
+  "observed": false,
+  "note": "ponteiro em imm @0x0018C5AA (1 ref); dentro de sub_00188C87; decodifica como funcao"
+ },
+ {
+  "start": "0x00196810",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0035C2AC (1 ref); dentro de sub_00196760; decodifica como funcao"
+ },
+ {
+  "start": "0x00197990",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0035C5A4 (1 ref); dentro de sub_00197980; decodifica como funcao"
+ },
+ {
+  "start": "0x00199090",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x0035C52C (1 ref); dentro de sub_00199080; decodifica como funcao"
+ },
+ {
+  "start": "0x001E0032",
+  "observed": false,
+  "note": "ponteiro em .data @0x003AE86C (1 ref); dentro de sub_001E0020; decodifica como funcao"
+ },
+ {
+  "start": "0x00295303",
+  "observed": false,
+  "note": "ponteiro em imm @0x002953CC (1 ref); dentro de sub_002952F9; decodifica como funcao"
+ },
+ {
+  "start": "0x00295C4B",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003833D4 (1 ref); dentro de sub_00295C42; decodifica como funcao"
+ },
+ {
+  "start": "0x0029664A",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383438 (1 ref); dentro de sub_00296646; decodifica como funcao"
+ },
+ {
+  "start": "0x00297825",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00336B64 (1 ref); dentro de sub_002974AC; decodifica como funcao"
+ },
+ {
+  "start": "0x0029A0C4",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00383AF0 (1 ref); dentro de sub_0029A0C0; decodifica como funcao"
+ },
+ {
+  "start": "0x0029EDF0",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00384168 (1 ref); dentro de sub_0029EDEC; decodifica como funcao"
+ },
+ {
+  "start": "0x0029EE59",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x00384178 (1 ref); dentro de sub_0029EE55; decodifica como funcao"
+ },
+ {
+  "start": "0x002D73E8",
+  "observed": false,
+  "note": "ponteiro em imm @0x002D73E2 (1 ref); dentro de sub_002D73DE; decodifica como funcao"
+ },
+ {
+  "start": "0x00303430",
+  "observed": false,
+  "note": "ponteiro em .rdata @0x003752FC (1 ref); dentro de sub_003033F3; decodifica como funcao"
+ }
+]
