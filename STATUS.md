@@ -285,6 +285,14 @@ ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
   `_outerFrustCullScale`) não resolveu.
 - **Não verificado:** 16:10 / 21:9 / 4K, fases além do que o usuário jogou.
 
+## Release v0.3.0 (2026-11-24)
+
+Desempenho (espera por evento, Vulkan direto pela GPU, modo paralelo), widescreen (fade, HUD,
+minimapa, menu do START em 21:9), recorte do minimapa, launcher e READMEs. Notas em
+`docs/releases/v0.3.0.md`. Pacote conferido fora do projeto: `--selftest`, jogo sem janela até o
+título e, dentro de um gamescope sem tela, janela com swapchain (`apresentacao: direta`).
+Não conferido no pacote: janela real, som, controle, leitura de imagem de disco.
+
 ## Até onde o jogo foi testado (informado pelo usuário, 2026-11-24)
 
 Terminal Area (lobby), Central Area, Death Valley e Humid Cave — a parte inicial do jogo. Nada

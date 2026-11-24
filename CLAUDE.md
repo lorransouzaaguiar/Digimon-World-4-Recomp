@@ -14,8 +14,9 @@ caminho para as três plataformas (macOS via MoltenVK).
 
 - **Jogável:** boot, vídeos, menus, criação do Digimon, save/load, lobby, tutorial e primeira fase,
   a 60 fps (CachyOS, NVIDIA). Fases seguintes, chefes e multijogador **não foram testados**.
-- **Publicado:** release v0.2.0 (2026-11-24; AppImage + tar.gz; v0.1.0 antes) em
-  `github.com/lorransouzaaguiar/Digimon-World-4-Recomp` (privado; vai ser público e open source).
+- **Publicado:** release v0.3.0 (2026-11-24; AppImage + tar.gz; antes v0.2.0 e v0.1.0) em
+  `github.com/lorransouzaaguiar/Digimon-World-4-Recomp` (preparado para ficar público: licença
+  MIT, histórico com e-mail noreply; a visibilidade quem muda é o usuário).
 - **Vulkan (branch `DW4R-1`):** `src/hooks/nv2a_vk_backend.c` passa nos mesmos frames de
   referência do OpenGL sem janela, até o lobby, a 60 fps, e o usuário jogou com janela em
   2026-11-24 sem problemas. Não testado fora de NVIDIA — veja `STATUS.md` antes de afirmar mais que isso.
