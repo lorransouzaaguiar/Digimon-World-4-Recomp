@@ -47,7 +47,7 @@ Detalhes e a lista do que falta: [STATUS.md](STATUS.md).
 
 Um download só, sem instalar nada:
 
-1. Baixe `DigimonWorld4-Recomp-<versão>-x86_64.AppImage` na página de releases.
+1. Baixe `DigimonWorld4-Recomp-<versão>-x86_64.AppImage` na [página de releases](https://github.com/lorransouzaaguiar/Digimon-World-4-Recomp/releases).
 2. Torne o arquivo executável e abra: `chmod +x DigimonWorld4-Recomp-*.AppImage`, depois dois
    cliques (ou `./DigimonWorld4-Recomp-*.AppImage`).
 3. Na tela **Jogar**, escolha a imagem (`.iso`) do seu próprio disco de Digimon World 4, ou uma
@@ -114,8 +114,8 @@ sudo pacman -S --needed base-devel cmake ninja clang python sdl2 libepoxy mesa o
 ```
 
 ```bash
-git clone --recursive <url do repositório>
-cd digimon-world-4-recomp
+git clone --recursive https://github.com/lorransouzaaguiar/Digimon-World-4-Recomp.git
+cd Digimon-World-4-Recomp
 scripts/setup.sh                 # submódulo do toolkit, patches locais, ambiente Python
 
 # copie o conteúdo do seu disco para game_data/
