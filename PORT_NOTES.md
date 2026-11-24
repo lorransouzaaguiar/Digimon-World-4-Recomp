@@ -467,6 +467,13 @@ comum). Desenho tirado do Amped 2 e dos dois SSX 3 (`docs/REFERENCIAS.md`), cód
     visão real continua fora (testado com o usuário, x1,373, o objeto continuou sumindo).
   - Os SSX 3 resolvem com hook na projeção da câmera; aqui só o descarte alarga.
   - **Compilado; ainda não executado nem confirmado pelo usuário.**
+- **Medido em 4K (2026-11-24, sessão do usuário, Vulkan, 3840×2160, Central Area, limite 60):**
+  30–48 fps, placa a ~60%. O log mostra o renderizador gastando **17–19 ms por quadro** sozinho
+  (o orçamento a 60 fps é 16,7): ~9 ms esperando a GPU (desenho + cópia da imagem de 33 MB para
+  a memória) e 5,6 ms copiando o quadro para a janela. Em 1440p eram 7,7 ms (4,1 + 1,4). Ou
+  seja, em 4K o gargalo é a leitura de volta, não o desenho: apresentar direto da GPU (swapchain
+  Vulkan na janela, como os ports de referência) tiraria ~14 ms por quadro. É o próximo passo de
+  desempenho para resoluções altas; nas áreas pesadas sobra ainda o custo de CPU do executor.
 - **Limites conhecidos:** menus e vídeos ficam com faixas laterais; a sonda de pixel do F9 só
   funciona em 480 + 4:3; os frames de referência (`tests/golden`) só valem para 480 + 4:3.
 - **Verificado sem janela:** 1440 + 16:9 nos dois renderizadores (seleção de Digimon, login,
