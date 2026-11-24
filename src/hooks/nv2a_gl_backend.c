@@ -1471,7 +1471,8 @@ static void module_env(void)
 
 /* O que o host (gl_host.c) chama. Mude DW4_GL_MODULE_ABI se a struct mudar. */
 static const Dw4GlModule s_module = {
-    DW4_GL_MODULE_ABI, be_clear, be_draw, be_flip, be_present_sync
+    .abi = DW4_GL_MODULE_ABI, .name = "OpenGL", .needs_gl = 1,
+    .clear = be_clear, .draw = be_draw, .flip = be_flip, .present_sync = be_present_sync
 };
 
 /* Roda dentro do dlopen, na thread que carrega o modulo (a NV2A num reload).

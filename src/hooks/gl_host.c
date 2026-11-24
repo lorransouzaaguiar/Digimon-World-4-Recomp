@@ -1,6 +1,17 @@
 /**
- * Host do renderizador OpenGL: contexto EGL + carga e RECARGA A QUENTE do
- * modulo libdw4_gl.so (nv2a_gl_backend.c).
+ * Host dos renderizadores: escolhe a API grafica, carrega o modulo dela e o
+ * RECARREGA A QUENTE.
+ *
+ *     DW4_RENDERER=opengl   libdw4_gl.so (nv2a_gl_backend.c) -- padrao
+ *     DW4_RENDERER=vulkan   libdw4_vk.so (nv2a_vk_backend.c)
+ *     DW4_RENDERER=cpu      rasterizador em CPU do toolkit (= DW4_SW_RENDER=1)
+ *
+ * E o que o launcher grava quando o jogador escolhe a API em "Graficos". Se a
+ * API pedida nao sobe (sem driver, sem a biblioteca), tenta a outra e, por
+ * ultimo, a CPU -- o jogo abre de qualquer forma e o log diz o que aconteceu.
+ *
+ * Para o OpenGL o host e dono do contexto EGL; o modulo Vulkan cria o proprio
+ * dispositivo (init/shutdown em gl_module.h).
  *
  * Para que: corrigir o renderizador com o jogo aberto. Quem esta jogando fica
  * parado onde o defeito aparece; recompila-se (cmake --build build) e, quando
@@ -143,9 +154,11 @@ static int context_create(void)
     return try_display(eglGetDisplay(EGL_DEFAULT_DISPLAY), "EGL default");
 }
 
+static const Dw4GlModule *s_mod;
+
 static int ensure_current(void)
 {
-    if (s_current)
+    if (s_current || !s_mod->needs_gl)  /* Vulkan: nao ha contexto a tornar corrente */
         return 1;
     if (!eglMakeCurrent(s_dpy, s_pbuf, s_pbuf, s_ctx)) {
         LOG_ONCE("[GL] eglMakeCurrent falhou na thread NV2A (0x%X)\n",
@@ -182,9 +195,9 @@ static int context_recreate(void)
 
 /* ── Modulo ────────────────────────────────────────────────────────────────── */
 
-static char s_lib_path[PATH_MAX];     /* <dir do executavel>/libdw4_gl.so */
+static char s_exe_dir[PATH_MAX];
+static char s_lib_path[PATH_MAX];     /* <dir do executavel>/libdw4_{gl,vk}.so */
 static char s_live_dir[PATH_MAX];     /* <dir do executavel>/gl_live */
-static const Dw4GlModule *s_mod;
 static struct timespec s_loaded_mtime;
 static int s_no_reload;
 static unsigned s_generation;
@@ -231,7 +244,7 @@ static const Dw4GlModule *module_open(struct timespec *mtime)
         h = dlopen(s_lib_path, RTLD_NOW | RTLD_LOCAL);
     } else {
         mkdir(s_live_dir, 0755);
-        snprintf(live, sizeof live, "%s/libdw4_gl.%d.%u.so", s_live_dir, (int)getpid(),
+        snprintf(live, sizeof live, "%s/libdw4_live.%d.%u.so", s_live_dir, (int)getpid(),
                  s_generation);
         if (!copy_file(s_lib_path, live)) {
             fprintf(stderr, "[GL] nao copiou o modulo para %s\n", live);
@@ -288,15 +301,39 @@ static void reload_check(void)
         fprintf(stderr, "[GL] reload CANCELADO: o renderizador antigo continua\n");
         return;
     }
-    if (!context_recreate()) {
-        s_loaded_mtime = st.st_mtim;    /* uma tentativa por versao do arquivo */
-        fprintf(stderr, "[GL] reload CANCELADO: sem contexto novo; o renderizador "
-                        "antigo continua\n");
+    if (fresh->needs_gl != s_mod->needs_gl) {
+        s_loaded_mtime = st.st_mtim;
+        fprintf(stderr, "[GL] reload CANCELADO: a biblioteca mudou de API grafica\n");
         return;
+    }
+    if (fresh->needs_gl) {
+        if (!context_recreate()) {
+            s_loaded_mtime = st.st_mtim;    /* uma tentativa por versao do arquivo */
+            fprintf(stderr, "[GL] reload CANCELADO: sem contexto novo; o renderizador "
+                            "antigo continua\n");
+            return;
+        }
+    } else {
+        /* Dono do proprio dispositivo: o antigo solta tudo, o novo cria. */
+        if (s_mod->shutdown)
+            s_mod->shutdown();
+        if (fresh->init && !fresh->init()) {
+            s_loaded_mtime = st.st_mtim;
+            if (s_mod->init && s_mod->init()) {
+                fprintf(stderr, "[GL] reload CANCELADO: o modulo novo nao iniciou; o "
+                                "renderizador antigo voltou\n");
+            } else {
+                fprintf(stderr, "[GL] reload FALHOU e o renderizador antigo nao voltou: "
+                                "reinicie o jogo\n");
+                s_mod = NULL;
+            }
+            return;
+        }
     }
     s_mod = fresh;
     s_loaded_mtime = mt;
-    fprintf(stderr, "[GL] renderizador RECARREGADO (versao %u)\n", s_generation);
+    fprintf(stderr, "[GL] renderizador %s RECARREGADO (versao %u)\n", s_mod->name,
+            s_generation);
 }
 
 /* ── Back end fixo registrado no executor ──────────────────────────────────── */
@@ -316,7 +353,7 @@ static void host_draw(const Nv2aSurface *s, const Nv2aBatch *b)
 
 static void host_present_sync(void)
 {
-    if (s_mod && s_current)
+    if (s_mod && (s_current || !s_mod->needs_gl))
         s_mod->present_sync();
 }
 
@@ -337,17 +374,46 @@ static const Nv2aBackend s_backend = { host_clear, host_draw, host_flip };
 static void sw_flip(void) { dw4_frame_note(0, 0); }
 static const Nv2aBackend s_sw_backend = { NULL, NULL, sw_flip };
 
+/* Carrega e inicia um renderizador. 0 se ele nao sobe nesta maquina. */
+static int renderer_start(int vulkan)
+{
+    snprintf(s_lib_path, sizeof s_lib_path, "%s/libdw4_%s.so", s_exe_dir,
+             vulkan ? "vk" : "gl");
+    s_mod = module_open(&s_loaded_mtime);
+    if (!s_mod)
+        return 0;
+    if (s_mod->needs_gl && !context_create()) {
+        fprintf(stderr, "[GL] nenhum contexto OpenGL 3.3 acelerado\n");
+        s_mod = NULL;
+        return 0;
+    }
+    if (s_mod->init && !s_mod->init()) {
+        s_mod = NULL;
+        return 0;
+    }
+    return 1;
+}
+
 void dw4_gl_backend_init(void)
 {
-    const char *r = getenv("DW4_SW_RENDER");
+    const char *r = getenv("DW4_SW_RENDER"), *api = getenv("DW4_RENDERER");
     char exe[PATH_MAX];
     ssize_t len = readlink("/proc/self/exe", exe, sizeof exe - 1);
     char *slash;
+    int vulkan = 0;
 
-    if (r && *r && *r != '0') {
-        fprintf(stderr, "[GL] DW4_SW_RENDER=1: rasterizador em CPU do toolkit\n");
+    if ((r && *r && *r != '0') || (api && (!strcmp(api, "cpu") || !strcmp(api, "sw")))) {
+        fprintf(stderr, "[GL] rasterizador em CPU do toolkit (DW4_SW_RENDER / "
+                        "DW4_RENDERER=cpu)\n");
         nv2a_backend_register(&s_sw_backend);
         return;
+    }
+    if (api && *api) {
+        if (!strcmp(api, "vulkan") || !strcmp(api, "vk"))
+            vulkan = 1;
+        else if (strcmp(api, "opengl") && strcmp(api, "gl"))
+            fprintf(stderr, "[GL] DW4_RENDERER=%s desconhecido (opengl, vulkan, cpu); "
+                            "usando opengl\n", api);
     }
     s_allow_sw = getenv("DW4_GL_ALLOW_SW") != NULL;
     s_no_reload = getenv("DW4_GL_NO_RELOAD") != NULL;
@@ -359,23 +425,24 @@ void dw4_gl_backend_init(void)
     if (!slash)
         goto fallback;
     *slash = '\0';
-    snprintf(s_lib_path, sizeof s_lib_path, "%s/libdw4_gl.so", exe);
+    snprintf(s_exe_dir, sizeof s_exe_dir, "%s", exe);
     snprintf(s_live_dir, sizeof s_live_dir, "%s/gl_live", exe);
 
-    s_mod = module_open(&s_loaded_mtime);
-    if (!s_mod)
-        goto fallback;
-    if (!context_create()) {
-        fprintf(stderr, "[GL] nenhum contexto OpenGL 3.3 acelerado\n");
-        s_mod = NULL;
-        goto fallback;
+    if (!renderer_start(vulkan)) {
+        fprintf(stderr, "[GL] %s indisponivel; tentando %s\n",
+                vulkan ? "Vulkan" : "OpenGL", vulkan ? "OpenGL" : "Vulkan");
+        vulkan = !vulkan;
+        if (!renderer_start(vulkan))
+            goto fallback;
     }
-    fprintf(stderr, "[GL] renderizador carregado de %s%s\n", s_lib_path,
-            s_no_reload ? "" : " (recarrega sozinho quando o arquivo mudar)");
+    /* Linha lida pelo launcher e pelos testes: qual API ficou valendo. */
+    fprintf(stderr, "[GL] renderizador ativo: %s (%s)%s\n", s_mod->name, s_lib_path,
+            s_no_reload ? "" : " -- recarrega sozinho quando o arquivo mudar");
     nv2a_backend_register_with_present_sync(&s_backend, host_present_sync);
     return;
 
 fallback:
+    s_mod = NULL;
     fprintf(stderr, "[GL] usando o rasterizador em CPU\n");
     nv2a_backend_register(&s_sw_backend);
 }

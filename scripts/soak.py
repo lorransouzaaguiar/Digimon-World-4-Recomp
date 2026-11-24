@@ -8,6 +8,7 @@ Roda o jogo N vezes SEM JANELA com um cenario de entrada e classifica cada run.
     scripts/soak.py --golden                         # compara os shots com tests/golden
     scripts/soak.py --window                         # com janela (para assistir)
     scripts/soak.py --sw                             # rasterizador em CPU (lento)
+    scripts/soak.py --vulkan --golden                # renderizador Vulkan
     scripts/soak.py -e RECOMP_GUEST_LOCK=1           # variavel extra no ambiente
 
 Cada run tem log, capturas e pasta de saves proprios em
@@ -43,6 +44,7 @@ def main():
     ap.add_argument("--timeout", type=int, default=240, help="segundos por run")
     ap.add_argument("--window", action="store_true", help="abre a janela do jogo")
     ap.add_argument("--sw", action="store_true", help="DW4_SW_RENDER=1")
+    ap.add_argument("--vulkan", action="store_true", help="DW4_RENDERER=vulkan (padrao: opengl)")
     ap.add_argument("--golden", action="store_true", help="compara shots com tests/golden")
     ap.add_argument("--binary", default="build/dw4_recomp")
     ap.add_argument("-e", "--env", action="append", default=[], metavar="VAR=VALOR")
@@ -80,6 +82,8 @@ def main():
             env.setdefault("SDL_AUDIODRIVER", "dummy")
         if args.sw:
             env["DW4_SW_RENDER"] = "1"
+        if args.vulkan:
+            env["DW4_RENDERER"] = "vulkan"
         for kv in args.env:
             k, _, v = kv.partition("=")
             env[k] = v
