@@ -21,6 +21,26 @@ Crie `docs/releases/vX.Y.Z.md` seguindo `docs/releases/v0.1.0.md`: links no topo
 mudou, problemas conhecidos, como relatar. Escreva só o que foi verificado; o que não foi testado
 entra em "problemas conhecidos". Sempre o aviso de que os arquivos do jogo não vêm junto.
 
+Os links de idioma do topo precisam de âncora explícita: o GitHub **não** cria âncora para os
+títulos no texto de um release (cria nos arquivos do repositório), então `[...](#english)` não
+rola a página. Formato que funciona (o GitHub prefixa o id com `user-content-`):
+
+```markdown
+**[English](#user-content-en) · [Português (Brasil)](#user-content-pt-br)**
+
+<a id="en"></a>
+
+## English
+...
+<a id="pt-br"></a>
+
+## Português (Brasil)
+```
+
+Depois de publicar, confira no `body_html` do release (API com
+`Accept: application/vnd.github.html+json`) que existem `id="user-content-en"` e
+`id="user-content-pt-br"`.
+
 ## 3. Pacote
 
 Regra do projeto: `dist/` só guarda a versão que está sendo criada. Os dois scripts abaixo chamam
