@@ -333,14 +333,16 @@ button" / "Game Start / Option" ficavam na coluna 4:3; agora não são espremida
 `PORT_NOTES.md` §7.6. Sem execução sem janela (o usuário dispensou); **confirmado pelo usuário
 jogando** ("ótimo, aprovado").
 
-## Release v0.3.2 (preparado em 2026-11-24, **não publicado**)
+## Release v0.3.2 (2026-11-24)
 
 Acabamento do widescreen: caixa de diálogo, rodapé do menu do START, loading do boot e faixa do
-título. Notas em `docs/releases/v0.3.2.md`; PR #5 (`DW4R-4` → `main`). Pacote gerado em `dist/`
-e conferido fora do projeto: `--selftest` ok; boot sem janela até o menu do título pelo AppImage
-(`Config: launcher v0.3.2`, renderizador Vulkan carregado de dentro do pacote, saves na pasta de
-teste, sem CRASH/STALL). Goldens 4:3 conferem em Vulkan e OpenGL. **AppImage aberto e testado pelo
-usuário com janela ("tá ok").** **Falta:** merge do PR, tag e publicação.
+título. Notas em `docs/releases/v0.3.2.md`; PR #5 (`DW4R-4` → `main`), tag `v0.3.2` na `main`.
+Pacote conferido fora do projeto (`--selftest` ok; boot sem janela até o menu do título pelo
+AppImage, em 4:3: `Config: launcher v0.3.2`, renderizador Vulkan de dentro do pacote, saves na
+pasta de teste, sem CRASH/STALL) e **AppImage aberto e testado pelo usuário antes de publicar**.
+Goldens 4:3 conferem em Vulkan e OpenGL. Anexos no GitHub com tamanho e SHA-256 iguais aos de
+`dist/SHA256SUMS-v0.3.2.txt`. Não conferido: o `.tar.gz` aberto; widescreen dentro do pacote sem
+janela.
 
 ## Release v0.3.1 (2026-11-24)
 
