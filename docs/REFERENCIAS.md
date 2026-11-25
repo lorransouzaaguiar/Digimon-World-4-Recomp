@@ -80,6 +80,7 @@ e BLiNX 2 também, mas o código de runtime deles não está nos clones (só doc
 | Cache de vértices pós-transformação + programas pré-decodificados (23 → 55–60 fps) | SSX 3 ×2, Amped 2 | README `:54-58`, patch `:2356-2416` | não temos |
 | Textura obsoleta em estágio com programa NONE; pitch só para formatos lineares | Amped 2 | README `:46`, `:66` | conferir (pode explicar o bug visual da seção 7.1 do `PORT_NOTES.md`) |
 | `NV_MAX_INDICES` baixo truncava draws em silêncio | BLiNX 2 | `archive/2026-10-07-pb-index-batch-cap/` | v0.18 tem 65536 |
+| Devolver memória do guest: `RECOMP_HEAP_RECLAIM=1` (sem ela a arena contígua de 64 MB só enche) | Amped 2, Def Jam v0.9.1 | `scripts/run.sh:20-22`, `docs/notes.md:188-190`; `docs/releases/v0.9.1.md` | **adotado em 2026-11-24** (tela branca após ~7 min, `STATUS.md`) |
 | Heap: quarentena e guarda de double-free | BLiNX 2 | `archive/2026-11-03-heap-quarantine/` | não temos |
 | Página física com dois donos (imagem × janela contígua) | BLiNX 2 | `archive/2026-11-03-contig-image-alias/` | resolvido com `RECOMP_CONTIG_AVOID_IMAGE=1` |
 | Funções do guest com nome de função da libc + `-rdynamic` derrubavam o processo | Amped 2 | README `:73-75` | conferido: não ocorre aqui |

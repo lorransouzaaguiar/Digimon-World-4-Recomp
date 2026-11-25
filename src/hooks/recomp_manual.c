@@ -70,6 +70,18 @@ void dw4_hooks_set_env_defaults(void)
      * tomava por enderecos da imagem -- lia o .text do jogo como descritores
      * e a enumeracao do controle nunca terminava. */
     env_default("RECOMP_CONTIG_AVOID_IMAGE", "1");
+    /* Sem isto o toolkit NUNCA devolve memoria do guest: MmFreeContiguousMemory
+     * e o free do heap nao liberam nada. A memoria contigua (64 MB) e onde o
+     * D3D poe toda textura e todo vertex buffer; a cada troca de area o jogo
+     * libera os da area antiga e aloca os da nova, e a janela so enchia. Numa
+     * sessao do usuario (v0.3.0, 2026-11-24): 5695 alocacoes, frees=0, arena
+     * esgotada aos ~400 s (60 mil "[CONTIG] arena exhausted" no log) -- as
+     * texturas deixam de ser criadas e a tela fica toda branca ao voltar para
+     * a Central Area. Amped 2 e Def Jam ligam a mesma opcao pelo mesmo motivo
+     * (docs/REFERENCIAS.md). O toolkit liga com a variavel EXISTINDO, com
+     * qualquer valor; DW4_NO_HEAP_RECLAIM=1 pula este default. */
+    if (!getenv("DW4_NO_HEAP_RECLAIM"))
+        env_default("RECOMP_HEAP_RECLAIM", "1");
     /* Com o renderizador Vulkan (o padrao) a janela e aberta para uma
      * superficie Vulkan: o back end apresenta por swapchain e o frame nao
      * sai da GPU (patch 4.14 no toolkit; nv2a_vk_backend.c "Apresentacao

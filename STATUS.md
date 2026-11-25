@@ -285,6 +285,21 @@ ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
   `_outerFrustCullScale`) não resolveu.
 - **Não verificado:** 16:10 / 21:9 / 4K, fases além do que o usuário jogou.
 
+## Tela branca depois de alguns minutos — memória do guest nunca era devolvida (2026-11-24, DW4R-3)
+
+**Sintoma (usuário, v0.3.0):** ao salvar e voltar para a Central Area a tela ficou toda branca.
+**Causa (log da sessão):** 60 mil `[CONTIG] arena exhausted`; `allocs=5695 frees=0`; os 64 MB de
+memória contígua (onde o D3D põe texturas e vertex buffers) esgotados aos ~400 s. O toolkit só
+devolve memória (contígua e heap) com `RECOMP_HEAP_RECLAIM`; sem ela toda troca de área só
+acumula. Existia desde o primeiro release; aparece em qualquer sessão com várias trocas de área.
+**Correção:** `RECOMP_HEAP_RECLAIM=1` como default (`recomp_manual.c`; `DW4_NO_HEAP_RECLAIM=1`
+desliga). Amped 2 e Def Jam (v0.9.1) fazem o mesmo.
+**Verificado sem janela:** no lobby, memória contígua em uso 22 MB → 8,5 MB (`frees=893`);
+goldens iguais em Vulkan e OpenGL; cenário de ~105 s repetido 3× sem erro.
+**Confirmado pelo usuário jogando (2026-11-24):** "parece que foi corrigido". Não sei quanto
+tempo nem quantas trocas de área teve essa sessão. Muda o endereço de toda alocação depois do primeiro free: se aparecer
+crash novo, comparar com `DW4_NO_HEAP_RECLAIM=1`.
+
 ## Release v0.3.0 (2026-11-24)
 
 Desempenho (espera por evento, Vulkan direto pela GPU, modo paralelo), widescreen (fade, HUD,
