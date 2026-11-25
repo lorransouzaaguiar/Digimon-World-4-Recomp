@@ -12,9 +12,9 @@ Não é um emulador.
 > obtida legalmente, de Digimon World 4 para Xbox (NTSC-U). O código C é gerado na sua máquina a
 > partir do seu `default.xbe` e nunca é versionado.
 
-> **Por enquanto, só Linux.** Os ports para Windows e macOS ainda não foram começados. Os dois
-> estão planejados: o código que fala com o sistema vem sendo mantido separado para que eles
-> possam ser feitos, e o renderizador Vulkan foi escrito pensando neles.
+> **Hoje o Linux é o único sistema suportado.** Há um **build de Windows em prévia experimental**
+> (pré-lançamento `v0.4.0-win1`): roda no Wine, ainda não foi testado em Windows de verdade e não
+> tem launcher. O port para macOS não foi começado; está planejado.
 >
 > **Só o começo do jogo foi testado:** Terminal Area (o lobby), Central Area, Death Valley e Humid
 > Cave. Tudo o que vem depois — áreas seguintes, chefes, o final — nunca foi executado.
@@ -45,7 +45,8 @@ bugs.
 | Launcher com visual inspirado nos menus do jogo; limite de quadros (30 por padrão, a velocidade do console; em 60 fica mais fluido, mas o jogo roda no dobro da velocidade) | ✅ novo |
 | Remapear teclas | ⬜ não implementado |
 | Linux | ✅ o único sistema suportado hoje |
-| Windows e macOS | ⬜ planejado, não iniciado |
+| Windows | 🧪 prévia experimental (Vulkan e OpenGL, sem launcher); só testado no Wine, não em Windows de verdade |
+| macOS | ⬜ planejado, não iniciado |
 | Steam Deck | ⬜ não testado |
 
 Detalhes e a lista do que falta: [STATUS.md](STATUS.md).

@@ -35,23 +35,159 @@
  *   DW4_SW_RENDER=1     nao usa nada disto: rasterizador em CPU do toolkit
  *   DW4_GL_ALLOW_SW=1   aceita OpenGL por software (llvmpipe)
  *   DW4_GL_NO_RELOAD=1  carrega o modulo uma vez e nunca recarrega
+ *
+ * DW4_STATIC_RENDERERS (Windows): os dois renderizadores estao ligados dentro
+ * do executavel; nao ha modulo no disco nem recarga. O contexto OpenGL e WGL
+ * (os drivers de Windows nao trazem EGL).
  */
 
 #define _GNU_SOURCE
-#include <dlfcn.h>
-#include <epoxy/egl.h>
-#include <epoxy/gl.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <time.h>
-#include <unistd.h>
 
 #include "dw4_hooks.h"
 #include "gl_module.h"
+#include "host_os.h"
+
+static const Dw4GlModule *s_mod;
+static char s_exe_dir[PATH_MAX];
+static char s_lib_path[PATH_MAX + 32]; /* <dir do executavel>/libdw4_{gl,vk}.so */
+static int s_current;                 /* contexto OpenGL corrente na thread NV2A */
+static int s_allow_sw;
+static int s_no_reload;
+
+#if defined(_WIN32)
+
+/* ── Contexto WGL (Windows) ────────────────────────────────────────────────
+ * Os drivers de Windows nao trazem EGL. O contexto 3.3 core nasce de uma
+ * janela escondida de 16x16 que nunca aparece: o renderizador desenha em
+ * FBOs proprios e entrega o quadro por leitura, como no Linux. WGL direto, e
+ * nao pela SDL, para nao mexer nos atributos OpenGL globais dela nem depender
+ * do subsistema de video (que nao sobe sem janela).
+ *
+ * As funcoes wgl* sao as da opengl32.dll, chamadas direto, e NAO as da
+ * libepoxy (epoxy/wgl.h): depois do segundo MakeCurrent a libepoxy passa a
+ * usar uma tabela de funcoes por thread, e a de uma thread nova comeca zerada
+ * -- o wglMakeCurrent dela, chamado na thread NV2A, saltava para o endereco 0
+ * (visto no Wine em 2026-11-25). Por isso cada MakeCurrent nosso e seguido de
+ * epoxy_handle_external_wglMakeCurrent(), que monta a tabela da thread. */
+
+#include <windows.h>
+#include <epoxy/gl.h>
+
+#define DW4_WGL_CONTEXT_MAJOR_VERSION_ARB    0x2091
+#define DW4_WGL_CONTEXT_MINOR_VERSION_ARB    0x2092
+#define DW4_WGL_CONTEXT_PROFILE_MASK_ARB     0x9126
+#define DW4_WGL_CONTEXT_CORE_PROFILE_BIT_ARB 0x0001
+
+__declspec(dllimport) void epoxy_handle_external_wglMakeCurrent(void);
+
+static BOOL make_current(HDC dc, HGLRC rc)
+{
+    BOOL ok = wglMakeCurrent(dc, rc);
+    if (ok && rc)
+        epoxy_handle_external_wglMakeCurrent();
+    return ok;
+}
+
+static HWND s_gl_wnd;
+static HDC s_gl_dc;
+static HGLRC s_gl_rc;
+
+static int context_create(void)
+{
+    static const int attr[] = {
+        DW4_WGL_CONTEXT_MAJOR_VERSION_ARB, 3, DW4_WGL_CONTEXT_MINOR_VERSION_ARB, 3,
+        DW4_WGL_CONTEXT_PROFILE_MASK_ARB, DW4_WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0
+    };
+    HGLRC (WINAPI *create_attribs)(HDC, HGLRC, const int *);
+    PIXELFORMATDESCRIPTOR pfd;
+    WNDCLASSA wc;
+    HGLRC tmp;
+    const char *renderer;
+    int pf;
+
+    memset(&wc, 0, sizeof wc);
+    wc.style = CS_OWNDC;
+    wc.lpfnWndProc = DefWindowProcA;
+    wc.hInstance = GetModuleHandleA(NULL);
+    wc.lpszClassName = "dw4_gl_context";
+    RegisterClassA(&wc);                /* falha inofensiva se ja registrada */
+    s_gl_wnd = CreateWindowExA(0, wc.lpszClassName, "", WS_OVERLAPPED, 0, 0, 16, 16,
+                               NULL, NULL, wc.hInstance, NULL);
+    s_gl_dc = s_gl_wnd ? GetDC(s_gl_wnd) : NULL;
+    if (!s_gl_dc) {
+        fprintf(stderr, "[GL] WGL: nao criou a janela do contexto (erro %lu)\n",
+                (unsigned long)GetLastError());
+        return 0;
+    }
+    memset(&pfd, 0, sizeof pfd);
+    pfd.nSize = sizeof pfd;
+    pfd.nVersion = 1;
+    pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+    pfd.iPixelType = PFD_TYPE_RGBA;
+    pfd.cColorBits = 32;
+    pf = ChoosePixelFormat(s_gl_dc, &pfd);
+    if (!pf || !SetPixelFormat(s_gl_dc, pf, &pfd)) {
+        fprintf(stderr, "[GL] WGL: sem formato de pixel OpenGL (erro %lu)\n",
+                (unsigned long)GetLastError());
+        return 0;
+    }
+    /* O contexto 3.3 core so se pede por extensao, e a extensao so aparece
+     * com um contexto antigo corrente. */
+    tmp = wglCreateContext(s_gl_dc);
+    if (!tmp || !make_current(s_gl_dc, tmp)) {
+        fprintf(stderr, "[GL] WGL: wglCreateContext falhou (erro %lu)\n",
+                (unsigned long)GetLastError());
+        return 0;
+    }
+    create_attribs = (HGLRC (WINAPI *)(HDC, HGLRC, const int *))(void (*)(void))
+        wglGetProcAddress("wglCreateContextAttribsARB");
+    if (create_attribs)
+        s_gl_rc = create_attribs(s_gl_dc, NULL, attr);
+    wglMakeCurrent(NULL, NULL);
+    wglDeleteContext(tmp);
+    if (!s_gl_rc || !make_current(s_gl_dc, s_gl_rc)) {
+        fprintf(stderr, "[GL] WGL: sem contexto OpenGL 3.3 core\n");
+        return 0;
+    }
+    renderer = (const char *)glGetString(GL_RENDERER);
+    if (!s_allow_sw && (!renderer || strstr(renderer, "GDI Generic")
+            || strstr(renderer, "llvmpipe") || strstr(renderer, "SwiftShader"))) {
+        fprintf(stderr, "[GL] WGL: renderizador por software (%s), ignorado\n",
+                renderer ? renderer : "?");
+        wglMakeCurrent(NULL, NULL);
+        wglDeleteContext(s_gl_rc);
+        s_gl_rc = NULL;
+        return 0;
+    }
+    fprintf(stderr, "[GL] back end OpenGL em WGL: %s (%s)\n", renderer,
+            (const char *)glGetString(GL_VERSION));
+    /* solta: o contexto passa para a thread NV2A na primeira chamada */
+    wglMakeCurrent(NULL, NULL);
+    return 1;
+}
+
+static int ensure_current(void)
+{
+    if (s_current || !s_mod->needs_gl)  /* Vulkan: nao ha contexto a tornar corrente */
+        return 1;
+    if (!make_current(s_gl_dc, s_gl_rc)) {
+        LOG_ONCE("[GL] wglMakeCurrent falhou na thread NV2A (erro %lu)\n",
+                 (unsigned long)GetLastError());
+        return 0;
+    }
+    s_current = 1;
+    return 1;
+}
+
+#else  /* !_WIN32 */
+
+#include <epoxy/egl.h>
+#include <epoxy/gl.h>
 
 /* ── Contexto EGL ──────────────────────────────────────────────────────────── */
 
@@ -59,8 +195,6 @@ static EGLDisplay s_dpy = EGL_NO_DISPLAY;
 static EGLConfig  s_cfg;
 static EGLContext s_ctx = EGL_NO_CONTEXT;
 static EGLSurface s_pbuf = EGL_NO_SURFACE;
-static int s_current;                 /* contexto corrente na thread NV2A */
-static int s_allow_sw;
 
 static const EGLint CTX_ATTR[] = {
     EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 3,
@@ -154,8 +288,6 @@ static int context_create(void)
     return try_display(eglGetDisplay(EGL_DEFAULT_DISPLAY), "EGL default");
 }
 
-static const Dw4GlModule *s_mod;
-
 static int ensure_current(void)
 {
     if (s_current || !s_mod->needs_gl)  /* Vulkan: nao ha contexto a tornar corrente */
@@ -193,13 +325,46 @@ static int context_recreate(void)
     return ensure_current();
 }
 
+#endif /* contexto: WGL / EGL */
+
+#if defined(DW4_STATIC_RENDERERS)
+
+/* ── Renderizadores dentro do executavel ───────────────────────────────────── */
+
+static void reload_check(void) { }
+
+static int renderer_start(int vulkan)
+{
+    snprintf(s_lib_path, sizeof s_lib_path, "dentro do executavel");
+    s_no_reload = 1;
+    s_mod = vulkan ? dw4_gl_module_vk() : dw4_gl_module_gl();
+    if (!s_mod || s_mod->abi != DW4_GL_MODULE_ABI) {
+        s_mod = NULL;
+        return 0;
+    }
+    if (s_mod->needs_gl && !context_create()) {
+        fprintf(stderr, "[GL] nenhum contexto OpenGL 3.3 acelerado\n");
+        s_mod = NULL;
+        return 0;
+    }
+    if (s_mod->init && !s_mod->init()) {
+        s_mod = NULL;
+        return 0;
+    }
+    return 1;
+}
+
+#else  /* modulos recarregaveis: dlopen (POSIX) */
+
+#include <dlfcn.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
+
 /* ── Modulo ────────────────────────────────────────────────────────────────── */
 
-static char s_exe_dir[PATH_MAX];
-static char s_lib_path[PATH_MAX];     /* <dir do executavel>/libdw4_{gl,vk}.so */
-static char s_live_dir[PATH_MAX];     /* <dir do executavel>/gl_live */
+static char s_live_dir[PATH_MAX + 16]; /* <dir do executavel>/gl_live */
 static struct timespec s_loaded_mtime;
-static int s_no_reload;
 static unsigned s_generation;
 
 static int copy_file(const char *from, const char *to)
@@ -231,7 +396,7 @@ static const Dw4GlModule *module_open(struct timespec *mtime)
     const Dw4GlModule *(*entry)(void);
     const Dw4GlModule *m;
     struct stat st;
-    char live[PATH_MAX + 64];
+    char live[PATH_MAX + 96];
     void *h;
 
     if (stat(s_lib_path, &st) != 0) {
@@ -336,6 +501,29 @@ static void reload_check(void)
             s_generation);
 }
 
+/* Carrega e inicia um renderizador. 0 se ele nao sobe nesta maquina. */
+static int renderer_start(int vulkan)
+{
+    snprintf(s_live_dir, sizeof s_live_dir, "%s/gl_live", s_exe_dir);
+    snprintf(s_lib_path, sizeof s_lib_path, "%s/libdw4_%s.so", s_exe_dir,
+             vulkan ? "vk" : "gl");
+    s_mod = module_open(&s_loaded_mtime);
+    if (!s_mod)
+        return 0;
+    if (s_mod->needs_gl && !context_create()) {
+        fprintf(stderr, "[GL] nenhum contexto OpenGL 3.3 acelerado\n");
+        s_mod = NULL;
+        return 0;
+    }
+    if (s_mod->init && !s_mod->init()) {
+        s_mod = NULL;
+        return 0;
+    }
+    return 1;
+}
+
+#endif /* !DW4_STATIC_RENDERERS */
+
 /* ── Back end fixo registrado no executor ──────────────────────────────────── */
 
 static void host_clear(const Nv2aSurface *s, const Nv2aRenderState *rs,
@@ -375,32 +563,9 @@ static const Nv2aBackend s_backend = { host_clear, host_draw, host_flip };
 static void sw_flip(void) { dw4_frame_note(0, 0); dw4_fps_limit_tick(); }
 static const Nv2aBackend s_sw_backend = { NULL, NULL, sw_flip };
 
-/* Carrega e inicia um renderizador. 0 se ele nao sobe nesta maquina. */
-static int renderer_start(int vulkan)
-{
-    snprintf(s_lib_path, sizeof s_lib_path, "%s/libdw4_%s.so", s_exe_dir,
-             vulkan ? "vk" : "gl");
-    s_mod = module_open(&s_loaded_mtime);
-    if (!s_mod)
-        return 0;
-    if (s_mod->needs_gl && !context_create()) {
-        fprintf(stderr, "[GL] nenhum contexto OpenGL 3.3 acelerado\n");
-        s_mod = NULL;
-        return 0;
-    }
-    if (s_mod->init && !s_mod->init()) {
-        s_mod = NULL;
-        return 0;
-    }
-    return 1;
-}
-
 void dw4_gl_backend_init(void)
 {
     const char *r = getenv("DW4_SW_RENDER"), *api = getenv("DW4_RENDERER");
-    char exe[PATH_MAX];
-    ssize_t len = readlink("/proc/self/exe", exe, sizeof exe - 1);
-    char *slash;
     int vulkan = 1;                     /* padrao desde 2026-11-24; cai no OpenGL se nao subir */
 
     if ((r && *r && *r != '0') || (api && (!strcmp(api, "cpu") || !strcmp(api, "sw")))) {
@@ -419,15 +584,8 @@ void dw4_gl_backend_init(void)
     s_allow_sw = getenv("DW4_GL_ALLOW_SW") != NULL;
     s_no_reload = getenv("DW4_GL_NO_RELOAD") != NULL;
 
-    if (len <= 0)
+    if (!dw4_os_exe_dir(s_exe_dir, sizeof s_exe_dir))
         goto fallback;
-    exe[len] = '\0';
-    slash = strrchr(exe, '/');
-    if (!slash)
-        goto fallback;
-    *slash = '\0';
-    snprintf(s_exe_dir, sizeof s_exe_dir, "%s", exe);
-    snprintf(s_live_dir, sizeof s_live_dir, "%s/gl_live", exe);
 
     if (!renderer_start(vulkan)) {
         fprintf(stderr, "[GL] %s indisponivel; tentando %s\n",

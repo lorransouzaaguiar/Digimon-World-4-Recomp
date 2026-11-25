@@ -52,12 +52,20 @@ def main():
     ap.add_argument("--vulkan", action="store_true", help="DW4_RENDERER=vulkan (ja e o padrao)")
     ap.add_argument("--opengl", action="store_true", help="DW4_RENDERER=opengl")
     ap.add_argument("--golden", action="store_true", help="compara shots com tests/golden")
-    ap.add_argument("--binary", default="build/dw4_recomp")
+    ap.add_argument("--wine", action="store_true",
+                    help="roda o build de Windows (build-win/dw4_recomp.exe, de "
+                         "scripts/build_win.sh) no Wine, sem tela nenhuma")
+    ap.add_argument("--binary", default=None,
+                    help="padrao: build/dw4_recomp (build-win/dw4_recomp.exe com --wine)")
     ap.add_argument("-e", "--env", action="append", default=[], metavar="VAR=VALOR")
     ap.add_argument("--verbose", action="store_true", help="imprime a triagem de todo run")
     args = ap.parse_args()
 
     os.chdir(ROOT)
+    if args.wine and args.window:
+        ap.error("--wine nao abre janela na tela; use --gamescope (janela num gamescope sem tela)")
+    if not args.binary:
+        args.binary = "build-win/dw4_recomp.exe" if args.wine else "build/dw4_recomp"
     scenario = os.path.abspath(args.scenario)
     # Um diretorio por invocacao (nada e apagado: um run ruim e evidencia);
     # build/soak/latest aponta para o mais recente.
@@ -84,6 +92,17 @@ def main():
             "DW4_GL_STATS": "1",
         })
         cmd = [os.path.join(ROOT, args.binary), os.path.join(ROOT, "game_data")]
+        if args.wine:
+            # Sem DISPLAY/WAYLAND_DISPLAY o Wine nao tem como abrir janela alguma
+            # (nem as dele); o Vulkan sem janela nao precisa de tela. Prefixo
+            # proprio, para nao tocar no ~/.wine do usuario. Os caminhos Linux
+            # do ambiente valem como estao: o diretorio corrente fica em Z:.
+            env.pop("DISPLAY", None)
+            env.pop("WAYLAND_DISPLAY", None)
+            env.setdefault("WINEPREFIX", os.path.join(ROOT, "tools", "win-deps", "wineprefix"))
+            env.setdefault("WINEDEBUG", "-all")
+            env.setdefault("WINEDLLOVERRIDES", "mscoree,mshtml=")
+            cmd = ["wine"] + cmd
         if args.gamescope:
             gw, _, gh = args.gamescope.partition("x")
             # Sem DISPLAY/WAYLAND_DISPLAY o gamescope nao tem onde se aninhar.
@@ -123,6 +142,13 @@ def main():
                 else:
                     p.kill()
                 rc = p.wait()
+        if args.wine:
+            # O servidor do Wine sobrevive alguns segundos ao jogo e seria
+            # reaproveitado pelo proximo run com a tela (ou a falta dela) deste.
+            subprocess.run(["wineserver", "-k"], env=env, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
+            subprocess.run(["wineserver", "-w"], env=env, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
         secs = time.time() - t0
         ru1 = resource.getrusage(resource.RUSAGE_CHILDREN)
         cpu = (ru1.ru_utime + ru1.ru_stime) - (ru0.ru_utime + ru0.ru_stime)
@@ -139,6 +165,15 @@ def main():
         elif rc != 0 and verdict in ("OK", "AVISOS"):
             verdict = "INCOMPLETO"
             out.insert(0, f"(saiu com codigo {rc})")
+        # A API pedida nao subiu e o jogo caiu na outra: o run nao testou o que devia.
+        want = "OpenGL" if args.opengl else "Vulkan" if args.vulkan else None
+        if want and verdict in ("OK", "AVISOS"):
+            with open(log, "rb") as f:
+                active = [ln for ln in f.read().split(b"\n") if b"renderizador ativo:" in ln]
+            if not active or want.encode() not in active[0]:
+                verdict = "INCOMPLETO"
+                out.insert(0, f"(pediu {want}, subiu: "
+                              f"{active[0].decode(errors='replace').strip() if active else 'nenhum'})")
         results.append((i, verdict, secs, log))
         print(f"run {i:02d}: {verdict:10s} {secs:6.1f} s  CPU {cpu:6.1f} s ({100 * cpu / secs:3.0f}% de um nucleo)"
               f"  {os.path.relpath(log, ROOT)}", flush=True)

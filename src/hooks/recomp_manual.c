@@ -17,17 +17,20 @@
 #include "recomp_types.h"
 #include "xbox_memory_layout.h"
 #include "dw4_hooks.h"
+#include "host_os.h"
 
 /* ── Defaults de ambiente ──────────────────────────────────────────────────── */
 
 static void env_default(const char *name, const char *value)
 {
     if (!getenv(name))
-        setenv(name, value, 0);
+        dw4_os_env_default(name, value);
 }
 
 void dw4_hooks_set_env_defaults(void)
 {
+    dw4_os_env_defaults();
+
     /* O jogo linka o D3D8 do XDK estaticamente: ele nunca chama uma API D3D,
      * escreve metodos NV2A num pushbuffer. Para ver frames e preciso executar
      * esse pushbuffer e abrir a janela do framebuffer. */

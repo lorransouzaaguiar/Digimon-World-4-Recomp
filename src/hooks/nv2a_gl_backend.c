@@ -37,7 +37,9 @@
  *                      validar a imagem numa maquina sem GPU utilizavel
  */
 
+#if !defined(_WIN32)
 #include <epoxy/egl.h>
+#endif
 #include <epoxy/gl.h>
 #include <math.h>
 #include <stdint.h>
@@ -1572,9 +1574,14 @@ static const Dw4GlModule s_module = {
 __attribute__((constructor))
 static void module_loaded(void)
 {
+#if !defined(_WIN32)
     eglBindAPI(EGL_OPENGL_API);
+#endif
 }
 
+#if defined(DW4_STATIC_RENDERERS)
+#define dw4_gl_module dw4_gl_module_gl
+#endif
 __attribute__((visibility("default")))
 const Dw4GlModule *dw4_gl_module(void)
 {

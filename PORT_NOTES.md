@@ -306,6 +306,26 @@ Ao fechar com um swapchain vivo a janela é deixada para o `exit()`.
 tamanho do recorte; sem a origem o back end não tinha como cortar um sub-viewport (o minimapa das
 fases, `PORT_NOTES` §7.6).
 
+### 4.16 `CMakeLists.txt` e guardas de `_WIN32` — host SDL no Windows (2026-11-25, DW4R-5)
+
+No Windows o toolkit escolhia sozinho Win32 + Direct3D 11 para a janela (`fb_present.c`,
+`gpu_present.c`), XInput para o controle e XAudio2 para o áudio. O port quer o mesmo caminho do
+Linux (SDL2 + nosso Vulkan; regra 3, nada de DirectX), então o patch acrescenta a opção
+`XBOXRECOMP_SDL_HOST` (desligada por padrão; o nosso `CMakeLists.txt` liga quando `WIN32`):
+
+- `CMakeLists.txt` (raiz): a opção, a definição `XBOXRECOMP_SDL_HOST=1`, e as variáveis
+  `XBR_SDL_HOST` / `XBR_WIN32_HOST`; com ela a camada `src/d3d` (D3D11) não é compilada.
+- `src/video`: `fb_present_sdl.c` (com `xbox_HostWindowMain` e as funções `xbox_FramebufferWindowVk*`
+  que o nosso Vulkan usa) no lugar de `fb_present.c` + `gpu_present.c`; `video_player.c` e
+  `video_pump.c` caem no ramo sem decodificador (o jogo decodifica os vídeos sozinho, CRI Sofdec).
+  Em `fb_present_sdl.c`, `sys/resource.h`/`getrlimit` ficam só fora do Windows.
+- `src/input`: ramo SDL de `xinput_device.c` + `keyboard_sdl.c`; sem `mkb_input.c` nem `xinput1_4`.
+  Faltava `#include <stdio.h>` no ramo SDL.
+- `src/apu`: `apu_sdl2.c` no lugar de `apu_xaudio2.c`; liga em SDL2 em vez de `xaudio2_8`.
+
+Resultado conferido com `objdump -p`: o `.exe` importa só `KERNEL32`, `SHELL32`, `WINMM`, a CRT
+universal, `SDL2.dll` e `vulkan-1.dll` — nenhuma DLL do DirectX. Fora do Windows nada muda.
+
 ## 5. Hooks (`src/hooks/`)
 
 | Arquivo | Função |
@@ -828,6 +848,32 @@ daí que vêm os textos da tela Gráficos do launcher. Vulkan virou o padrão po
 Janela: o launcher não oferece mais "tamanho da janela"; passa `RECOMP_WINDOW_SIZE=LxA` (patch
 no toolkit) com a resolução interna (dobrada em 480p/720p), e a janela é reduzida se não couber
 na área útil do monitor.
+
+### 7.11 OpenGL no Windows: WGL e a tabela por thread da libepoxy (2026-11-25, DW4R-5)
+
+Os drivers de Windows não trazem EGL, então no Windows o contexto 3.3 core do `gl_host.c` é WGL
+sobre uma janela escondida de 16×16 (o renderizador desenha em FBOs e entrega o quadro por
+leitura, como no Linux). Primeira tentativa: chamar `wglCreateContext`/`wglMakeCurrent` pelas
+versões da libepoxy (`epoxy/wgl.h`). O contexto subia (`[GL] back end OpenGL em WGL: NVIDIA…`) e o
+jogo caía em seguida com `[CRASH] violacao de acesso em RIP=0x0`, numa thread sem registradores de
+guest (a do executor NV2A).
+
+Causa: no Windows a libepoxy começa com uma tabela de funções global e, **a partir do segundo
+MakeCurrent**, troca para uma tabela por thread. A tabela de uma thread nova é alocada zerada e só
+é preenchida por `epoxy_handle_external_wglMakeCurrent()` chamada naquela thread. Nós criávamos o
+contexto na thread do jogo (dois MakeCurrent: o contexto provisório e o 3.3 core) e depois
+chamávamos o `wglMakeCurrent` *da libepoxy* na thread NV2A, cuja tabela ainda estava zerada: salto
+para o endereço 0.
+
+Correção: as funções `wgl*` são as da `opengl32.dll`, chamadas direto, e cada MakeCurrent nosso é
+seguido de `epoxy_handle_external_wglMakeCurrent()` (função `make_current` em `gl_host.c`). O
+relatório de crash do Windows também passou a mostrar quem chamou quando o RIP é 0.
+
+Teste: `scripts/soak.py --wine --gamescope --opengl --golden`. Sem tela nenhuma o Wine não cria
+janela, o WGL falha e o jogo cai no Vulkan; por isso o OpenGL do `.exe` só se testa dentro do
+gamescope sem tela, e o `soak.py` marca INCOMPLETO quando a API pedida não é a que subiu. O
+`soak.py --wine` encerra o servidor do Wine ao fim de cada run: ele sobrevive alguns segundos e o
+run seguinte herdaria a tela (ou a falta dela) do anterior.
 
 ### 7.1 Opções de depuração do renderizador
 

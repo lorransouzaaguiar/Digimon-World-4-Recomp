@@ -3,7 +3,7 @@
  *
  * Se nenhum frame for apresentado por DW4_STALL_MS milissegundos (padrao
  * 5000; 0 desliga), escreve "[STALL] ..." no log e pede a TODAS as threads
- * que despejem seu estado (o handler SIGUSR1 de main.c: registradores e
+ * que despejem seu estado (dw4_dump_all_threads em host_os_*.c: registradores e
  * retornos do guest, backtrace do host). Assim um travamento visto por quem
  * esta jogando ja chega diagnosticado no log, sem precisar reproduzir.
  *
@@ -15,16 +15,11 @@
  * RECOMP_SLOW_STACKS (koenhendriks/SSX3-recomp); implementacao propria.
  */
 
-#define _GNU_SOURCE
-#include <dirent.h>
 #include <pthread.h>
-#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/syscall.h>
 #include <time.h>
-#include <unistd.h>
 
 #include "dw4_hooks.h"
 
@@ -35,26 +30,6 @@ static double now_s(void)
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
-}
-
-void dw4_dump_all_threads(void)
-{
-    DIR *d = opendir("/proc/self/task");
-    struct dirent *e;
-    pid_t pid = getpid(), self = (pid_t)syscall(SYS_gettid);
-
-    if (!d)
-        return;
-    while ((e = readdir(d)) != NULL) {
-        pid_t tid = (pid_t)atoi(e->d_name);
-        struct timespec ts = { 0, 20000000 };      /* 20 ms: saidas nao se misturam */
-
-        if (tid <= 0 || tid == self)
-            continue;
-        syscall(SYS_tgkill, pid, tid, SIGUSR1);
-        nanosleep(&ts, NULL);
-    }
-    closedir(d);
 }
 
 static void *stall_thread(void *arg)
