@@ -21,25 +21,30 @@ Crie `docs/releases/vX.Y.Z.md` seguindo `docs/releases/v0.1.0.md`: links no topo
 mudou, problemas conhecidos, como relatar. Escreva só o que foi verificado; o que não foi testado
 entra em "problemas conhecidos". Sempre o aviso de que os arquivos do jogo não vêm junto.
 
-Os links de idioma do topo precisam de âncora explícita: o GitHub **não** cria âncora para os
-títulos no texto de um release (cria nos arquivos do repositório), então `[...](#english)` não
-rola a página. Formato que funciona (o GitHub prefixa o id com `user-content-`):
+Os links de idioma do topo precisam de âncora explícita **e própria de cada versão**:
+
+- o GitHub **não** cria âncora para os títulos no texto de um release (cria nos arquivos do
+  repositório), então `[...](#english)` não rola a página;
+- a página que lista os releases mostra vários de uma vez: com a mesma âncora em todos, o clique
+  num release antigo levava ao texto do mais novo. Por isso o id leva a versão (pontos viram hífens).
+
+Formato (o GitHub prefixa o id com `user-content-`), aqui para a v0.4.1:
 
 ```markdown
-**[English](#user-content-en) · [Português (Brasil)](#user-content-pt-br)**
+**[English](#user-content-en-v0-4-1) · [Português (Brasil)](#user-content-pt-br-v0-4-1)**
 
-<a id="en"></a>
+<a id="en-v0-4-1"></a>
 
 ## English
 ...
-<a id="pt-br"></a>
+<a id="pt-br-v0-4-1"></a>
 
 ## Português (Brasil)
 ```
 
 Depois de publicar, confira no `body_html` do release (API com
-`Accept: application/vnd.github.html+json`) que existem `id="user-content-en"` e
-`id="user-content-pt-br"`.
+`Accept: application/vnd.github.html+json`) que existem `id="user-content-en-<versão>"` e
+`id="user-content-pt-br-<versão>"`.
 
 ## 3. Pacote
 
