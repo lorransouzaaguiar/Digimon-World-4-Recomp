@@ -33,4 +33,18 @@ Saves, opcoes e logs / saves, settings and logs:  ~/.local/share/dw4-recomp/
 Projeto de fas, sem vinculo com Bandai Namco, Toei Animation ou Microsoft.
 Fan project, not affiliated with Bandai Namco, Toei Animation or Microsoft.
 Nunca compartilhe arquivos do jogo. / Never share game files.
+Fechar o jogo (tela cheia): Ctrl+Q no teclado, ou Back+Start segurados por
+1 segundo no controle. Troque em "Controles", no launcher.
+Quit the game (fullscreen): Ctrl+Q on the keyboard, or Back+Start held for
+1 second on the controller. Change it under "Controls", in the launcher.
+
+FPS, CPU e GPU na tela: F2 no teclado ou L3+R3 no controle (tambem em
+"Controles").  /  FPS, CPU and GPU on screen: F2 on the keyboard or L3+R3 on
+the controller (also under "Controls").
+
+Atualizacoes: o launcher avisa quando sai uma versao nova. O AppImage se
+atualiza pelo botao "Atualizar agora" (tela Jogar); o .tar.gz abre a pagina.
+Updates: the launcher tells you when a new version is out. The AppImage
+updates itself with "Update now" (Play screen); the .tar.gz opens the page.
+
 Licencas de terceiros / third-party licenses: licenses/

@@ -1,0 +1,15 @@
+# Atalho de fechar pelo controle (src/hooks/quit_hotkey.c): Back+Start
+# segurados por 1 s num controle virtual.
+#   scripts/soak.py --scenario tests/scenarios/quit_controle.txt --timeout 60
+sleep:8
+vpad
+sleep:2
+vpad_hold:back+start*0.4      # menos de 1 s: nao pode fechar
+sleep:1
+vpad_hold:start*1.5           # um botao so: nao pode fechar
+sleep:1
+mark:antes-do-atalho
+vpad_hold:back+start*3
+sleep:5
+mark:nao-fechou
+quit

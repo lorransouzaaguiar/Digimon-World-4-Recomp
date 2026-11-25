@@ -14,9 +14,9 @@ caminho para as três plataformas (macOS via MoltenVK).
 
 - **Jogável:** boot, vídeos, menus, criação do Digimon, save/load, lobby, tutorial e primeira fase,
   a 60 fps (CachyOS, NVIDIA). Fases seguintes, chefes e multijogador **não foram testados**.
-- **Publicado:** release v0.4.1 (2026-11-25; AppImage + tar.gz + `.zip` de Windows com launcher;
+- **Publicado:** release v0.5.0 (2026-11-25, o segundo do dia; AppImage + tar.gz + `.zip` de Windows com launcher;
   todo release leva Linux e Windows, e o Windows não é mais apresentado como "experimental" — pedido
-  do usuário; antes v0.4.0, v0.3.2, v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
+  do usuário; antes v0.4.1, v0.4.0, v0.3.2, v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
   `github.com/lorransouzaaguiar/Digimon-World-4-Recomp` (preparado para ficar público: licença
   MIT, histórico com e-mail noreply; a visibilidade quem muda é o usuário).
 - **Vulkan (branch `DW4R-1`):** `src/hooks/nv2a_vk_backend.c` passa nos mesmos frames de
@@ -46,7 +46,16 @@ caminho para as três plataformas (macOS via MoltenVK).
   **Launcher no Windows (`DW4R-6`, v0.4.1):** `DigimonWorld4-Recomp.exe` +
   Python embutível + PySide6 no pacote, dados em `%APPDATA%\dw4-recomp\`; testado só no Wine.
   Teclado e Proton não foram testados. Veja `STATUS.md` (Port para Windows).
-- **Aberto:** crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
+- **Atalhos, mostrador e atualização (`DW4R-6`, na v0.5.0, 2026-11-25):** fechar o jogo por
+  atalho (`Ctrl`+`Q`; `Back`+`Start` segurados 1 s), mostrador de FPS/CPU/GPU (`F2`; `L3`+`R3`) e
+  teclas do teclado-controle trocáveis, 4 portas de controle (`RECOMP_USB_PADS=4`; multijogador
+  nunca testado) e atualização pelos releases do GitHub (AppImage e `.zip` de Windows se atualizam; `.tar.gz` e
+  código-fonte abrem a página) e escolha do monitor (Gráficos → Janela; confirmada pelo usuário
+  no Linux e no Wine). A v0.5.0 é a primeira que se atualiza sozinha. Tudo configurável no launcher. Testado sem janela, no Wine e com
+  um servidor local no lugar do GitHub; o usuário jogou no Linux em 2026-11-25 e relatou tudo
+  funcionando. **Não testado: mais de um controle, Windows real e uma atualização entre dois
+  releases de verdade.** Veja `STATUS.md`.
+- **Aberto:** fechar pela janela caiu na saída dentro do gamescope (`PORT_NOTES.md` §8); crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
   assinatura no `STATUS.md`); texgen não implementado; o chão que escurece por alguns quadros;
   HUD em widescreen só conferido com 1 jogador.
 - **Memória do guest:** `RECOMP_HEAP_RECLAIM=1` é default desde a v0.3.1 (sem ela a memória
@@ -105,9 +114,12 @@ src/hooks/                    todo o código próprio do runtime
                               host_os_posix.c (Linux) e host_os_win32.c (Windows)
   recomp_manual.c             defaults de ambiente (RECOMP_*), overrides, init dos hooks
   d3d_fence.c  input_script.c  screenshot.c  stall_watch.c
+  quit_hotkey.c               atalhos de teclado/controle: fechar o jogo e ligar/desligar o mostrador
+  osd.c                       mostrador de FPS/CPU/GPU: um lote 2D entregue ao renderizador em uso (gl_host.c)
   prof.c                      amostrador de CPU (DW4_PROF; relatorio: scripts/prof_report.py)
 src/recompiled/               C GERADO do default.xbe (ignorado; scripts/regen.sh)
-launcher/                     launcher Qt Quick (Linux e Windows): dw4_launcher.py, qml/Main.qml, xiso.py
+launcher/                     launcher Qt Quick (Linux e Windows): dw4_launcher.py, qml/Main.qml, xiso.py,
+                              updater.py (atualizacao pelos releases do GitHub; sem Qt)
 packaging/                    AppRun, .desktop, ícone, README do pacote; windows/ (entrada .exe e README)
 scripts/                      setup, regen, soak, triage, golden, f9_diff, package_release...
 tests/scenarios/              roteiros de entrada (sintaxe em src/hooks/input_script.c)
@@ -134,6 +146,9 @@ scripts/soak.py -e DW4_PROF=/tmp/p.txt -e DW4_PROF_FROM=3900 && scripts/prof_rep
 scripts/triage.py <log>                          # resumo e veredito de um log
 scripts/regen.sh                                 # regenera src/recompiled/ (após mudar sementes)
 scripts/test_pad.sh                              # plugar/desplugar controle virtual (sem jogo, ~5 s)
+scripts/test_updater.py                          # atualizacao do launcher contra um servidor local (~2 s); --online consulta o GitHub
+scripts/soak.py --scenario tests/scenarios/osd.txt --timeout 60            # mostrador de desempenho (capturas osd_*.bmp)
+scripts/soak.py --scenario tests/scenarios/quit_teclado.txt --timeout 60   # atalho de fechar: da INCOMPLETO de proposito; vale o [QUIT] no log
 ./launcher.sh --selftest                         # launcher fora da tela
 ./launcher.sh --screenshot 1 docs/launcher_graphics.png --lang en --size 1120x1000 --defaults   # imagens dos READMEs
 scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
@@ -188,7 +203,7 @@ scripts/package_win.sh vX.Y.Z                    # .zip de Windows em dist/ (+ .
 
 ## Ao terminar uma tarefa
 
-- Rode `scripts/soak.py --golden` (e `--opengl --golden` se mexeu em renderização; e
+- Rode `scripts/soak.py --golden` (e `--opengl --golden` se mexeu em renderização ou em `osd.c`; `scripts/test_updater.py` se mexeu em `launcher/updater.py`; e
   `scripts/build_win.sh` + `scripts/soak.py --wine --golden` se mexeu em `host_os*`, `main.c`,
   `gl_host.c`, CMake ou toolkit); se a imagem mudou de propósito, confira e atualize as
   referências (`scripts/golden.py <shots> --update`).

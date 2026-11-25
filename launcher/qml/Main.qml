@@ -222,6 +222,83 @@ ApplicationWindow {
             }
         }
     }
+    // Atalho de teclado de uma opcao (quit_keys, osd_keys): mostra o atual e
+    // captura um novo -- as teclas apertadas juntas valem ao soltar.
+    component KeyShortcut: RowLayout {
+        id: ks
+        property string optKey
+        property string label
+        property string hint
+        Layout.fillWidth: true; spacing: 14
+        ColumnLayout {
+            Layout.fillWidth: true; spacing: 2
+            Label { text: ks.label; color: win.ink; font.pixelSize: 15 }
+            Label { text: keyCap.active ? t.quit_press : ks.hint
+                    color: keyCap.active ? win.gold : win.dim; font.pixelSize: 12
+                    wrapMode: Text.WordWrap; Layout.fillWidth: true }
+        }
+        Rectangle {
+            id: keyCap
+            property bool active: false
+            property var held: []
+            function begin() { held = []; active = true; forceActiveFocus() }
+            function end(save) { if (save && held.length) app.setComboKeys(ks.optKey, held); active = false; held = [] }
+            implicitWidth: 215; implicitHeight: 38; radius: 3
+            color: active ? "#17337c" : win.field
+            border.color: active ? win.gold : "#2b55a8"
+            onActiveFocusChanged: if (!activeFocus && active) end(false)
+            Keys.onPressed: e => {
+                if (!active) return
+                e.accepted = true
+                if (e.isAutoRepeat) return
+                var n = app.keyName(e.key)
+                if (n !== "" && held.indexOf(n) < 0 && held.length < 4) held = held.concat([n])
+            }
+            Keys.onReleased: e => {
+                if (!active) return
+                e.accepted = true
+                if (!e.isAutoRepeat) end(true)
+            }
+            Label { anchors.centerIn: parent; font.pixelSize: 14; font.bold: true
+                    text: keyCap.active ? (keyCap.held.length ? app.keysLabel(keyCap.held) : "…")
+                                        : (app.rev, t, app.comboLabel(ks.optKey))
+                    color: keyCap.active ? win.gold : win.ink }
+            TapHandler { onTapped: keyCap.active ? keyCap.end(false) : keyCap.begin() }
+        }
+        Btn { text: t.quit_set; implicitWidth: 110; onClicked: keyCap.begin() }
+        Btn { text: t.quit_clear; implicitWidth: 110; enabled: (app.rev, app.opt(ks.optKey) !== "")
+              onClicked: { keyCap.end(false); app.setComboKeys(ks.optKey, []) } }
+    }
+    // Atalho de controle de uma opcao (quit_pad, osd_pad): de 2 a 4 botoes marcados.
+    component PadShortcut: ColumnLayout {
+        id: ps
+        property string optKey
+        property string label
+        property string hint
+        readonly property int count: (app.rev, app.padCount(optKey))
+        Layout.fillWidth: true; spacing: 6
+        Label { text: ps.label; color: win.ink; font.pixelSize: 15 }
+        Label { text: ps.hint; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+        Flow {
+            Layout.fillWidth: true; spacing: 8
+            Repeater {
+                model: (app.rev, app.padButtons(ps.optKey))
+                Rectangle {
+                    required property var modelData
+                    width: 62; height: 34; radius: 3
+                    color: modelData.on ? "#1586b8" : win.field
+                    border.color: modelData.on ? win.cyan : (chipHover.hovered ? "#3a6fd0" : "#2b55a8")
+                    Label { anchors.centerIn: parent; text: modelData.label; font.pixelSize: 13
+                            font.bold: modelData.on; color: modelData.on ? "#ffffff" : win.dim }
+                    HoverHandler { id: chipHover }
+                    TapHandler { onTapped: app.togglePad(ps.optKey, modelData.name) }
+                }
+            }
+        }
+        Label { visible: ps.count === 1; text: t.quit_pad_one; color: "#ffb454"; font.pixelSize: 12
+                wrapMode: Text.WordWrap; Layout.fillWidth: true }
+        Label { visible: ps.count === 0; text: t.quit_off; color: win.dim; font.pixelSize: 12 }
+    }
     component Info: RowLayout {
         property string k
         property string v
@@ -349,6 +426,36 @@ ApplicationWindow {
                               onClicked: app.play() }
                     }
                 }
+                Card {
+                    heading: t.updates
+                    readonly property bool busy: ["checking", "downloading", "installing"].indexOf(app.updateState) >= 0
+                    property var dep: t          // o texto muda com o idioma
+                    Label { visible: text !== ""; text: (parent.dep, app.updateText); font.pixelSize: 14
+                            color: app.updateState === "available" ? win.gold
+                                   : (app.updateState === "error" ? "#ffb454" : win.ink)
+                            font.bold: app.updateState === "available"
+                            wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Rectangle { visible: app.updateState === "downloading"
+                                Layout.fillWidth: true; height: 8; radius: 4; color: "#12224f"
+                                Rectangle { width: parent.width * app.updateProgress; height: 8; radius: 4; color: win.accent } }
+                    RowLayout {
+                        spacing: 10
+                        Btn { visible: app.updateState === "available" && app.updateSelf; primary: true
+                              text: t.upd_install; enabled: !app.running; implicitWidth: 190
+                              onClicked: app.installUpdate() }
+                        Btn { visible: app.updateState === "available" && !app.updateSelf; primary: true
+                              text: t.upd_page; implicitWidth: 270; onClicked: app.openUpdatePage() }
+                        Btn { visible: app.updateState === "available" && app.updateSelf
+                              text: t.upd_notes; implicitWidth: 190; onClicked: app.openUpdatePage() }
+                        Btn { visible: app.updateState === "downloading"
+                              text: t.upd_cancel; onClicked: app.cancelUpdate() }
+                        Btn { visible: ["idle", "current", "error", "available"].indexOf(app.updateState) >= 0
+                              text: t.upd_check; implicitWidth: 210; onClicked: app.checkUpdate() }
+                    }
+                    Label { text: app.updateSelf ? t.upd_self_d : t.upd_manual_d; color: win.dim; font.pixelSize: 12
+                            wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Toggle { optKey: "check_updates"; label: t.upd_auto; hint: t.upd_auto_d }
+                }
             }
 
             // ── Graficos ─────────────────────────────────────────────────────
@@ -435,6 +542,33 @@ ApplicationWindow {
                 }
                 Card {
                     heading: t.window
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 14
+                        ColumnLayout {
+                            Layout.fillWidth: true; spacing: 2
+                            Label { text: t.display; color: win.ink; font.pixelSize: 15 }
+                            Label { text: t.display_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                        }
+                        Combo {
+                            id: dispCombo
+                            implicitWidth: 330
+                            // Monitores ligados agora; o escolhido continua na lista mesmo desligado.
+                            readonly property var list: app.displays()
+                            readonly property string saved: (app.rev, app.opt("display"))
+                            readonly property var names: {
+                                var n = [""].concat(list.map(d => d.name))
+                                if (saved !== "" && n.indexOf(saved) < 0) n.push(saved)
+                                return n
+                            }
+                            model: {
+                                var m = [t.display_auto].concat(list.map(d => d.label))
+                                if (names.length > m.length) m.push(saved + " " + t.display_gone)
+                                return m
+                            }
+                            currentIndex: Math.max(0, names.indexOf(saved))
+                            onActivated: i => app.setOpt("display", names[i])
+                        }
+                    }
                     Toggle { optKey: "fullscreen"; label: t.fullscreen; hint: t.fullscreen_d }
                     Label { text: t.window_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Toggle { optKey: "vsync"; label: t.vsync; hint: t.vsync_d }
@@ -450,22 +584,73 @@ ApplicationWindow {
                 Card {
                     Label { text: t.pad_note; color: win.ink; font.pixelSize: 14; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     Toggle { optKey: "keyboard"; label: t.keyboard; hint: t.keyboard_d }
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 14
+                        ColumnLayout {
+                            Layout.fillWidth: true; spacing: 2
+                            Label { text: t.pads; color: win.ink; font.pixelSize: 15 }
+                            Label { text: t.pads_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                        }
+                        Combo {
+                            implicitWidth: 110
+                            model: ["1", "2", "3", "4"]
+                            currentIndex: Math.max(0, app.opt("pads") - 1)
+                            onActivated: i => app.setOpt("pads", i + 1)
+                        }
+                    }
+                }
+                Card {
+                    heading: t.quit
+                    Label { text: t.quit_d; color: win.ink; font.pixelSize: 13; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    KeyShortcut { optKey: "quit_keys"; label: t.quit_keys; hint: t.quit_keys_d }
+                    PadShortcut { optKey: "quit_pad"; label: t.quit_pad; hint: t.quit_pad_d }
+                }
+                Card {
+                    heading: t.osd
+                    Label { text: t.osd_d; color: win.ink; font.pixelSize: 13; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Toggle { optKey: "osd"; label: t.osd_start; hint: t.osd_start_d }
+                    KeyShortcut { optKey: "osd_keys"; label: t.osd_keys; hint: t.osd_keys_d }
+                    PadShortcut { optKey: "osd_pad"; label: t.osd_pad; hint: t.osd_pad_d }
                 }
                 Card {
                     heading: t.keyboard
+                    Label { text: t.keymap_d; color: win.dim; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     GridLayout {
-                        columns: 2; columnSpacing: 40; rowSpacing: 8
-                        Label { text: t.key; color: win.dim; font { pixelSize: 12; bold: true } }
-                        Label { text: t.xbox; color: win.dim; font { pixelSize: 12; bold: true } }
+                        columns: 3; columnSpacing: 26; rowSpacing: 8
+                        Layout.fillWidth: true
                         Repeater {
-                            model: app ? app.keymap.length * 2 : 0
-                            Label {
-                                required property int index
-                                text: index % 2 ? app.keymap[(index - 1) / 2].xbox : app.keymap[index / 2].key
-                                color: index % 2 ? win.ink : win.blue; font.pixelSize: 14
+                            model: (app.rev, app.keymapRows())
+                            RowLayout {
+                                id: kb
+                                required property var modelData
+                                property bool active: false
+                                spacing: 10
+                                Layout.fillWidth: true
+                                Label { text: kb.modelData.label; color: win.ink; font.pixelSize: 14; Layout.preferredWidth: 92 }
+                                Rectangle {
+                                    id: kbCap
+                                    implicitWidth: 120; implicitHeight: 32; radius: 3
+                                    color: kb.active ? "#17337c" : win.field
+                                    border.color: kb.active ? win.gold : (kb.modelData.changed ? win.cyan : "#2b55a8")
+                                    onActiveFocusChanged: if (!activeFocus) kb.active = false
+                                    Keys.onPressed: e => {
+                                        if (!kb.active) return
+                                        e.accepted = true
+                                        if (e.isAutoRepeat) return
+                                        var n = app.keyName(e.key)
+                                        if (n === "") return
+                                        kb.active = false
+                                        app.setKeymap(kb.modelData.control, n)
+                                    }
+                                    Label { anchors.centerIn: parent; font.pixelSize: 13; font.bold: kb.modelData.changed
+                                            text: kb.active ? "…" : kb.modelData.key
+                                            color: kb.active ? win.gold : (kb.modelData.changed ? win.cyan : win.blue) }
+                                    TapHandler { onTapped: { kb.active = !kb.active; if (kb.active) kbCap.forceActiveFocus() } }
+                                }
                             }
                         }
                     }
+                    Btn { text: t.keymap_reset; implicitWidth: 210; onClicked: app.resetKeymap() }
                 }
             }
 

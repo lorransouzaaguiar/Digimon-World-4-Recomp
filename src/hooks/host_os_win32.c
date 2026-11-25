@@ -192,4 +192,105 @@ void dw4_dump_all_threads(void)
     fprintf(stderr, "[DUMP] despejo de threads ainda nao existe no Windows\n");
 }
 
+/* ── Mostrador de desempenho (osd.c) ───────────────────────────────────────── */
+
+int dw4_os_cpu_times(double *busy, double *total)
+{
+    FILETIME idle, kernel, user;        /* o tempo de kernel inclui o ocioso */
+    ULARGE_INTEGER i, k, u;
+
+    if (!GetSystemTimes(&idle, &kernel, &user))
+        return 0;
+    i.LowPart = idle.dwLowDateTime;   i.HighPart = idle.dwHighDateTime;
+    k.LowPart = kernel.dwLowDateTime; k.HighPart = kernel.dwHighDateTime;
+    u.LowPart = user.dwLowDateTime;   u.HighPart = user.dwHighDateTime;
+    *total = (double)(k.QuadPart + u.QuadPart);
+    *busy = *total - (double)i.QuadPart;
+    return 1;
+}
+
+/* NVIDIA: nvml.dll, que o driver instala em System32. Carregada so se existir. */
+static int gpu_nvml(void)
+{
+    static int state;                   /* 0 nao tentou, 1 pronto, -1 nao ha */
+    static void *dev;
+    static int (*get_util)(void *, unsigned *);
+    unsigned util[2] = { 0, 0 };        /* nvmlUtilization_t: gpu, memory */
+
+    if (!state) {
+        HMODULE lib = LoadLibraryA("nvml.dll");
+        int (*init)(void) = lib ? (int (*)(void))(void *)GetProcAddress(lib, "nvmlInit_v2") : NULL;
+        int (*by_index)(unsigned, void **) =
+            lib ? (int (*)(unsigned, void **))(void *)GetProcAddress(lib, "nvmlDeviceGetHandleByIndex_v2") : NULL;
+
+        get_util = lib ? (int (*)(void *, unsigned *))(void *)GetProcAddress(lib, "nvmlDeviceGetUtilizationRates") : NULL;
+        state = init && by_index && get_util && init() == 0 && by_index(0, &dev) == 0 ? 1 : -1;
+    }
+    if (state < 0 || get_util(dev, util) != 0)
+        return -1;
+    return (int)util[0];
+}
+
+/* Qualquer placa (Windows 10 1709+): os contadores "GPU Engine" do sistema, os
+ * mesmos do Gerenciador de Tarefas. Soma os motores 3D de todos os processos.
+ * pdh.dll e carregada em tempo de execucao para o executavel nao a importar
+ * (scripts/package_win.sh confere a lista de DLLs). NAO TESTADO num Windows
+ * de verdade: o Wine nao tem esses contadores. */
+static int gpu_pdh(void)
+{
+    typedef struct { DWORD status; double value; } FmtValue;        /* PDH_FMT_COUNTERVALUE, double */
+    typedef struct { wchar_t *name; FmtValue v; } FmtItem;          /* PDH_FMT_COUNTERVALUE_ITEM_W */
+    static int state;
+    static void *query, *counter;
+    static LONG (WINAPI *collect)(void *);
+    static LONG (WINAPI *get_array)(void *, DWORD, DWORD *, DWORD *, void *);
+    static FmtItem *items;
+    static DWORD cap;
+    DWORD size = cap, count = 0;
+    double sum = 0.0;
+    LONG rc;
+
+    if (!state) {
+        HMODULE lib = LoadLibraryA("pdh.dll");
+        LONG (WINAPI *open)(const wchar_t *, DWORD_PTR, void **) =
+            lib ? (LONG (WINAPI *)(const wchar_t *, DWORD_PTR, void **))(void *)GetProcAddress(lib, "PdhOpenQueryW") : NULL;
+        LONG (WINAPI *add)(void *, const wchar_t *, DWORD_PTR, void **) =
+            lib ? (LONG (WINAPI *)(void *, const wchar_t *, DWORD_PTR, void **))(void *)
+                  GetProcAddress(lib, "PdhAddEnglishCounterW") : NULL;
+
+        collect = lib ? (LONG (WINAPI *)(void *))(void *)GetProcAddress(lib, "PdhCollectQueryData") : NULL;
+        get_array = lib ? (LONG (WINAPI *)(void *, DWORD, DWORD *, DWORD *, void *))(void *)
+                          GetProcAddress(lib, "PdhGetFormattedCounterArrayW") : NULL;
+        state = open && add && collect && get_array && open(NULL, 0, &query) == 0
+                && add(query, L"\\GPU Engine(*engtype_3D)\\Utilization Percentage", 0, &counter) == 0
+                && collect(query) == 0 ? 1 : -1;
+        return -1;                      /* a taxa precisa de duas coletas */
+    }
+    if (state < 0 || collect(query) != 0)
+        return -1;
+    rc = get_array(counter, 0x00000200 /* PDH_FMT_DOUBLE */, &size, &count, items);
+    if (rc == (LONG)0x800007D2) {       /* PDH_MORE_DATA: o numero de processos mudou */
+        FmtItem *bigger = realloc(items, size);
+
+        if (!bigger)
+            return -1;
+        items = bigger;
+        cap = size;
+        rc = get_array(counter, 0x00000200, &size, &count, items);
+    }
+    if (rc != 0)
+        return -1;
+    for (DWORD i = 0; i < count; i++)
+        if (items[i].v.status == 0 || items[i].v.status == 1)       /* dado valido / novo */
+            sum += items[i].v.value;
+    return sum > 100.0 ? 100 : (int)(sum + 0.5);
+}
+
+int dw4_os_gpu_percent(void)
+{
+    int v = gpu_nvml();
+
+    return v >= 0 ? v : gpu_pdh();
+}
+
 #endif /* _WIN32 */

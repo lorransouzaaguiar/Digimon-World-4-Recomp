@@ -1,0 +1,18 @@
+# Mostrador de desempenho (src/hooks/osd.c): liga pela tecla (F2), captura,
+# desliga pelo controle virtual (L3+R3), captura de novo.
+#   scripts/soak.py --scenario tests/scenarios/osd.txt --timeout 60
+#   scripts/soak.py --opengl --scenario tests/scenarios/osd.txt -e DW4_RES=1080 -e DW4_ASPECT=16:9
+sleep:9
+shot:osd_0_desligado
+combo:f2*0.2
+sleep:2.5
+shot:osd_1_ligado
+vpad
+sleep:2
+vpad_hold:l3+r3*0.3
+sleep:1
+shot:osd_2_desligado
+vpad_hold:l3+r3*0.3
+sleep:1.5
+shot:osd_3_ligado
+quit

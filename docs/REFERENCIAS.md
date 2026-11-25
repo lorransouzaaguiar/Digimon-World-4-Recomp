@@ -151,3 +151,35 @@ eles (`PORT_NOTES.md` §7.5b); o modo leitura ficou como reserva e para os teste
 Nenhum distribui dados do disco. Eles se dividem em **publicar o executável** (três ports) ou
 **publicar só a ferramenta que compila** (dois ports). Nós: `scripts/package_release.sh` no primeiro
 modelo; sem contêiner (não há docker/podman na máquina), então a glibc mínima é a do CachyOS do dia.
+
+## 8. Atualização pelo launcher: SpartanPort (estudado em 2026-11-25)
+
+Não é um port do xboxrecomp: é o port de God of War 3 (`github.com/FelipePrado0/SpartanPort`,
+commit `6c97aa8`), indicado pelo usuário como modelo para a atualização pelo launcher. **Licença
+GPL-2-or-later: só ideias, nenhum código** (o launcher atual é Rust + iced em `launcher-rust/`; o
+antigo, Python + Tkinter).
+
+| O que eles fazem | Onde | Aqui (`launcher/updater.py`) |
+|---|---|---|
+| Lista de releases da API do GitHub (`releases?per_page=100`), `User-Agent` próprio, sem token; menu que deixa instalar qualquer versão, até mais antiga | `core/update.rs`, `ui/version_menu.rs` | só `releases/latest`: uma versão nova ou nada |
+| Consulta ao abrir é opcional e vem **desligada**; sem cache em disco | `core/catalog.rs:299` | vem **ligada** (pedido do usuário), com cache de 6 h em `config/update.json` |
+| Versão local embutida na compilação; comparação por tuplas de dígitos | `core/release.rs` | `launcher/VERSION` do pacote; só `vX.Y.Z` |
+| Asset escolhido pelo sufixo (`.zip`, `.appimage`) | `release.rs:163` | sufixo completo com arquitetura **e** a tag no nome |
+| SHA-256 de um `<asset>.sha256` irmão; obrigatório no Linux, **opcional no Windows** | `update.rs:205,467` | obrigatório nos dois: campo `digest` da API ou `SHA256SUMS-vX.Y.Z.txt`; confere o tamanho também |
+| AppImage: baixa ao lado, confere, `rename` por cima, reabre com o ambiente limpo | `update.rs:198-259` | igual; se o nome do arquivo tem a versão, o novo leva a versão nova |
+| Windows: extrai em `%TEMP%`, roda o `.exe` novo de lá com `--install-update <pasta> <pid>`, que espera o antigo fechar e copia por cima (30 tentativas), sem apagar nada | `update.rs:459-486`, `startup.rs:94-119` | igual, com a pasta de preparo em `%APPDATA%\dw4-recomp\update`; cada arquivo entra por um temporário renomeado |
+| Sem cancelar, sem limite de tempo no corpo do download | `update.rs` | botão Cancelar; limite de 30 s por leitura; download só do repositório do projeto |
+
+Fraquezas deles que continuam valendo aqui: o hash vem do mesmo lugar que o pacote (protege de
+download corrompido, não de um release adulterado; não há assinatura); a cópia no Windows não tem
+volta atrás se falhar no meio (sobra o aviso para baixar à mão); arquivos que uma versão nova
+deixa de trazer ficam na pasta.
+
+## 9. Mostrador de FPS (visto em 2026-11-25)
+
+Só o SSX 3 do koenhendriks tem: `RECOMP_FPS_OVERLAY=1`, tecla F3, "FPS n SHOWN n MAX n MS"
+desenhado na imagem pelo apresentador D3D11 dele (patch local no toolkit, só Windows; GPL-3, nada
+copiado). O toolkit v0.18.0 não tem. O nosso (`src/hooks/osd.c`) é outro desenho: um lote 2D
+entregue ao renderizador em uso, para valer em Vulkan e OpenGL nos dois sistemas, e mostra também
+CPU e GPU. Nenhum dos ports tem atalho para fechar o jogo.
+

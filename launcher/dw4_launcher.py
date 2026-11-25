@@ -27,7 +27,15 @@ import time
 import zipfile
 from pathlib import Path
 
-from PySide6.QtCore import (Property, QObject, QProcess, QProcessEnvironment, QTimer, QUrl,
+sys.path.insert(0, str(Path(__file__).resolve().parent))    # o Python embutido do Windows nao poe a pasta do script
+import updater  # noqa: E402
+
+if "--install-update" in sys.argv[1:]:
+    # Ajudante de instalacao do Windows (updater.py): roda do pacote novo, numa
+    # pasta de preparo, e nao abre janela. Antes do Qt de proposito.
+    sys.exit(updater.run_install_helper(sys.argv))
+
+from PySide6.QtCore import (Property, QObject, QProcess, QProcessEnvironment, Qt, QTimer, QUrl,
                             Signal, Slot)
 from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
@@ -73,6 +81,7 @@ DEFAULTS = {
     "game_dir": "",          # vazio = <raiz>/game_data
     "lang": "auto",          # auto | pt | en
     "fullscreen": False,
+    "display": "",           # monitor da janela do jogo: nome do Qt (QScreen.name); "" = o principal
     "vsync": True,
     "renderer": "vulkan",    # vulkan | opengl  (API grafica; "gpu" antigo = opengl)
     "res": 480,              # altura da imagem: 480 (original) | 720 | 1080 | 1440 | 2160
@@ -80,7 +89,64 @@ DEFAULTS = {
     "fps": 30,               # limite de quadros: 30 (como rodava no Xbox) | 60
     "parallel": False,       # jogo e GPU emulada em paralelo (RECOMP_KICK_AHEAD); experimental
     "keyboard": True,
+    "pads": 4,               # portas de controle que o jogo enxerga, 1..4 (RECOMP_USB_PADS)
+    "keymap": {},            # teclas trocadas do teclado-controle: {comando: tecla}; vazio = padrao
+    "quit_keys": "ctrl+q",   # atalho de teclado que fecha o jogo ("" = desligado); src/hooks/quit_hotkey.c
+    "quit_pad": "back+start",  # botoes do controle, segurados 1 s ("" = desligado)
+    "osd": False,            # mostrador de FPS/CPU/GPU ja visivel ao abrir o jogo (src/hooks/osd.c)
+    "osd_keys": "f2",        # tecla(s) que ligam/desligam o mostrador ("" = nenhuma)
+    "osd_pad": "l3+r3",      # botoes do controle que ligam/desligam ("" = nenhum)
+    "check_updates": True,   # consulta o GitHub ao abrir (launcher/updater.py)
 }
+
+# Atalho de fechar: nomes que o jogo entende (quit_hotkey.c) e como aparecem na tela.
+KEY_NAMES = {Qt.Key_Control: "ctrl", Qt.Key_Shift: "shift", Qt.Key_Alt: "alt", Qt.Key_Escape: "esc",
+             Qt.Key_Tab: "tab", Qt.Key_Space: "space", Qt.Key_Return: "enter", Qt.Key_Enter: "enter",
+             Qt.Key_Backspace: "backspace", Qt.Key_Up: "up", Qt.Key_Down: "down", Qt.Key_Left: "left",
+             Qt.Key_Right: "right", Qt.Key_Home: "home", Qt.Key_End: "end", Qt.Key_PageUp: "pgup",
+             Qt.Key_PageDown: "pgdn", Qt.Key_Insert: "ins", Qt.Key_Delete: "del", Qt.Key_Pause: "pause"}
+KEY_NAMES = {int(k): v for k, v in KEY_NAMES.items()}
+KEY_LABELS = {"ctrl": "Ctrl", "shift": "Shift", "alt": "Alt", "esc": "Esc", "tab": "Tab", "space": "Space",
+              "enter": "Enter", "backspace": "Backspace", "up": "↑", "down": "↓", "left": "←", "right": "→",
+              "home": "Home", "end": "End", "pgup": "Page Up", "pgdn": "Page Down", "ins": "Insert",
+              "del": "Delete", "pause": "Pause"}
+KEY_MODS = ("ctrl", "shift", "alt")
+QUIT_MAX = 4                 # o jogo aceita ate 4 teclas / botoes por atalho
+PAD_BUTTONS = [("back", "Back"), ("start", "Start"), ("a", "A"), ("b", "B"), ("x", "X"), ("y", "Y"),
+               ("lb", "LB"), ("rb", "RB"), ("lt", "LT"), ("rt", "RT"), ("l3", "L3"), ("r3", "R3")]
+# Teclado como controle 1: comando do Xbox (nome do toolkit, input_map.c), como aparece e a tecla padrao.
+KEYMAP_ROWS = [("start", "START", "enter"), ("back", "BACK", "backspace"),
+               ("a", "A", "z"), ("b", "B", "x"), ("x", "X", "c"), ("y", "Y", "v"),
+               ("white", "White", "q"), ("black", "Black", "e"),
+               ("left_trigger", "L trigger", "1"), ("right_trigger", "R trigger", "3"),
+               ("left_thumb", "L3", "shift"), ("right_thumb", "R3", "ctrl"),
+               ("dpad_up", "D-pad ↑", "up"), ("dpad_down", "D-pad ↓", "down"),
+               ("dpad_left", "D-pad ←", "left"), ("dpad_right", "D-pad →", "right"),
+               ("left_stick_up", "L stick ↑", "w"), ("left_stick_down", "L stick ↓", "s"),
+               ("left_stick_left", "L stick ←", "a"), ("left_stick_right", "L stick →", "d"),
+               ("right_stick_up", "R stick ↑", "i"), ("right_stick_down", "R stick ↓", "k"),
+               ("right_stick_left", "R stick ←", "j"), ("right_stick_right", "R stick →", "l")]
+KEYMAP_DEFAULT = {c: k for c, _, k in KEYMAP_ROWS}
+TOOLKIT_KEY = {"pgup": "pageup", "pgdn": "pagedown", "ins": "insert", "del": "delete"}     # nomes do toolkit
+COMBO_KEYS = ("quit_keys", "osd_keys")      # opcoes que guardam um atalho de teclado
+COMBO_PADS = ("quit_pad", "osd_pad")        # ... e de controle
+UPDATE_EVERY = 6 * 3600      # consulta automatica: no maximo uma a cada 6 h
+
+
+def key_valid(name: str) -> bool:
+    return (name in KEY_LABELS or (len(name) == 1 and name.isascii() and name.isalnum() and name == name.lower())
+            or bool(re.fullmatch(r"f([1-9]|1[0-2])", name)))
+
+
+def key_label(name: str) -> str:
+    return KEY_LABELS.get(name) or name.upper()
+
+
+def clean_combo(text, valid) -> str:
+    """"Ctrl+Q" gravado a mao -> "ctrl+q"; "" se houver nome que o jogo nao entende."""
+    parts = [x.strip().lower() for x in str(text or "").split("+") if x.strip()]
+    parts = list(dict.fromkeys(parts))
+    return "+".join(parts) if parts and len(parts) <= QUIT_MAX and all(valid(x) for x in parts) else ""
 
 STR = {
     "pt": {
@@ -102,6 +168,10 @@ STR = {
         "btn_play": "JOGAR", "btn_running": "EM EXECUÇÃO",
         "ended_ok": "O jogo foi fechado.",
         "ended_crash": "O jogo fechou com erro. O log foi guardado em: ",
+        "display": "Monitor", "display_auto": "Automático (monitor principal)",
+        "display_d": "Em qual monitor o jogo abre, em janela ou em tela cheia. Se o monitor escolhido não "
+                     "estiver ligado, o jogo abre no principal.",
+        "display_gone": "(desligado)",
         "window": "Janela", "fullscreen": "Tela cheia", "fullscreen_d": "Tela cheia sem borda, na resolução da área de trabalho.",
         "window_d": "Fora da tela cheia, a janela abre do tamanho da resolução interna escolhida acima (em 480p e "
                     "720p, no dobro, para não ficar pequena). Se não couber no monitor, é reduzida mantendo a forma.",
@@ -142,6 +212,49 @@ STR = {
         "keyboard": "Teclado como controle 1", "keyboard_d": "Um controle conectado continua funcionando junto.",
         "pad_note": "Qualquer controle reconhecido como Xbox/XInput funciona sem configuração.",
         "key": "Tecla", "xbox": "Controle do Xbox",
+        "pads": "Portas de controle",
+        "pads_d": "Quantos controles o jogo enxerga, como as 4 portas do Xbox: é o que permite jogar com até 4 "
+                  "jogadores. Os controles ocupam as portas na ordem em que o sistema os reconhece; o teclado "
+                  "conta sempre como o controle 1. Se o jogo se comportar de forma estranha com portas vazias, reduza.",
+        "keymap_d": "Clique numa tecla e aperte a nova. Se ela já estiver em outro comando, os dois trocam.",
+        "keymap_reset": "Restaurar o padrão",
+        "quit": "Fechar o jogo", "quit_d": "Em tela cheia não há botão de fechar: use um destes atalhos durante o jogo. "
+                                           "O que não foi salvo no jogo é perdido, como ao fechar a janela.",
+        "quit_keys": "Atalho do teclado", "quit_keys_d": "As teclas apertadas ao mesmo tempo fecham o jogo na hora.",
+        "quit_set": "Definir…", "quit_clear": "Desligar", "quit_off": "Desligado",
+        "quit_press": "Aperte a tecla ou a combinação (até 4 teclas) e solte…",
+        "quit_pad": "Atalho do controle",
+        "quit_pad_d": "Marque de 2 a 4 botões. Segurados juntos por 1 segundo, em qualquer controle, fecham o jogo. "
+                      "LB e RB são os botões Black e White do Xbox; LT e RT, os gatilhos.",
+        "quit_pad_one": "Um botão sozinho não vale como atalho: marque pelo menos dois.",
+        "osd": "Mostrador de desempenho",
+        "osd_d": "Mostra no canto da tela, durante o jogo, os quadros por segundo (FPS), o uso do processador (CPU) "
+                 "e o da placa de vídeo (GPU). CPU: média de todos os núcleos do computador, como no monitor do "
+                 "sistema (inclui os outros programas). GPU: ocupação da placa inteira, não só do jogo; aparece \"--\" quando o sistema não informa.",
+        "osd_start": "Já mostrar ao abrir o jogo",
+        "osd_start_d": "Desligado, o mostrador só aparece quando você usar o atalho abaixo.",
+        "osd_keys": "Tecla de mostrar/esconder", "osd_keys_d": "Aperte durante o jogo para mostrar ou esconder.",
+        "osd_pad": "Botões de mostrar/esconder",
+        "osd_pad_d": "Marque de 2 a 4 botões. Apertados juntos, em qualquer controle, mostram ou escondem.",
+        "updates": "Atualizações", "upd_check": "Procurar atualização", "upd_install": "Atualizar agora",
+        "upd_page": "Abrir a página de download", "upd_notes": "Novidades da versão", "upd_cancel": "Cancelar",
+        "upd_auto": "Procurar atualizações ao abrir",
+        "upd_auto_d": "Uma consulta ao GitHub quando o launcher abre, no máximo a cada 6 horas. "
+                      "Nada é instalado sem você pedir.",
+        "upd_checking": "Procurando atualização…", "upd_current": "Você já está na versão mais recente (%s).",
+        "upd_available": "Nova versão disponível: %s", "upd_dev": "Versão mais recente publicada: %s.",
+        "upd_downloading": "Baixando %s…", "upd_installing": "Instalando %s: o launcher vai fechar e abrir de novo.",
+        "upd_manual_d": "Esta instalação (pacote .tar.gz ou código-fonte) não se atualiza sozinha: "
+                        "baixe o pacote novo na página do projeto. Saves e opções são mantidos.",
+        "upd_self_d": "O launcher baixa o pacote, confere e se reabre na versão nova. Saves e opções são mantidos.",
+        "upd_running": "Feche o jogo antes de atualizar.", "upd_cancelled": "Atualização cancelada.",
+        "upd_err_net": "Não foi possível falar com o GitHub. Confira a conexão com a internet.",
+        "upd_err_rate": "O GitHub limitou as consultas deste endereço por agora. Tente de novo mais tarde.",
+        "upd_err_http": "O GitHub respondeu com erro. Tente de novo mais tarde.",
+        "upd_err_bad": "Resposta inesperada do GitHub; nada foi instalado.",
+        "upd_err_hash": "O arquivo baixado não confere com o do release; nada foi instalado. Tente de novo.",
+        "upd_err_write": "Não foi possível gravar a atualização: ",
+        "upd_err_noasset": "Esta versão não tem pacote para a sua instalação. Baixe pela página do projeto.",
         "save_folder": "Pasta dos saves", "open_folder": "Abrir pasta", "backup": "Fazer backup",
         "export": "Exportar .zip…", "import": "Importar .zip…", "no_saves": "Nenhum save ainda.",
         "save_list": "Saves encontrados", "backup_done": "Backup gravado em: ",
@@ -189,6 +302,10 @@ STR = {
         "btn_play": "PLAY", "btn_running": "RUNNING",
         "ended_ok": "The game was closed.",
         "ended_crash": "The game closed with an error. The log was kept at: ",
+        "display": "Display", "display_auto": "Automatic (primary display)",
+        "display_d": "Which display the game opens on, windowed or fullscreen. If the chosen display is not "
+                     "connected, the game opens on the primary one.",
+        "display_gone": "(disconnected)",
         "window": "Window", "fullscreen": "Fullscreen", "fullscreen_d": "Borderless fullscreen at the desktop resolution.",
         "window_d": "Outside fullscreen, the window opens at the internal resolution chosen above (doubled at 480p "
                     "and 720p, so it is not tiny). If it does not fit the display it is shrunk, keeping its shape.",
@@ -229,6 +346,50 @@ STR = {
         "keyboard": "Keyboard as controller 1", "keyboard_d": "A connected controller keeps working alongside it.",
         "pad_note": "Any controller the system reports as Xbox/XInput works with no setup.",
         "key": "Key", "xbox": "Xbox control",
+        "pads": "Controller ports",
+        "pads_d": "How many controllers the game sees, like the Xbox's 4 ports: this is what allows up to 4 "
+                  "players. Controllers take the ports in the order the system reports them; the keyboard always "
+                  "counts as controller 1. If the game misbehaves with empty ports, lower it.",
+        "keymap_d": "Click a key and press the new one. If it is already on another control, the two swap.",
+        "keymap_reset": "Restore defaults",
+        "quit": "Quit the game", "quit_d": "Fullscreen has no close button: use one of these shortcuts while playing. "
+                                           "Anything not saved in the game is lost, as when closing the window.",
+        "quit_keys": "Keyboard shortcut", "quit_keys_d": "The keys pressed together quit the game at once.",
+        "quit_set": "Set…", "quit_clear": "Turn off", "quit_off": "Off",
+        "quit_press": "Press the key or combination (up to 4 keys) and release…",
+        "quit_pad": "Controller shortcut",
+        "quit_pad_d": "Tick 2 to 4 buttons. Held together for 1 second, on any controller, they quit the game. "
+                      "LB and RB are the Xbox Black and White buttons; LT and RT, the triggers.",
+        "quit_pad_one": "A single button is not accepted as a shortcut: tick at least two.",
+        "osd": "Performance overlay",
+        "osd_d": "Shows, in a corner of the screen while playing, the frames per second (FPS), processor use (CPU) "
+                 "and graphics card use (GPU). CPU: average of all the computer's cores, as in the system "
+                 "monitor (other programs included). GPU: load of the whole card, not only the game; \"--\" when the system does not report it.",
+        "osd_start": "Already showing when the game starts",
+        "osd_start_d": "When off, the overlay only appears when you use the shortcut below.",
+        "osd_keys": "Show/hide key", "osd_keys_d": "Press while playing to show or hide it.",
+        "osd_pad": "Show/hide buttons",
+        "osd_pad_d": "Tick 2 to 4 buttons. Pressed together, on any controller, they show or hide it.",
+        "updates": "Updates", "upd_check": "Check for updates", "upd_install": "Update now",
+        "upd_page": "Open the download page", "upd_notes": "What's new", "upd_cancel": "Cancel",
+        "upd_auto": "Check for updates on start",
+        "upd_auto_d": "One request to GitHub when the launcher opens, at most every 6 hours. "
+                      "Nothing is installed unless you ask.",
+        "upd_checking": "Checking for updates…", "upd_current": "You already have the latest version (%s).",
+        "upd_available": "New version available: %s", "upd_dev": "Latest published version: %s.",
+        "upd_downloading": "Downloading %s…", "upd_installing": "Installing %s: the launcher will close and open again.",
+        "upd_manual_d": "This install (.tar.gz package or source code) does not update itself: "
+                        "download the new package from the project page. Saves and options are kept.",
+        "upd_self_d": "The launcher downloads the package, verifies it and reopens on the new version. "
+                      "Saves and options are kept.",
+        "upd_running": "Close the game before updating.", "upd_cancelled": "Update cancelled.",
+        "upd_err_net": "Could not reach GitHub. Check your internet connection.",
+        "upd_err_rate": "GitHub is limiting requests from this address for now. Try again later.",
+        "upd_err_http": "GitHub answered with an error. Try again later.",
+        "upd_err_bad": "Unexpected answer from GitHub; nothing was installed.",
+        "upd_err_hash": "The downloaded file does not match the release; nothing was installed. Try again.",
+        "upd_err_write": "Could not write the update: ",
+        "upd_err_noasset": "This version has no package for your install. Download it from the project page.",
         "save_folder": "Save folder", "open_folder": "Open folder", "backup": "Back up",
         "export": "Export .zip…", "import": "Import .zip…", "no_saves": "No saves yet.",
         "save_list": "Saves found", "backup_done": "Backup written to: ",
@@ -258,11 +419,6 @@ STR = {
             "If the game freezes, wait about 10 seconds before closing: the log records where it stopped.",
     },
 }
-
-KEYMAP = [("Enter", "START"), ("Backspace", "BACK"), ("Z / X / C / V", "A / B / X / Y"),
-          ("↑ ↓ ← →", "D-pad"), ("W A S D", "L stick"), ("I J K L", "R stick"),
-          ("Q / E", "White / Black"), ("1 / 3", "L / R trigger"), ("Shift / Ctrl", "L3 / R3")]
-
 
 def find_ci(folder: Path, name: str):
     """Arquivo `name` em `folder`, sem diferenciar maiusculas (FATX)."""
@@ -307,7 +463,27 @@ class Backend(QObject):
             self.cfg["renderer"] = "vulkan"
         if self.cfg["renderer"] not in ("opengl", "vulkan"):
             self.cfg["renderer"] = "opengl"     # "gpu" das versoes ate 0.1.0
+        for k in COMBO_KEYS:
+            self.cfg[k] = clean_combo(self.cfg[k], key_valid)
+        for k in COMBO_PADS:
+            self.cfg[k] = clean_combo(self.cfg[k], dict(PAD_BUTTONS).__contains__)
+        self.cfg["osd"] = bool(self.cfg["osd"])
+        if not isinstance(self.cfg["display"], str):
+            self.cfg["display"] = ""
+        if self.cfg["pads"] not in (1, 2, 3, 4):
+            self.cfg["pads"] = 4
+        km = self.cfg["keymap"] if isinstance(self.cfg["keymap"], dict) else {}
+        self.cfg["keymap"] = {c: k for c, k in km.items()
+                              if c in KEYMAP_DEFAULT and isinstance(k, str) and key_valid(k) and k != KEYMAP_DEFAULT[c]}
+        self.cfg["check_updates"] = bool(self.cfg["check_updates"])
         self._vulkan = self._detect_vulkan()
+        self._upd_kind = updater.install_kind(FROZEN, PACKAGED, APP)
+        self._upd = {"state": "idle", "tag": "", "page": updater.RELEASES_PAGE, "progress": 0.0, "err": ""}
+        self._upd_busy = False
+        self._upd_cancel = False
+        self._updDone.connect(self._upd_finished)
+        self._updProgress.connect(self._upd_set_progress)
+        self._upd_load_cache()
         self.proc = None
         self.log_file = None
         self.last_log = None
@@ -412,10 +588,6 @@ class Backend(QObject):
     def t(self):
         return STR[self._lang()]
 
-    @Property("QVariantList", constant=True)
-    def keymap(self):
-        return [{"key": k, "xbox": x} for k, x in KEYMAP]
-
     @Property(str, constant=True)
     def gpu(self):
         return self._gpu
@@ -485,6 +657,7 @@ class Backend(QObject):
         if key not in DEFAULTS or self.cfg.get(key) == value:
             return
         self.cfg[key] = value
+        self._rev = getattr(self, "_rev", 0) + 1
         self._save()
         if key == "lang":
             self.langChanged.emit()
@@ -493,6 +666,301 @@ class Backend(QObject):
     @Slot(QUrl)
     def setGameDir(self, url):
         self.setOpt("game_dir", url.toLocalFile())
+
+    # ── monitor ─────────────────────────────────────────────────────────────
+    @staticmethod
+    def _screens() -> list:
+        app = QGuiApplication.instance()
+        return list(app.screens()) if app else []
+
+    @Slot(result="QVariantList")
+    def displays(self):
+        """Monitores ligados agora: [{name, label}], na ordem do sistema."""
+        out = []
+        for i, s in enumerate(self._screens()):
+            g, r = s.geometry(), s.devicePixelRatio()
+            model = " ".join(x for x in (s.manufacturer(), s.model()) if x).strip()
+            out.append({"name": s.name(),
+                        "label": "%d: %s (%d×%d)" % (i + 1, model if model and model != s.name()
+                                                     else s.name(), round(g.width() * r), round(g.height() * r))})
+        return out
+
+    def _display_env(self) -> dict:
+        """As pistas que o jogo aceita para achar o monitor (toolkit, patch 4.19).
+
+        O Qt daqui e a SDL do jogo nao combinam em nome, em numeracao nem na origem
+        das coordenadas (X11: canto do conjunto; Windows e Wine: canto do monitor
+        principal; Wayland nem tem principal). O que os dois veem igual e a
+        DISPOSICAO dos monitores, entao vai: a posicao na ordem esquerda->direita,
+        cima->baixo, e um ponto medido a partir do canto do retangulo que envolve
+        todos os monitores. Nome e indice vao juntos, para quando casarem."""
+        name, screens = self.cfg["display"], self._screens()
+        geo = [s.geometry() for s in screens]
+        for i, s in enumerate(screens):
+            if name and s.name() == name:
+                g = geo[i]
+                order = sorted(range(len(geo)), key=lambda j: (geo[j].x(), geo[j].y(), j))
+                x0, y0 = min(r.x() for r in geo), min(r.y() for r in geo)
+                return {"RECOMP_DISPLAY_NAME": name, "RECOMP_DISPLAY": str(i),
+                        "RECOMP_DISPLAY_RANK": "%d/%d" % (order.index(i), len(geo)),
+                        "RECOMP_DISPLAY_AT": "%d,%d" % (g.x() + g.width() // 2 - x0, g.y() + g.height() // 2 - y0)}
+        return {}                       # automatico, ou o monitor escolhido nao esta ligado
+
+    # ── atalho de fechar o jogo ─────────────────────────────────────────────
+    @Slot(int, result=str)
+    def keyName(self, key):
+        """Tecla do Qt -> nome que o jogo entende; "" se nao serve para o atalho."""
+        if key in KEY_NAMES:
+            return KEY_NAMES[key]
+        if int(Qt.Key_A) <= key <= int(Qt.Key_Z) or int(Qt.Key_0) <= key <= int(Qt.Key_9):
+            return chr(key).lower()
+        if int(Qt.Key_F1) <= key <= int(Qt.Key_F12):
+            return "f%d" % (key - int(Qt.Key_F1) + 1)
+        return ""
+
+    @Slot("QVariantList", result=str)
+    def keysLabel(self, names):
+        return " + ".join(key_label(str(n)) for n in names)
+
+    # ── teclas do teclado-controle ──────────────────────────────────────────
+    def _keymap(self) -> dict:
+        return dict(KEYMAP_DEFAULT, **self.cfg["keymap"])
+
+    @Slot(result="QVariantList")
+    def keymapRows(self):
+        km = self._keymap()
+        return [{"control": c, "label": lb, "key": key_label(km[c]), "changed": km[c] != KEYMAP_DEFAULT[c]}
+                for c, lb, _ in KEYMAP_ROWS]
+
+    @Slot(str, str)
+    def setKeymap(self, control, name):
+        """Poe a tecla `name` no comando; se ela ja era de outro, os dois trocam."""
+        if control not in KEYMAP_DEFAULT or not key_valid(name):
+            return
+        km = self._keymap()
+        for other, k in km.items():
+            if k == name and other != control:
+                km[other] = km[control]
+        km[control] = name
+        self.setOpt("keymap", {c: k for c, k in km.items() if k != KEYMAP_DEFAULT[c]})
+
+    @Slot()
+    def resetKeymap(self):
+        self.setOpt("keymap", {})
+
+    @Slot(str, "QVariantList")
+    def setComboKeys(self, opt, names):
+        if opt not in COMBO_KEYS:
+            return
+        names = [str(n) for n in names if key_valid(str(n))]
+        names = list(dict.fromkeys(names))[:QUIT_MAX]
+        names.sort(key=lambda n: KEY_MODS.index(n) if n in KEY_MODS else len(KEY_MODS))     # Ctrl + Q, nao Q + Ctrl
+        self.setOpt(opt, "+".join(names))
+
+    @Property(int, notify=changed)
+    def rev(self):
+        """Muda a cada opcao gravada: o QML refaz o que le por funcao (comboLabel...)."""
+        return getattr(self, "_rev", 0)
+
+    @Slot(str, result=str)
+    def comboLabel(self, opt):
+        k = self.cfg.get(opt, "") if opt in COMBO_KEYS else ""
+        return self.keysLabel(k.split("+")) if k else STR[self._lang()]["quit_off"]
+
+    @Slot(str, result="QVariantList")
+    def padButtons(self, opt):
+        on = self.cfg.get(opt, "").split("+") if opt in COMBO_PADS else []
+        return [{"name": n, "label": lb, "on": n in on} for n, lb in PAD_BUTTONS]
+
+    @Slot(str, result=int)
+    def padCount(self, opt):
+        return len([n for n in self.cfg.get(opt, "").split("+") if n]) if opt in COMBO_PADS else 0
+
+    @Slot(str, str)
+    def togglePad(self, opt, name):
+        if opt not in COMBO_PADS:
+            return
+        on = [n for n in self.cfg[opt].split("+") if n]
+        if name in on:
+            on.remove(name)
+        elif name in dict(PAD_BUTTONS) and len(on) < QUIT_MAX:
+            on.append(name)
+        self.setOpt(opt, "+".join(n for n, _ in PAD_BUTTONS if n in on))
+
+    # ── atualizacao (launcher/updater.py) ───────────────────────────────────
+    updChanged = Signal()
+    _updDone = Signal(str, object)
+    _updProgress = Signal(float)
+
+    def _upd_cache_path(self) -> Path:
+        return DATA / "config" / "update.json"
+
+    def _upd_load_cache(self):
+        """A ultima resposta do GitHub: mostra "nova versao" sem consultar de novo."""
+        self._upd_checked = 0.0
+        try:
+            c = json.loads(self._upd_cache_path().read_text())
+            self._upd_checked = float(c.get("checked") or 0)
+            tag = str(c.get("tag") or "")
+        except (OSError, ValueError, TypeError, AttributeError):
+            return
+        if updater.is_newer(tag, self.version):
+            self._upd.update(state="available", tag=tag, page=updater.RELEASES_PAGE)
+
+    def _upd_api(self) -> str:
+        # So para os testes, e so para um servidor nesta mesma maquina.
+        api = os.environ.get("DW4_UPDATE_API", "")
+        return api if api.startswith("http://127.0.0.1:") else ""
+
+    @Property(str, notify=updChanged)
+    def updateState(self):
+        return self._upd["state"]
+
+    @Property(float, notify=updChanged)
+    def updateProgress(self):
+        return self._upd["progress"]
+
+    @Property(bool, constant=True)
+    def updateSelf(self):
+        """Esta instalacao se atualiza sozinha (AppImage, .zip de Windows)."""
+        return self._upd_kind != "manual"
+
+    @Property(str, notify=updChanged)
+    def updateText(self):
+        t, u = STR[self._lang()], self._upd
+        st = u["state"]
+        if st == "error":
+            return u["err"]
+        if st == "available" and updater.parse_version(self.version) is None:
+            return t["upd_dev"] % u["tag"]
+        if st in ("current", "available", "downloading", "installing"):
+            text = t["upd_" + st] % (self.version if st == "current" else u["tag"])
+            return text + ("  %d%%" % round(u["progress"] * 100) if st == "downloading" else "")
+        return t["upd_checking"] if st == "checking" else ""
+
+    def _upd_set(self, **kw):
+        self._upd.update(kw)
+        self.updChanged.emit()
+
+    def _upd_set_progress(self, v):
+        if self._upd["state"] == "downloading":
+            self._upd_set(progress=v)
+
+    def _upd_error(self, e) -> str:
+        t = STR[self._lang()]
+        text = t.get("upd_err_" + e.code, t["upd_err_bad"])
+        return text + scrub(e.detail) if e.code == "write" else text
+
+    def autoCheckUpdate(self):
+        """Ao abrir: so no pacote, com a opcao ligada e se a ultima consulta e antiga."""
+        if (PACKAGED and self.cfg["check_updates"] and updater.parse_version(self.version)
+                and time.time() - self._upd_checked >= UPDATE_EVERY):
+            self.checkUpdate()
+
+    @Slot()
+    def checkUpdate(self):
+        if self._upd_busy:
+            return
+        import threading
+        self._upd_busy = True
+        self._upd_set(state="checking", err="")
+        kind, api = self._upd_kind, self._upd_api()
+
+        def work():
+            try:
+                self._updDone.emit("checked", updater.check(kind, api))
+            except updater.UpdateError as e:
+                self._updDone.emit("error", e)
+        threading.Thread(target=work, daemon=True).start()
+
+    @Slot()
+    def installUpdate(self):
+        """Baixa, confere e instala; no fim o launcher fecha e o novo abre."""
+        t = STR[self._lang()]
+        if self._upd_busy:
+            return
+        if self.proc is not None:
+            self.message.emit(t["upd_running"])
+            return
+        if self._upd_kind == "manual":
+            self.openUpdatePage()
+            return
+        import threading
+        self._upd_busy, self._upd_cancel = True, False
+        self._upd_set(state="downloading", progress=0.0, err="")
+        kind, api, version = self._upd_kind, self._upd_api(), self.version
+        current = Path(os.path.realpath(os.environ.get("APPIMAGE") or "."))
+
+        def work():
+            try:
+                rel = updater.check(kind, api)
+                if not rel.asset_name:
+                    raise updater.UpdateError("noasset")
+                if not updater.is_newer(rel.tag, version):
+                    self._updDone.emit("checked", rel)
+                    return
+                self._updDone.emit("tag", rel)
+                cancelled = lambda: self._upd_cancel        # noqa: E731
+                if kind == "appimage":
+                    got = updater.download(rel, current.parent / (".dw4-update-" + rel.asset_name),
+                                           self._updProgress.emit, cancelled)
+                    self._updDone.emit("installing", rel)
+                    self._updDone.emit("appimage", updater.apply_appimage(got, current, version, rel.tag))
+                else:
+                    work_dir = DATA / "update"
+                    got = updater.download(rel, work_dir / rel.asset_name, self._updProgress.emit, cancelled)
+                    self._updDone.emit("installing", rel)
+                    root = updater.stage_windows(got, work_dir / "new")
+                    got.unlink(missing_ok=True)
+                    self._updDone.emit("windows", root)
+            except updater.Cancelled:
+                self._updDone.emit("cancelled", None)
+            except updater.UpdateError as e:
+                self._updDone.emit("error", e)
+        threading.Thread(target=work, daemon=True).start()
+
+    @Slot()
+    def cancelUpdate(self):
+        self._upd_cancel = True
+
+    @Slot()
+    def openUpdatePage(self):
+        QDesktopServices.openUrl(QUrl(self._upd["page"] or updater.RELEASES_PAGE))
+
+    def _upd_finished(self, what, arg):
+        t = STR[self._lang()]
+        if what == "tag":                   # o download vai comecar: ja se sabe a versao
+            self._upd_set(tag=arg.tag, page=arg.page or updater.RELEASES_PAGE)
+            return
+        if what == "installing":
+            self._upd_set(state="installing", progress=1.0)
+            return
+        self._upd_busy = False
+        if what == "checked":
+            self._upd_checked = time.time()
+            try:
+                self._upd_cache_path().parent.mkdir(parents=True, exist_ok=True)
+                self._upd_cache_path().write_text(json.dumps({"checked": self._upd_checked, "tag": arg.tag}) + "\n")
+            except OSError:
+                pass
+            newer = updater.is_newer(arg.tag, self.version) or updater.parse_version(self.version) is None
+            self._upd_set(state="available" if newer else "current", tag=arg.tag,
+                          page=arg.page or updater.RELEASES_PAGE)
+        elif what == "error":
+            self._upd_set(state="error", err=self._upd_error(arg))
+        elif what == "cancelled":
+            self._upd_set(state="available")
+            self.message.emit(t["upd_cancelled"])
+        elif what == "appimage":
+            updater.relaunch_appimage(arg)
+            QGuiApplication.quit()
+        elif what == "windows":
+            try:
+                updater.start_windows_install(arg, APP.parent, os.getpid())
+            except OSError as e:
+                self._upd_set(state="error", err=t["upd_err_write"] + scrub(str(e)))
+                return
+            QGuiApplication.quit()
 
     # ── imagem de disco ─────────────────────────────────────────────────────
     isoChanged = Signal()
@@ -565,6 +1033,22 @@ class Backend(QObject):
         c = self.cfg
         env["RECOMP_SAVE_DIR"] = str(self.save_dir())
         env["RECOMP_KEYBOARD"] = "1" if c["keyboard"] else "0"
+        for k in ("RECOMP_DISPLAY_NAME", "RECOMP_DISPLAY", "RECOMP_DISPLAY_RANK", "RECOMP_DISPLAY_AT"):
+            env.pop(k, None)
+        env.update(self._display_env())
+        env["RECOMP_USB_PADS"] = str(int(c["pads"]))        # portas de controle (toolkit, ohci.c)
+        # So os comandos trocados: os outros ficam com o mapa do toolkit (patch 4.18).
+        if c["keymap"]:
+            env["RECOMP_KEYMAP"] = ";".join("%s=%s" % (ctl, TOOLKIT_KEY.get(k, k)) for ctl, k in c["keymap"].items())
+        else:
+            env.pop("RECOMP_KEYMAP", None)
+        # Atalho que fecha o jogo (src/hooks/quit_hotkey.c). Um botao sozinho nao vale.
+        env["DW4_QUIT_KEYS"] = c["quit_keys"] or "off"
+        env["DW4_QUIT_PAD"] = c["quit_pad"] if c["quit_pad"].count("+") >= 1 else "off"
+        # Mostrador de FPS / CPU / GPU (src/hooks/osd.c), com as mesmas regras de atalho.
+        env["DW4_OSD"] = "1" if c["osd"] else "0"
+        env["DW4_OSD_KEYS"] = c["osd_keys"] or "off"
+        env["DW4_OSD_PAD"] = c["osd_pad"] if c["osd_pad"].count("+") >= 1 else "off"
         # Janela do tamanho da resolucao interna (toolkit: RECOMP_WINDOW_SIZE; ele
         # reduz se nao couber no monitor). 480p e 720p abrem no dobro.
         h = int(c["res"]) * (2 if int(c["res"]) < 1080 else 1)
@@ -637,9 +1121,10 @@ class Backend(QObject):
     def _config_header(self) -> str:
         c = self.cfg
         return ("Config: launcher %s | renderer=%s res=%s aspect=%s fps=%s parallel=%s fullscreen=%s vsync=%s "
-                "keyboard=%s | GPU: %s\n"
+                "keyboard=%s pads=%s keymap=%s quit=%s/%s osd=%s,%s/%s | GPU: %s\n"
                 % (self.version, c["renderer"], c["res"], c["aspect"], c["fps"], c["parallel"], c["fullscreen"],
-                   c["vsync"], c["keyboard"], self._gpu))
+                   c["vsync"], c["keyboard"], c["pads"], len(c["keymap"]), c["quit_keys"] or "off", c["quit_pad"] or "off",
+                   c["osd"], c["osd_keys"] or "off", c["osd_pad"] or "off", self._gpu))
 
     @Slot()
     def play(self):
@@ -815,9 +1300,6 @@ class Backend(QObject):
         self.message.emit(t["report_done"] + scrub(str(dest)))
 
 
-sys.path.insert(0, str(HERE))
-
-
 def play_direct() -> int:
     b = Backend()
     if not b.canPlay:
@@ -864,6 +1346,9 @@ def main() -> int:
     if "--selftest" in args:
         assert set(STR["pt"]) == set(STR["en"]), "tabelas de texto diferentes entre idiomas"
         import xiso  # noqa: F401  (confere que o leitor de imagem veio no pacote)
+        import ssl  # noqa: F401  (a atualizacao precisa de HTTPS)
+        assert all(key_valid(k) for k in KEY_NAMES.values())
+        assert all(key_valid(k) for k in KEYMAP_DEFAULT.values())
         exe = backend.exe()
         print("app:", "frozen" if FROZEN else "packaged" if PACKAGED else "source", "| wine:" if WINE else "|", "game exe:", "ok" if exe else "MISSING",
               "| data:", scrub(str(DATA)))
@@ -885,6 +1370,11 @@ def main() -> int:
             finally:
                 app.quit()
         QTimer.singleShot(400, grab)
+    else:
+        if PACKAGED:                    # restos de uma atualizacao anterior (pasta de preparo)
+            import threading
+            threading.Thread(target=updater.cleanup, args=(DATA / "update",), daemon=True).start()
+        QTimer.singleShot(1200, backend.autoCheckUpdate)
     return app.exec()
 
 

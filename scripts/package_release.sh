@@ -80,7 +80,7 @@ WORK="$BUILD/pyinstaller"
 echo "$VERSION" > "$BUILD/VERSION"
 "$PY" -m PyInstaller --noconfirm --clean --log-level WARN --onedir --name dw4-launcher \
     --distpath "$WORK/dist" --workpath "$WORK/work" --specpath "$WORK" \
-    --paths "$ROOT/launcher" --hidden-import xiso \
+    --paths "$ROOT/launcher" --hidden-import xiso --hidden-import updater \
     --add-data "$ROOT/launcher/qml:qml" --add-data "$BUILD/VERSION:." \
     "$ROOT/launcher/dw4_launcher.py"
 cp -r "$WORK/dist/dw4-launcher" "$APPDIR/launcher"

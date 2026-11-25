@@ -544,6 +544,49 @@ jogar e para desenvolver, correções de runtime candidatas a portar e a discuss
   launcher não abre terminal. A janela do OpenGL usa o renderizador padrão da SDL, que
   no Windows é Direct3D por dentro da SDL — o nosso código não usa DirectX.
 
+## Release v0.5.0 (2026-11-25)
+
+Gerado da `main` depois do merge da `DW4R-6`: tudo da seção abaixo. Conferido fora do projeto: o
+AppImage (`--selftest`; jogo iniciado pelo launcher de dentro do pacote, sem janela, até o lobby,
+frames de referência conferem) e o `.zip` de Windows no Wine (o mesmo). Não conferido nos pacotes:
+janela, som, controle; o atualizador rodando de dentro do launcher congelado (só o Python que o
+congela consultou o GitHub); Windows real.
+
+## Atalho de fechar, mostrador de desempenho e atualização pelo launcher (2026-11-25, branch `DW4R-6`, na v0.5.0)
+
+Três funções para a próxima versão. Código em `src/hooks/quit_hotkey.c`, `src/hooks/osd.c`,
+`launcher/updater.py`; opções na tela Controles e na tela Jogar do launcher.
+
+| Função | Padrão | Conferido | Não conferido |
+|---|---|---|---|
+| **Fechar o jogo** por atalho (teclado na hora; controle segurando 1 s) | `Ctrl`+`Q`; `Back`+`Start` | sem janela e com janela num gamescope sem tela, Linux e `.exe` no Wine (`tests/scenarios/quit_*.txt`): fecha com a combinação, não fecha com tecla ou botão sozinho nem com toque curto | controle de verdade; tela cheia num monitor |
+| **Mostrador** de FPS / CPU / GPU | escondido; `F2`; `L3`+`R3` | capturas sem janela em Vulkan e OpenGL, 4:3 / 16:9 / 21:9, boot e lobby; `.exe` no Wine; GPU pela NVML numa NVIDIA no Linux; frames de referência conferem com ele desligado | AMD e Intel; os contadores de GPU do Windows (`pdh.dll`) nunca rodaram; o número da GPU não foi comparado com outra ferramenta |
+| **Atualização** pelos releases do GitHub | consulta ao abrir (no máx. a cada 6 h), instala só a pedido | `scripts/test_updater.py` (servidor local no lugar do GitHub: leitura do release, hash, cancelar, troca do AppImage, `.zip` malicioso, cópia sobre a instalação, fluxo inteiro pelo Backend do Qt); consulta real ao release v0.4.1 pelo Python do pacote de Linux e, no Wine, pelo do pacote de Windows; instalador do Windows no Wine sobre uma cópia do pacote v0.4.1 | uma atualização de verdade entre dois releases; o AppImage se reabrindo; Windows real (arquivos em uso se comportam diferente do Wine); os botões da tela, só capturados fora da tela |
+
+- O launcher só captura teclas e marca botões na simulação fora da tela; ninguém usou a tela de
+  verdade ainda.
+- A v0.4.1 e as anteriores não têm atualizador: a primeira atualização automática só acontece a
+  partir da versão que levar isto.
+- `.tar.gz` de Linux e código-fonte não se atualizam sozinhos (abrem a página do release).
+- **Confirmado pelo usuário jogando (2026-11-25, Linux):** "testado e tudo funcionando" — atalho de
+  fechar, mostrador (com a CPU pela média dos núcleos), teclas trocadas e o jogo com as 4 portas
+  e um controle só. Ele **não testou mais de um controle** (não tinha). Ele não disse quais
+  telas ou combinações usou; a instalação de uma atualização não tem como ter sido exercitada
+  (não existe release mais novo que a v0.4.1), nem Windows real.
+- **Escolha do monitor** (Gráficos → Janela → Monitor; toolkit §4.19): o monitor é passado pela
+  **disposição** (ordem esquerda→direita e ponto relativo ao conjunto), que não depende da origem
+  das coordenadas de cada sistema. Com dois monitores, o usuário confirmou no Linux (sessão
+  Wayland) e no `.exe` pelo Wine ("funcionou", 2026-11-25). Windows real: não testado.
+- **Achado no caminho, aberto:** fechar pela janela (`exit()` com o swapchain vivo) caiu com
+  SIGSEGV dentro do gamescope, 1 vez em 1 (`PORT_NOTES.md` §8). O atalho não usa esse caminho.
+- Patch novo no toolkit: `xbox_InputPadHeld` (`PORT_NOTES.md` §4.17).
+- **Pedidos seguintes do usuário (mesmo dia), implementados sem bateria de testes** (ele avisou que
+  testa): a CPU do mostrador passou a ser a média de todos os núcleos do sistema; as teclas do
+  teclado-controle são trocáveis no launcher (`RECOMP_KEYMAP`, patch §4.18); o jogo passa a
+  enxergar 4 portas de controle (`RECOMP_USB_PADS=4`, opção 1–4 no launcher). Conferido só: o
+  boot até o lobby com 4 portas (`soak.py --golden`), a tela do launcher numa captura e o build de
+  Windows compilando. Não verificado: os três em jogo; multijogador; portas vazias; Wine.
+
 ## Próximos passos
 
 1. Lobby a 60 fps estáveis: agrupar draws com o mesmo estado e evitar um `glBufferData` por draw.

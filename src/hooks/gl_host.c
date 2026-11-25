@@ -533,24 +533,56 @@ static void host_clear(const Nv2aSurface *s, const Nv2aRenderState *rs,
         s_mod->clear(s, rs, flags, argb, zstencil);
 }
 
+/* Mostrador de desempenho (osd.c): um lote 2D a mais, desenhado por cima do
+ * quadro pronto na ultima superficie de tela em que o jogo desenhou (640 de
+ * largura, recorte inteiro -- a mesma regra de ro_is_screen). Entra uma vez
+ * por quadro, antes da leitura de volta (present_sync) ou, se ela nao rodar,
+ * antes do flip. */
+int dw4_osd_batch(const Nv2aSurface *s, const Nv2aRenderState *base, Nv2aBatch *out);
+static Nv2aSurface s_osd_surf;
+static Nv2aRenderState s_osd_state;
+static int s_osd_have, s_osd_done;
+
+static void osd_draw(void)
+{
+    Nv2aBatch b;
+
+    if (s_osd_done || !s_osd_have)
+        return;
+    s_osd_done = 1;
+    if (dw4_osd_batch(&s_osd_surf, &s_osd_state, &b))
+        s_mod->draw(&s_osd_surf, &b);
+}
+
 static void host_draw(const Nv2aSurface *s, const Nv2aBatch *b)
 {
-    if (s_mod && ensure_current())
+    if (s_mod && ensure_current()) {
         s_mod->draw(s, b);
+        if (dw4_osd_visible() && b->state && s->aa_sx && s->aa_sy && s->width / s->aa_sx == 640
+                && s->height / s->aa_sy >= 400 && !s->clip_x && !s->clip_y) {
+            s_osd_surf = *s;
+            s_osd_state = *b->state;
+            s_osd_have = 1;
+        }
+    }
 }
 
 static void host_present_sync(void)
 {
-    if (s_mod && (s_current || !s_mod->needs_gl))
+    if (s_mod && (s_current || !s_mod->needs_gl)) {
+        osd_draw();
         s_mod->present_sync();
+    }
 }
 
 static void host_flip(void)
 {
-    if (s_mod && ensure_current())
+    if (s_mod && ensure_current()) {
+        osd_draw();
         s_mod->flip();
-    else
+    } else
         dw4_frame_note(0, 0);
+    s_osd_have = s_osd_done = 0;
     dw4_fps_limit_tick();
     reload_check();                     /* entre dois frames: nada pendente */
 }
