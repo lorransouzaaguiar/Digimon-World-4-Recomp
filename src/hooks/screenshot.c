@@ -26,6 +26,7 @@
 
 #include "xbox_memory_layout.h"
 #include "dw4_hooks.h"
+#include "host_os.h"
 
 #define SHOT_W 640u
 #define SHOT_H 480u
@@ -353,8 +354,8 @@ static void *ring_dump_thread(void *arg)
         if (access(base, F_OK) != 0)
             break;
     }
-    mkdir(dir, 0755);
-    mkdir(base, 0755);
+    dw4_os_mkdir(dir);
+    dw4_os_mkdir(base);
     snprintf(path, sizeof path, "%s/info.txt", base);
     info = fopen(path, "w");
     for (unsigned i = 0; i < s_ring_count; i++) {

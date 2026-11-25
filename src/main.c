@@ -1,5 +1,5 @@
 /**
- * Digimon World 4 (Xbox, NTSC-U) - host nativo Linux
+ * Digimon World 4 (Xbox, NTSC-U) - host nativo (Linux; Windows em andamento)
  *
  * XBE:
  *   Titulo:        DigimonWorld4  (Title ID 0x42410002, engine Alchemy)
@@ -8,8 +8,9 @@
  *                  estaticamente) + CRI Sofdec (secoes PSFD_*)
  *   Kernel thunks: 0x00309BC0 (128 imports)
  *
- * Sequencia de boot (mesma do templates/new-game do xboxrecomp, em POSIX):
- *   1. handler SIGSEGV/SIGBUS -> MMIO emulado (APU/AC97/OHCI) ou crash report
+ * Sequencia de boot (mesma do templates/new-game do xboxrecomp):
+ *   1. falhas de acesso -> MMIO emulado (APU/AC97/OHCI) ou crash report
+ *      (sinais no POSIX, excecoes no Windows: hooks/host_os_*.c)
  *   2. carrega o XBE de ./game_data (busca case-insensitive: FATX != ext4/btrfs)
  *   3. xbox_MemoryLayoutInit  -> 64 MB de RAM do guest + mirrors
  *   4. xbox_kernel_init / xbox_path_init (D:\ -> ./game_data) / bridge
@@ -22,10 +23,8 @@
 
 #define _GNU_SOURCE
 #include <dirent.h>
-#include <execinfo.h>
 #include <limits.h>
 #include <pthread.h>
-#include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -34,14 +33,13 @@
 #include <strings.h>
 #include <sys/stat.h>
 #include <time.h>
-#include <ucontext.h>
-#include <unistd.h>
 
 #include "kernel.h"
 #include "xbox_memory_layout.h"
 #include "video_player.h"     /* xbox_HostWindowMain */
 
 #include "hooks/dw4_hooks.h"
+#include "hooks/host_os.h"
 
 #define DW4_ENTRY_POINT 0x000121A4u
 
@@ -66,49 +64,20 @@ static char s_game_dir[PATH_MAX];
 static char s_save_dir[PATH_MAX];
 static char s_xbe_path[PATH_MAX];
 
-/* ── Crash handler ─────────────────────────────────────────────────────────── */
+/* ── Relatorio de crash: a parte que nao depende do sistema ─────────────────
+ * Quem captura a falha (sinal ou excecao) e o backtrace do host ficam em
+ * hooks/host_os_*.c. O formato das linhas e lido por scripts/triage.py. */
 
-
-static void fault_handler(int sig, siginfo_t *si, void *ucv)
+void dw4_crash_report_regs(void)
 {
-    uintptr_t fault = (uintptr_t)si->si_addr;
-    ucontext_t *uc = (ucontext_t *)ucv;
-    static volatile int in_crash;
-
-    /* Registradores de hardware interceptados (APU, AC'97, USB OHCI): o runtime
-     * decodifica o acesso, emula e avanca o RIP. 1 = tratado, retoma. */
-    if (xbox_PosixMmioFault(ucv, fault))
-        return;
-
-    if (__atomic_exchange_n(&in_crash, 1, __ATOMIC_SEQ_CST)) {
-        /* Falha dentro do proprio relatorio (ou em outra thread): termina. */
-        signal(sig, SIG_DFL);
-        return;
-    }
-
-    /* fprintf nao e async-signal-safe, mas o processo ja esta condenado e o
-     * relatorio e a unica coisa que importa a partir daqui. */
-    uintptr_t rip = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
-    fprintf(stderr,
-            "\n[CRASH] %s em RIP=0x%lx, endereco=0x%lx (VA guest 0x%08X)\n",
-            sig == SIGSEGV ? "SIGSEGV" : sig == SIGBUS ? "SIGBUS" :
-            sig == SIGFPE ? "SIGFPE" : sig == SIGILL ? "SIGILL" :
-            sig == SIGABRT ? "SIGABRT (abort da libc)" : "sinal",
-            (unsigned long)rip, (unsigned long)fault,
-            (uint32_t)(fault - (uintptr_t)g_xbox_mem_offset));
     fprintf(stderr, "  guest: eax=%08X ecx=%08X edx=%08X ebx=%08X\n",
             g_eax, g_ecx, g_edx, g_ebx);
     fprintf(stderr, "         esi=%08X edi=%08X ebp=%08X esp=%08X\n",
             g_esi, g_edi, g_ebp, g_esp);
+}
 
-    /* Funcao do guest: cada sub_XXXXXXXX e um simbolo real (-rdynamic). */
-    {
-        void *pc[1] = { (void *)rip };
-        fprintf(stderr, "  em: ");
-        fflush(stderr);
-        backtrace_symbols_fd(pc, 1, STDERR_FILENO);
-    }
-
+void dw4_crash_report_guest_stack(void)
+{
     /* Cadeia de chamadas do guest: toda chamada recompilada empilha o
      * endereco de retorno do guest, entao a pilha do guest ainda a contem. */
     if (g_xbox_mem_offset && g_esp >= 0x10000 &&
@@ -133,77 +102,7 @@ static void fault_handler(int sig, siginfo_t *si, void *ucv)
     fprintf(stderr, "  ICALLs recentes:");
     for (unsigned k = 0; k < 16; k++)
         fprintf(stderr, " %08X", g_icall_trace[(g_icall_trace_idx + k) & 15]);
-    fprintf(stderr, "\n  backtrace do host:\n");
-    fflush(stderr);
-    {
-        void *bt[48];
-        int n = backtrace(bt, 48);
-        backtrace_symbols_fd(bt, n, STDERR_FILENO);
-    }
-    dw4_hooks_crash_report();
-    fflush(stderr);
-
-    /* Devolve ao handler padrao: a instrucao refaz a falha e gera o core. */
-    signal(sig, SIG_DFL);
-}
-
-/* SIGUSR1: despeja o estado DESTA thread sem derrubar nada. Com
- * scripts/dump_threads.sh (tgkill em cada thread) da para ver onde um jogo
- * travado esta, mesmo com ptrace bloqueado (yama ptrace_scope=1). */
-static void dump_handler(int sig, siginfo_t *si, void *ucv)
-{
-    static volatile int lock;
-    ucontext_t *uc = (ucontext_t *)ucv;
-    void *pc[1] = { (void *)uc->uc_mcontext.gregs[REG_RIP] };
-    void *bt[40];
-    int n;
-
-    (void)sig; (void)si;
-    while (__atomic_exchange_n(&lock, 1, __ATOMIC_ACQUIRE))
-        ;
-    fprintf(stderr, "\n[DUMP] thread %d  guest esp=%08X eax=%08X ecx=%08X "
-                    "esi=%08X edi=%08X ebp=%08X\n  em: ",
-            (int)gettid(), g_esp, g_eax, g_ecx, g_esi, g_edi, g_ebp);
-    fflush(stderr);                 /* stderr tem buffer; o backtrace vai direto ao fd */
-    backtrace_symbols_fd(pc, 1, STDERR_FILENO);
-    if (g_xbox_mem_offset && g_esp >= 0x10000) {
-        const uint32_t *sp =
-            (const uint32_t *)((uintptr_t)g_xbox_mem_offset + g_esp);
-        int shown = 0;
-        fprintf(stderr, "  retornos do guest:");
-        for (int i = 0; i < 400 && shown < 20; i++)
-            if (sp[i] > g_xbox_code_lo && sp[i] < g_xbox_code_hi) {
-                fprintf(stderr, " %08X", sp[i]);
-                shown++;
-            }
-        fprintf(stderr, "\n");
-    }
-    fflush(stderr);                 /* antes das escritas diretas no fd */
-    n = backtrace(bt, 40);
-    backtrace_symbols_fd(bt, n, STDERR_FILENO);
-    __atomic_store_n(&lock, 0, __ATOMIC_RELEASE);
-}
-
-static void install_fault_handler(void)
-{
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_sigaction = fault_handler;
-    sa.sa_flags = SA_SIGINFO | SA_NODEFER;
-    sigemptyset(&sa.sa_mask);
-    sigaction(SIGSEGV, &sa, NULL);
-    sigaction(SIGBUS, &sa, NULL);
-    sigaction(SIGFPE, &sa, NULL);
-    sigaction(SIGILL, &sa, NULL);
-    /* abort() da glibc ("malloc(): unaligned tcache chunk detected" etc.):
-     * sem isto o processo morria sem dizer em que funcao do guest estava. */
-    sigaction(SIGABRT, &sa, NULL);
-
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_sigaction = dump_handler;
-    sa.sa_flags = SA_SIGINFO | SA_RESTART;
-    sigemptyset(&sa.sa_mask);
-    sigaction(SIGUSR1, &sa, NULL);
+    fprintf(stderr, "\n");
 }
 
 /* ── Arquivos ──────────────────────────────────────────────────────────────── */
@@ -238,35 +137,28 @@ static bool find_nocase(const char *dir, const char *name, char *out, size_t n)
  * lado do executavel / na raiz do projeto. Sempre resolvido para absoluto. */
 static bool resolve_game_dir(int argc, char **argv)
 {
-    char exe[PATH_MAX] = "", cand[PATH_MAX], cand2[PATH_MAX];
+    char exe[PATH_MAX] = "", cand[PATH_MAX + 16], cand2[PATH_MAX + 16];
     const char *tries[6];
     int n = 0;
-    ssize_t len = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
 
     if (argc > 1 && argv[1][0] != '-')
         tries[n++] = argv[1];
     if (getenv("DW4_GAME_DIR"))
         tries[n++] = getenv("DW4_GAME_DIR");
     tries[n++] = "game_data";
-    if (len > 0) {
-        char *slash;
-        exe[len] = '\0';
-        slash = strrchr(exe, '/');
-        if (slash) {
-            *slash = '\0';
-            /* Pacote de release: game_data/ ao lado do executavel. */
-            snprintf(cand2, sizeof(cand2), "%s/game_data", exe);
-            tries[n++] = cand2;
-            snprintf(cand, sizeof(cand), "%s/../game_data", exe);
-            tries[n++] = cand;
-        }
+    if (dw4_os_exe_dir(exe, sizeof(exe))) {
+        /* Pacote de release: game_data/ ao lado do executavel. */
+        snprintf(cand2, sizeof(cand2), "%s/game_data", exe);
+        tries[n++] = cand2;
+        snprintf(cand, sizeof(cand), "%s/../game_data", exe);
+        tries[n++] = cand;
     }
 #ifdef DW4_PROJECT_ROOT          /* so no build de desenvolvimento */
     tries[n++] = DW4_PROJECT_ROOT "/game_data";
 #endif
 
     for (int i = 0; i < n; i++) {
-        if (is_dir(tries[i]) && realpath(tries[i], s_game_dir))
+        if (is_dir(tries[i]) && dw4_os_abspath(tries[i], s_game_dir, sizeof(s_game_dir)))
             return true;
     }
     return false;
@@ -394,7 +286,7 @@ int main(int argc, char **argv)
             pthread_detach(t);
     }
 
-    printf("=== Digimon World 4 - recompilacao estatica (Linux nativo) ===\n");
+    printf("=== Digimon World 4 - recompilacao estatica (port nativo) ===\n");
 
     if (!resolve_game_dir(argc, argv)) {
         fprintf(stderr, "[BOOT] diretorio do jogo nao encontrado. Use "
@@ -410,30 +302,27 @@ int main(int argc, char **argv)
     if (getenv("RECOMP_SAVE_DIR")) {
         snprintf(s_save_dir, sizeof(s_save_dir), "%s", getenv("RECOMP_SAVE_DIR"));
     } else {
-        char parent[PATH_MAX];
+        char parent[PATH_MAX + 8];
 #ifndef DW4_PROJECT_ROOT
         /* Pacote de release: saves ao lado do executavel, mesmo que game_data
          * seja um link para outro lugar. */
         char exe[PATH_MAX] = "";
-        ssize_t el = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
-        char *sl = el > 0 ? (exe[el] = '\0', strrchr(exe, '/')) : NULL;
-        if (sl) {
-            *sl = '\0';
+        if (dw4_os_exe_dir(exe, sizeof(exe))) {
             snprintf(parent, sizeof(parent), "%s", exe);
         } else
 #endif
         snprintf(parent, sizeof(parent), "%s/..", s_game_dir);
-        if (!realpath(parent, s_save_dir))
+        if (!dw4_os_abspath(parent, s_save_dir, sizeof(s_save_dir)))
             snprintf(s_save_dir, sizeof(s_save_dir), "%s", s_game_dir);
         strncat(s_save_dir, "/save_data",
                 sizeof(s_save_dir) - strlen(s_save_dir) - 1);
     }
-    mkdir(s_save_dir, 0755);
+    dw4_os_mkdir(s_save_dir);
 
     printf("[BOOT] D:\\ -> %s\n[BOOT] saves -> %s\n", s_game_dir, s_save_dir);
 
     dw4_hooks_set_env_defaults();
-    install_fault_handler();
+    dw4_os_install_crash_handlers();
 
     return xbox_HostWindowMain(guest_main);
 }

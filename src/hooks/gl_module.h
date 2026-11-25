@@ -33,7 +33,14 @@ typedef struct {
     void (*present_sync)(void);
 } Dw4GlModule;
 
-/* Exportado por libdw4_gl.so e por libdw4_vk.so. */
+/* Exportado por libdw4_gl.so e por libdw4_vk.so. Com DW4_STATIC_RENDERERS
+ * (Windows) os dois renderizadores ficam dentro do executavel e a entrada de
+ * cada um ganha um nome proprio. */
+#if defined(DW4_STATIC_RENDERERS)
+const Dw4GlModule *dw4_gl_module_gl(void);
+const Dw4GlModule *dw4_gl_module_vk(void);
+#else
 const Dw4GlModule *dw4_gl_module(void);
+#endif
 
 #endif /* DW4_GL_MODULE_H */

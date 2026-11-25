@@ -462,6 +462,71 @@ jogar e para desenvolver, correções de runtime candidatas a portar e a discuss
   de falhas de MMIO para aarch64 (o nosso é x86-64); BLiNX 2 e Def Jam já rodam em macOS com o
   mesmo toolkit (`docs/REFERENCIAS.md`).
 
+## Port para Windows (branch `DW4R-5`, iniciado em 2026-11-25) — EM ANDAMENTO
+
+- **Decisão:** Vulkan no Windows (mesmo `nv2a_vk_backend.c` e mesmos shaders); D3D11 fica para
+  depois, se um dia fizer sentido. Desenvolvimento por compilação cruzada no Linux (MinGW-w64) e
+  teste no Wine/Proton; Windows de verdade só para a conferência final.
+- **Funciona (2026-11-25):** `scripts/build_win.sh` gera `build-win/dw4_recomp.exe` (MinGW GCC
+  16.2) e `scripts/soak.py --wine --golden` passa: no Wine 11.22, sem tela, o `.exe` faz o boot,
+  cria o dispositivo Vulkan (RTX 5070), roda o roteiro até o lobby a ~59 fps e os 4 frames de
+  referência conferem. O `.exe` não importa nenhuma DLL do DirectX (só `SDL2.dll`, `vulkan-1.dll`,
+  `KERNEL32`, `SHELL32`, `WINMM` e a CRT universal).
+- **Como:** `build_win.sh` baixa o SDL2 2.32.10 para MinGW (SHA-256 fixo) e gera a biblioteca de
+  importação da `vulkan-1.dll` dos cabeçalhos em `third_party/Vulkan-Headers`, tudo em
+  `tools/win-deps/`. O que depende do sistema saiu de `main.c`, `gl_host.c` e `stall_watch.c` para
+  `src/hooks/host_os.h` (`host_os_posix.c`, `host_os_win32.c`). No Windows o renderizador Vulkan
+  entra no executável (`DW4_STATIC_RENDERERS`, sem recarga a quente) e o toolkit usa SDL2 para
+  janela, controle e áudio (`XBOXRECOMP_SDL_HOST`, `PORT_NOTES.md` §4.16).
+- **Com janela no Wine (usuário, 2026-11-25):** jogou lobby, Central Area, liberou o Death Valley e
+  fez o tutorial, a 30 fps (`DW4_FPS_LIMIT=30`): imagem sem defeito novo (só o já conhecido chão que
+  escurece), som normal (SDL2/WASAPI), controle de PS4 funcionando. No log: swapchain recriado ~25
+  vezes ao redimensionar e ida e volta da tela cheia (2560x1366) sem erro; saída limpa ao fechar a
+  janela. Saves em pasta separada (`build-win/save_data`).
+- **Launcher com o build de Windows:** `./launcher.sh --wine` (só a partir do código) usa o launcher
+  do Linux para iniciar `build-win/dw4_recomp.exe` no Wine, com as opções de vídeo salvas; força
+  Vulkan, prefixo em `tools/win-deps/wineprefix`, saves em `build-win/save_data`. É ferramenta de
+  desenvolvimento, não o launcher de Windows (que não existe ainda). Só o `--selftest --wine` rodou.
+- **1440p 16:9 a 60 fps pelo `./launcher.sh --wine` (usuário, 2026-11-25):** estável no geral;
+  Central Area cai a ~55 fps no trecho mais pesado e o Death Valley tem engasgos curtos até ~45 fps.
+  No log (`logs/run-20261125-143212.log`), médias de 5 s: mediana 59,99, mínima 56,39 (os 45 são
+  mais curtos que a janela de 5 s); nos quadros pesados o jogo passa ~9 ms esperando o executor
+  NV2A. No Linux nativo a mesma placa segura 60 nessas áreas. Causa não investigada; não dá para
+  separar ainda o custo do Wine do custo do build de Windows (no roteiro do lobby sem tela o `.exe`
+  no Wine usou 35% de um núcleo contra 28% do build Linux). Descartado: TLS emulado (o MinGW usado
+  tem TLS nativo; não há `__emutls` no `.exe`).
+- **NÃO verificado:** teclado; Proton; Windows real; qualquer placa que não seja NVIDIA; fases além
+  do tutorial; 60 fps com janela. O relatório de crash do Windows (`host_os_win32.c`) nunca foi
+  exercitado.
+- **OpenGL no Windows (2026-11-25):** os dois renderizadores ficam dentro do `.exe`
+  (`DW4_STATIC_RENDERERS`); o contexto 3.3 core é WGL sobre uma janela escondida (`gl_host.c`) e a
+  libepoxy 1.5.10 é compilada do código-fonte pelo `build_win.sh` (meson do `.venv`, SHA-256 fixo) e
+  vai no pacote como `libepoxy-0.dll`. `soak.py --wine --gamescope --opengl --golden` passa (Wine
+  dentro de um gamescope sem tela: sem tela nenhuma o Wine não cria janela, o WGL falha e o jogo cai
+  no Vulkan — o soak agora acusa isso como INCOMPLETO). **Com janela (usuário, 2026-11-25, pelo
+  `./launcher.sh --wine`, 1440p 16:9 a 60 fps): "rodou normal".** No log
+  (`logs/run-20261125-153730.log`): contexto WGL na RTX 5070, imagem 2560x1440, controle de PS4 e
+  áudio WASAPI, nenhum crash, saída limpa; sessão curta (~65 s, 13 medições de fps, mediana 59,3,
+  mínima 44,9), então desempenho em área pesada não foi medido. Causa de um crash achado no caminho: PORT_NOTES §7.11.
+- **Pacote (2026-11-25):** `scripts/package_win.sh vX` gera `dist/…-windows-x86_64.zip` (`.exe` sem
+  símbolos, `SDL2.dll`, `libepoxy-0.dll`, `run.bat` com as opções no começo, README bilíngue,
+  licenças) e guarda o `.exe` com símbolos em `dist/…debug.exe` (não publicar). Barreiras: arquivo
+  do jogo, caminho da máquina de build, DLL fora da lista. O `.exe` do pacote passou no
+  `soak.py --wine --golden` fora do projeto. O `run.bat` em si **não foi executado** (o Wine não
+  tem PowerShell de verdade para o carimbo de hora do log; há reserva com número aleatório).
+- **Release `v0.4.0`** (2026-11-25, publicado como pré-lançamento; a "latest" segue a v0.3.2 até o
+  usuário decidir): primeiro com Linux **e** Windows — AppImage, `.tar.gz` e `.zip` de Windows, um
+  `SHA256SUMS-v0.4.0.txt` só. O AppImage passou fora do projeto (`--selftest` e jogo sem janela até
+  o lobby com os frames de referência, Vulkan e OpenGL); o build de Linux desta versão não foi
+  jogado com janela. O usuário vai testar o `.zip` em Windows 11 real (dual boot) e voltar com os logs.
+- **Ajustes pensados para Windows real, nunca exercitados:** sono do limitador de quadros pelo
+  temporizador de alta resolução do toolkit (`fps_limit.c`); `SDL_WINDOWS_DPI_AWARENESS` para
+  monitores com escala (`host_os_win32.c`).
+- **Falta:** despejo de threads no travamento (`dw4_dump_all_threads` é um aviso no Windows);
+  amostrador de CPU (`prof.c` é só Linux); launcher para Windows (com leitura da `.iso`); o `.exe`
+  é de console (abre um terminal junto). A janela do OpenGL usa o renderizador padrão da SDL, que
+  no Windows é Direct3D por dentro da SDL — o nosso código não usa DirectX.
+
 ## Próximos passos
 
 1. Lobby a 60 fps estáveis: agrupar draws com o mesmo estado e evitar um `glBufferData` por draw.

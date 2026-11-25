@@ -32,6 +32,18 @@ Gera em `dist/`: `DigimonWorld4-Recomp-vX.Y.Z-x86_64.AppImage`,
 na primeira vez e **falha de propósito** se achar arquivo do jogo, caminho da máquina de build ou
 biblioteca que peça glibc acima de 2.38. Não contorne essas barreiras: corrija a causa.
 
+Desde a v0.4.0 o release tem também o pacote de Windows (experimental). Depois do script do Linux
+(a ordem importa: ele recria o arquivo de checksums):
+
+```bash
+scripts/package_win.sh vX.Y.Z      # precisa de mingw-w64-gcc; ver scripts/build_win.sh
+```
+
+Gera `...-windows-x86_64.zip`, acrescenta a linha dele em `SHA256SUMS-vX.Y.Z.txt` e deixa em
+`dist/` o `...windows-x86_64.debug.exe` (com símbolos, **não publicar**). Confira o `.exe` do
+`.zip` fora do projeto: `scripts/soak.py --wine --binary <pasta>/dw4_recomp.exe --golden` e o
+mesmo com `--gamescope --opengl` (com `game_data` ligado por symlink na pasta do pacote).
+
 ## 4. Conferir o pacote fora do projeto
 
 Em uma pasta do scratchpad, com `XDG_DATA_HOME` apontando para lá (não toque nos saves reais):

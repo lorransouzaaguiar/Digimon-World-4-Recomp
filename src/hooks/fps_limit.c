@@ -29,6 +29,7 @@
 #include <time.h>
 
 #include "xbox_memory_layout.h"
+#include "platform/host_time.h"   /* xbox_HostSleepNs */
 #include "dw4_hooks.h"
 
 void dw4_fps_limit_tick(void)
@@ -67,7 +68,15 @@ void dw4_fps_limit_tick(void)
             if (slice.tv_sec > next.tv_sec
                     || (slice.tv_sec == next.tv_sec && slice.tv_nsec >= next.tv_nsec))
                 slice = next;
+#if defined(_WIN32)
+            /* O sono da biblioteca de threads do MinGW pode ter a granularidade
+             * do agendador do Windows (ate 15,6 ms); o do toolkit usa um
+             * temporizador de alta resolucao. */
+            xbox_HostSleepNs((uint64_t)((slice.tv_sec - now.tv_sec) * 1000000000LL
+                                        + (slice.tv_nsec - now.tv_nsec)));
+#else
             clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &slice, NULL);
+#endif
             xbox_Nv2aAckGranted();
             clock_gettime(CLOCK_MONOTONIC, &now);
             if (now.tv_sec > next.tv_sec

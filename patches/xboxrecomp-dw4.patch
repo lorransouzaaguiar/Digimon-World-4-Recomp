@@ -1,8 +1,123 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 6138405..60057a0 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -22,6 +22,24 @@ add_compile_definitions(
+     NOMINMAX
+ )
+ 
++# SDL host on Windows (DW4 port): the window, the pads and the audio device
++# come from SDL2, as on POSIX hosts, instead of Win32 + Direct3D 11 + XInput +
++# XAudio2. For a title that brings its own NV2A back end (nv2a_backend.h) and
++# wants one host path on every system. No effect outside Windows, where SDL2
++# is already the host.
++option(XBOXRECOMP_SDL_HOST "Windows: SDL2 window/input/audio instead of D3D11/XInput/XAudio2" OFF)
++if(XBOXRECOMP_SDL_HOST AND WIN32)
++    add_compile_definitions(XBOXRECOMP_SDL_HOST=1)
++    set(XBR_SDL_HOST ON)
++else()
++    set(XBR_SDL_HOST OFF)
++endif()
++if(WIN32 AND NOT XBR_SDL_HOST)
++    set(XBR_WIN32_HOST ON)      # the native Win32 host layers
++else()
++    set(XBR_WIN32_HOST OFF)
++endif()
++
+ # Option to build examples
+ 
+ # ── Runtime Libraries ─────────────────────────────────────────
+@@ -39,9 +57,9 @@ add_subdirectory(src/kernel)
+ # target before adding xboxrecomp.
+ option(XBOXRECOMP_BUILD_D3D8 "Build the bundled xbox_d3d8 compatibility layer" ON)
+ if(NOT TARGET xbox_d3d8)
+-    if(XBOXRECOMP_BUILD_D3D8)
++    if(XBOXRECOMP_BUILD_D3D8 AND NOT XBR_SDL_HOST)
+         add_subdirectory(src/d3d)
+-    elseif(WIN32)
++    elseif(XBR_WIN32_HOST)
+         message(FATAL_ERROR
+             "XBOXRECOMP_BUILD_D3D8=OFF on Windows requires a replacement xbox_d3d8 target")
+     endif()
+diff --git a/src/apu/CMakeLists.txt b/src/apu/CMakeLists.txt
+index 7e96f14..2c9460d 100644
+--- a/src/apu/CMakeLists.txt
++++ b/src/apu/CMakeLists.txt
+@@ -35,7 +35,12 @@ if(MSVC)
+     )
+ endif()
+ 
+-if(WIN32)
++if(WIN32 AND XBR_SDL_HOST)
++    # XBOXRECOMP_SDL_HOST: the SDL2 device (apu_sdl2.c); winmm stays for the
++    # waveOut fallback in apu_core.c.
++    find_package(SDL2 REQUIRED)
++    target_link_libraries(xbox_apu PRIVATE platform kernel32 winmm SDL2::SDL2)
++elseif(WIN32)
+     # xaudio2_8 for XAudio2Create, which apu_xaudio2.c calls directly.
+     # It was missing: nothing had ever referenced this library from a linked
+     # target, so the archive was built and never pulled in, and the first
+diff --git a/src/apu/apu_sdl2.c b/src/apu/apu_sdl2.c
+index 7eca83d..11e199c 100644
+--- a/src/apu/apu_sdl2.c
++++ b/src/apu/apu_sdl2.c
+@@ -21,7 +21,7 @@
+ #include <string.h>
+ #include "apu_xaudio2.h"
+ 
+-#if !defined(_WIN32)
++#if !defined(_WIN32) || defined(XBOXRECOMP_SDL_HOST)
+ 
+ #include <SDL.h>
+ #include <time.h>
+diff --git a/src/apu/apu_xaudio2.c b/src/apu/apu_xaudio2.c
+index e725646..089b9d1 100644
+--- a/src/apu/apu_xaudio2.c
++++ b/src/apu/apu_xaudio2.c
+@@ -14,7 +14,7 @@
+ 
+ /* The XAudio2 backend is Windows-only. On POSIX hosts apu_sdl2.c provides
+  * the same xa2_* functions over SDL2. */
+-#if defined(_WIN32)
++#if defined(_WIN32) && !defined(XBOXRECOMP_SDL_HOST)
+ 
+ #define COBJMACROS
+ #include <windows.h>
+diff --git a/src/input/CMakeLists.txt b/src/input/CMakeLists.txt
+index ae6228d..2f93e34 100644
+--- a/src/input/CMakeLists.txt
++++ b/src/input/CMakeLists.txt
+@@ -12,7 +12,7 @@ target_include_directories(xbox_input PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+ add_subdirectory(mapping)
+ target_link_libraries(xbox_input PUBLIC xbox_input_map)
+ 
+-if(WIN32)
++if(XBR_WIN32_HOST)
+     # Mouse+keyboard pad (RECOMP_MKB) reads Win32 raw input.
+     target_sources(xbox_input PRIVATE mkb_input.c)
+     # mingw-w64's libxinput.a imports XINPUT1_3.dll, the DirectX June 2010
 diff --git a/src/input/xinput_device.c b/src/input/xinput_device.c
-index 5175387..1a8bfe2 100644
+index 5175387..8ed4922 100644
 --- a/src/input/xinput_device.c
 +++ b/src/input/xinput_device.c
-@@ -219,6 +219,7 @@ static void refresh_controllers_locked(void)
+@@ -49,7 +49,7 @@ static void keyboard_merge(XBOX_INPUT_STATE *pState)
+ }
+ 
+ /* ======================================================================== */
+-#if defined(_WIN32)
++#if defined(_WIN32) && !defined(XBOXRECOMP_SDL_HOST)
+ /* ====================  XInput backend  ================================== */
+ /* ======================================================================== */
+ 
+@@ -176,6 +176,7 @@ DWORD xbox_InputGetCapabilities(DWORD dwPort, DWORD dwFlags, XBOX_INPUT_CAPABILI
+ /* ======================================================================== */
+ 
+ #include <SDL.h>
++#include <stdio.h>
+ 
+ static SDL_GameController *g_pads[XBOX_MAX_CONTROLLERS];
+ static BOOL  g_controller_connected[XBOX_MAX_CONTROLLERS];
+@@ -219,6 +220,7 @@ static void refresh_controllers_locked(void)
              SDL_GameControllerClose(g_pads[slot]);
              g_pads[slot] = NULL;
              g_controller_connected[slot] = FALSE;
@@ -10,7 +125,7 @@ index 5175387..1a8bfe2 100644
          }
      }
  
-@@ -242,16 +243,38 @@ static void refresh_controllers_locked(void)
+@@ -242,16 +244,38 @@ static void refresh_controllers_locked(void)
          if (controller) {
              g_pads[slot] = controller;
              g_controller_connected[slot] = TRUE;
@@ -52,10 +167,16 @@ index 5175387..1a8bfe2 100644
      }
      g_controller_connected[port] =
 diff --git a/src/input/xinput_xbox.h b/src/input/xinput_xbox.h
-index 260fa3f..2650835 100644
+index 260fa3f..e05f9fb 100644
 --- a/src/input/xinput_xbox.h
 +++ b/src/input/xinput_xbox.h
-@@ -114,6 +114,10 @@ DWORD xbox_InputGetCapabilities(DWORD dwPort, DWORD dwFlags, XBOX_INPUT_CAPABILI
+@@ -109,11 +109,15 @@ BOOL xbox_InputIsConnected(DWORD dwPort);
+  */
+ DWORD xbox_InputGetCapabilities(DWORD dwPort, DWORD dwFlags, XBOX_INPUT_CAPABILITIES *pCaps);
+ 
+-#if !defined(_WIN32)
++#if !defined(_WIN32) || defined(XBOXRECOMP_SDL_HOST)
+ /* The POSIX SDL presenter owns event pumping while its main-thread window is
   * active, and keeps SDL alive at shutdown while controller handles are open. */
  void xbox_InputSetMainPump(int on);
  int xbox_InputAnyOpen(void);
@@ -1263,19 +1384,59 @@ index 1f9836e..1a39f42 100644
          goto undecoded;
      }
  
+diff --git a/src/video/CMakeLists.txt b/src/video/CMakeLists.txt
+index 3fafbe7..cc10be1 100644
+--- a/src/video/CMakeLists.txt
++++ b/src/video/CMakeLists.txt
+@@ -14,7 +14,7 @@ target_link_libraries(xbox_video PUBLIC xbox_input xbox_nv2a)
+ if(TARGET xbox_d3d8)
+     target_link_libraries(xbox_video PUBLIC xbox_d3d8)
+ endif()
+-if(WIN32)
++if(XBR_WIN32_HOST)
+     # gpu_present.c: the framebuffer window's D3D11 presenter.
+     target_sources(xbox_video PRIVATE gpu_present.c)
+     target_link_libraries(xbox_video PUBLIC mfplat mfreadwrite mfuuid mf ole32
+diff --git a/src/video/fb_present.c b/src/video/fb_present.c
+index cee70c0..fb823d6 100644
+--- a/src/video/fb_present.c
++++ b/src/video/fb_present.c
+@@ -24,7 +24,7 @@
+  */
+ #include <stdint.h>
+ 
+-#if defined(_WIN32)
++#if defined(_WIN32) && !defined(XBOXRECOMP_SDL_HOST)
+ #include <windows.h>
+ #include <stdio.h>
+ #include <stdlib.h>
 diff --git a/src/video/fb_present_sdl.c b/src/video/fb_present_sdl.c
-index b9b8c3e..7794f85 100644
+index b9b8c3e..bef99b2 100644
 --- a/src/video/fb_present_sdl.c
 +++ b/src/video/fb_present_sdl.c
-@@ -36,6 +36,7 @@
- #if !defined(_WIN32)
+@@ -33,16 +33,19 @@
+  * RECOMP_WINDOW_SCALE=<n> sizes the window (default 2);
+  * RECOMP_FULLSCREEN=1 starts in borderless desktop fullscreen.
+  */
+-#if !defined(_WIN32)
++#if !defined(_WIN32) || defined(XBOXRECOMP_SDL_HOST)
  
  #include <SDL.h>
 +#include <SDL_vulkan.h>
  #include <pthread.h>
  #include <sched.h>
  #include <stdint.h>
-@@ -60,6 +61,7 @@ struct fb_slot {
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+-#include <sys/resource.h>
++#if !defined(_WIN32)
++#include <sys/resource.h>   /* the main thread's stack limit */
++#endif
+ #include <time.h>
+ 
+ #include "video_player.h"
+@@ -60,6 +63,7 @@ struct fb_slot {
      uint8_t *px;
      size_t   cap;
      uint32_t bpp;
@@ -1283,7 +1444,7 @@ index b9b8c3e..7794f85 100644
  };
  
  /* What the window takes from SDL, and gives back on every way out. */
-@@ -103,6 +105,8 @@ void xbox_FramebufferWindowStart(void) {}
+@@ -103,6 +107,8 @@ void xbox_FramebufferWindowStart(void) {}
  
  /* The back slot is filled: make it the ready one. An unshown ready frame is
   * overwritten (dropped), never waited for. */
@@ -1292,7 +1453,7 @@ index b9b8c3e..7794f85 100644
  static void publish(uint32_t bpp)
  {
      s_slot[s_back].bpp = bpp;          /* only this thread touches s_back */
-@@ -115,7 +119,12 @@ static void publish(uint32_t bpp)
+@@ -115,7 +121,12 @@ static void publish(uint32_t bpp)
      }
      pthread_mutex_unlock(&s_lock);
  
@@ -1306,7 +1467,7 @@ index b9b8c3e..7794f85 100644
      if (!__atomic_exchange_n(&s_wake_pending, 1, __ATOMIC_ACQ_REL)) {
          SDL_Event ev;
          memset(&ev, 0, sizeof ev);
-@@ -127,6 +136,122 @@ static void publish(uint32_t bpp)
+@@ -127,6 +138,122 @@ static void publish(uint32_t bpp)
      }
  }
  
@@ -1429,7 +1590,7 @@ index b9b8c3e..7794f85 100644
  static void present_copy(uint32_t fb_va, uint32_t pitch)
  {
      struct fb_slot *s = &s_slot[s_back];
-@@ -148,6 +273,8 @@ static void present_copy(uint32_t fb_va, uint32_t pitch)
+@@ -148,6 +275,8 @@ static void present_copy(uint32_t fb_va, uint32_t pitch)
      for (y = 0; y < FB_H; y++)
          memcpy(s->px + (size_t)y * FB_W * bpp, src + (size_t)y * pitch,
                 (size_t)FB_W * bpp);
@@ -1438,7 +1599,7 @@ index b9b8c3e..7794f85 100644
      publish(bpp);
  }
  
-@@ -157,7 +284,9 @@ void xbox_FramebufferWindowPresent(uint32_t fb_va, uint32_t pitch)
+@@ -157,7 +286,9 @@ void xbox_FramebufferWindowPresent(uint32_t fb_va, uint32_t pitch)
      /* Dekker-style handshake with the close path: each side stores its own
       * flag and then loads the other's, all seq_cst, so either the window sees
       * this present in flight or this present sees the window closing. */
@@ -1449,7 +1610,27 @@ index b9b8c3e..7794f85 100644
          return;
      __atomic_add_fetch(&s_in_present, 1, __ATOMIC_SEQ_CST);
      if (__atomic_load_n(&s_running, __ATOMIC_SEQ_CST))
-@@ -274,7 +403,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -230,15 +361,19 @@ static int start_guest(void)
+ {
+     pthread_attr_t attr;
+     pthread_t th;
++#if !defined(_WIN32)
+     struct rlimit rl;
++#endif
+     size_t stack = 64u << 20;
+     int rc;
+ 
+     /* At least the main thread's stack (8 MB by default), and generously
+      * more: lifted code recurses on the native stack. */
++#if !defined(_WIN32)
+     if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_cur != RLIM_INFINITY
+             && rl.rlim_cur > stack)
+         stack = (size_t)rl.rlim_cur;
++#endif
+ 
+     pthread_attr_init(&attr);
+     pthread_attr_setstacksize(&attr, stack);
+@@ -274,7 +409,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
      SDL_Window *win;
      SDL_Renderer *ren;
      SDL_Texture *tex = NULL;
@@ -1458,7 +1639,7 @@ index b9b8c3e..7794f85 100644
      uint64_t shown_seq = 0, t_title = 0, flips_title = 0;
      const char *e;
      int vsync, scale, quit = 0, guest_done = 0, dirty = 1;
-@@ -304,13 +433,50 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -304,13 +439,50 @@ int xbox_HostWindowMain(int (*guest_main)(void))
      if (env_on("RECOMP_FULLSCREEN"))
          window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
  
@@ -1514,7 +1695,7 @@ index b9b8c3e..7794f85 100644
          fprintf(stderr, "  [FBWIN] SDL window/renderer failed (%s); running headless\n",
                  SDL_GetError());
          if (win)
-@@ -318,8 +484,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -318,8 +490,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
          SDL_QuitSubSystem(FBWIN_SDL_SUBSYSTEMS);
          return guest_main();
      }
@@ -1526,7 +1707,7 @@ index b9b8c3e..7794f85 100644
          SDL_RendererInfo ri;
          if (SDL_GetRendererInfo(ren, &ri) == 0)
              fprintf(stderr, "  [FBWIN] framebuffer window open (%ux%u, SDL %s renderer,"
-@@ -330,7 +497,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -330,7 +503,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
      s_guest_done_event = SDL_RegisterEvents(2);
      if (s_guest_done_event == (Uint32)-1) {
          fprintf(stderr, "  [FBWIN] SDL_RegisterEvents failed; running headless\n");
@@ -1537,7 +1718,7 @@ index b9b8c3e..7794f85 100644
          SDL_DestroyWindow(win);
          SDL_QuitSubSystem(FBWIN_SDL_SUBSYSTEMS);
          return guest_main();
-@@ -341,12 +510,15 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -341,12 +516,15 @@ int xbox_HostWindowMain(int (*guest_main)(void))
       * game controllers; the input layer then only reads them. */
      xbox_InputSetMainPump(1);
      xbox_InputSdlInit();
@@ -1554,7 +1735,7 @@ index b9b8c3e..7794f85 100644
          SDL_DestroyWindow(win);
          SDL_QuitSubSystem(FBWIN_SDL_SUBSYSTEMS);
          return guest_main();
-@@ -356,7 +528,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -356,7 +534,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
          SDL_Event ev;
          uint64_t seq, now;
          const uint8_t *px = NULL;
@@ -1563,7 +1744,7 @@ index b9b8c3e..7794f85 100644
  
          /* Before the first flip, poll at the display rate: the window then
           * reads the display surface itself. After, the flip's event wakes
-@@ -366,6 +538,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -366,6 +544,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
                  /* Keys for the pad stand-in, and the window events that
                   * release them; it only reads the event. */
                  xbox_InputSdlEvent(&ev);
@@ -1571,7 +1752,7 @@ index b9b8c3e..7794f85 100644
                  if (ev.type == SDL_QUIT)
                      quit = 1;
                  else if (ev.type == s_guest_done_event)
-@@ -379,6 +552,29 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -379,6 +558,29 @@ int xbox_HostWindowMain(int (*guest_main)(void))
              } while (SDL_PollEvent(&ev));
          }
  
@@ -1601,7 +1782,7 @@ index b9b8c3e..7794f85 100644
          pthread_mutex_lock(&s_lock);
          seq = s_ready_seq;
          if (seq != shown_seq) {
-@@ -392,7 +588,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -392,7 +594,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
              shown_seq = seq;
              px = s_slot[s_front].px;
              bpp = s_slot[s_front].bpp;
@@ -1612,7 +1793,7 @@ index b9b8c3e..7794f85 100644
          } else if (!shown_seq && s_fb_va && s_fb_pitch) {
              /* No flip yet: the display surface, as the GDI window reads it. */
              bpp = s_fb_pitch / FB_W;
-@@ -400,21 +598,60 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -400,21 +604,60 @@ int xbox_HostWindowMain(int (*guest_main)(void))
              if (bpp == 2 || bpp == 4)
                  px = (const uint8_t *)((uintptr_t)s_fb_va + xbox_GetMemoryOffset());
          }
@@ -1676,7 +1857,7 @@ index b9b8c3e..7794f85 100644
              dirty = 0;
              SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
              SDL_RenderClear(ren);
-@@ -452,12 +689,18 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -452,15 +695,21 @@ int xbox_HostWindowMain(int (*guest_main)(void))
       * start calling SDL_GameControllerUpdate while SDL goes down. */
      if (tex)
          SDL_DestroyTexture(tex);
@@ -1701,3 +1882,46 @@ index b9b8c3e..7794f85 100644
      if (quit)
          exit(0);
      return s_guest_rc;
+ }
+ 
+-#endif /* !_WIN32 */
++#endif /* !_WIN32 || XBOXRECOMP_SDL_HOST */
+diff --git a/src/video/video_player.c b/src/video/video_player.c
+index 18d2633..77409b5 100644
+--- a/src/video/video_player.c
++++ b/src/video/video_player.c
+@@ -14,7 +14,7 @@
+  * Media Foundation session on one thread, so nothing here touches the guest's
+  * execution or its memory.
+  */
+-#if defined(_WIN32)
++#if defined(_WIN32) && !defined(XBOXRECOMP_SDL_HOST)
+ #define COBJMACROS
+ #include <windows.h>
+ #include <mfapi.h>
+diff --git a/src/video/video_player.h b/src/video/video_player.h
+index a5b912c..d9ce732 100644
+--- a/src/video/video_player.h
++++ b/src/video/video_player.h
+@@ -68,7 +68,7 @@ int  xbox_FramebufferDumpBmp(const char *path);
+ void xbox_FramebufferWindowSetTitle(const uint16_t *name, int max_chars);
+ void xbox_FramebufferWindowFrameStats(uint32_t draws);
+ 
+-#if !defined(_WIN32)
++#if !defined(_WIN32) || defined(XBOXRECOMP_SDL_HOST)
+ /* POSIX hosts: the framebuffer window needs the process main thread (AppKit
+  * on macOS), so a title that wants it calls this from main() with its boot
+  * sequence. With RECOMP_FB_WINDOW set it opens the window, runs guest_main on
+diff --git a/src/video/video_pump.c b/src/video/video_pump.c
+index 6fdf222..0116bdf 100644
+--- a/src/video/video_pump.c
++++ b/src/video/video_pump.c
+@@ -9,7 +9,7 @@
+  * The guest decides when. A title opens its movie file at the point its own
+  * logic reaches the intro; the runtime notices that open and plays that file.
+  */
+-#if defined(_WIN32)
++#if defined(_WIN32) && !defined(XBOXRECOMP_SDL_HOST)
+ #define COBJMACROS
+ #include <windows.h>
+ #include <stdio.h>

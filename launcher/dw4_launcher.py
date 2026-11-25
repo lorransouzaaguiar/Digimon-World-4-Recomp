@@ -4,6 +4,8 @@
     launcher.sh                 abre o launcher
     launcher.sh --play          inicia o jogo direto, com as opcoes salvas
     launcher.sh --selftest      carrega a interface fora da tela e sai ("selftest ok")
+    launcher.sh --wine          (desenvolvimento) inicia o build de Windows no Wine:
+                                build-win/dw4_recomp.exe, de scripts/build_win.sh
     launcher.sh --screenshot <pagina> <arquivo.png> [--lang pt|en] [--size LxA] [--defaults]
                                 (documentacao/testes; nao grava a configuracao)
 
@@ -42,6 +44,14 @@ FROZEN = bool(getattr(sys, "frozen", False))
 APP = Path(os.environ.get("DW4_APP_DIR") or (Path(sys.executable).resolve().parent.parent / "game" if FROZEN else ROOT))
 DATA = Path(os.environ.get("DW4_DATA_DIR") or (
     Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "dw4-recomp" if FROZEN else ROOT))
+# --wine (so a partir do codigo): este launcher, nativo no Linux, inicia o .exe
+# de Windows pelo Wine, para testar as opcoes de video no build de Windows antes
+# de existir um launcher para Windows. Prefixo e saves proprios, para nao tocar
+# no ~/.wine nem nos saves do build de Linux.
+WINE = "--wine" in sys.argv[1:] and not FROZEN
+WINE_EXE = ROOT / "build-win" / "dw4_recomp.exe"
+WINE_PREFIX = ROOT / "tools" / "win-deps" / "wineprefix"
+
 GAME_FILES = ["default.xbe", "area.afs", "ndmw.afs", "ndmw.igb"]
 TITLE_ID = "42410002"
 KEEP_LOGS = 10
@@ -292,6 +302,8 @@ class Backend(QObject):
 
     # ── caminhos ────────────────────────────────────────────────────────────
     def exe(self):
+        if WINE:
+            return WINE_EXE if WINE_EXE.is_file() and shutil.which("wine") else None
         for p in (APP / "dw4_recomp", APP / "build" / "dw4_recomp"):
             if p.is_file() and os.access(p, os.X_OK):
                 return p
@@ -301,7 +313,12 @@ class Backend(QObject):
         return Path(self.cfg["game_dir"]) if self.cfg["game_dir"] else DATA / "game_data"
 
     def save_dir(self) -> Path:
-        return DATA / "save_data"
+        return ROOT / "build-win" / "save_data" if WINE else DATA / "save_data"
+
+    def command(self) -> list:
+        """Programa e argumentos que iniciam o jogo."""
+        cmd = [str(self.exe()), str(self.game_dir())]
+        return ["wine"] + cmd if WINE else cmd
 
     def log_dir(self) -> Path:
         return DATA / "logs"
@@ -548,6 +565,10 @@ class Backend(QObject):
                 env["LD_LIBRARY_PATH"] = orig
             else:
                 env.pop("LD_LIBRARY_PATH", None)
+        if WINE:
+            env.setdefault("WINEPREFIX", str(WINE_PREFIX))
+            env.setdefault("WINEDEBUG", "-all")
+            env.setdefault("WINEDLLOVERRIDES", "mscoree,mshtml=")
         lib = APP / "lib"                       # pacotes de release
         if lib.is_dir() and (FROZEN or not self._system_has_crypto(lib)):
             # No pacote completo as bibliotecas embutidas (SDL2, libepoxy, libcrypto)
@@ -600,7 +621,8 @@ class Backend(QObject):
         proc.errorOccurred.connect(self._proc_error)
         self.proc, self.last_log = proc, log
         self.runningChanged.emit()
-        proc.start(str(self.exe()), [str(self.game_dir())])
+        cmd = self.command()
+        proc.start(cmd[0], cmd[1:])
 
     def _proc_error(self, err):
         if err == QProcess.FailedToStart:
@@ -756,7 +778,7 @@ def play_direct() -> int:
     with open(log, "w") as f:
         f.write(b._config_header())
         f.flush()
-        return subprocess.call([str(b.exe()), str(b.game_dir())], env=b.game_env(), cwd=DATA,
+        return subprocess.call(b.command(), env=b.game_env(), cwd=DATA,
                                stdout=f, stderr=subprocess.STDOUT)
 
 
@@ -789,7 +811,7 @@ def main() -> int:
         assert set(STR["pt"]) == set(STR["en"]), "tabelas de texto diferentes entre idiomas"
         import xiso  # noqa: F401  (confere que o leitor de imagem veio no pacote)
         exe = backend.exe()
-        print("app:", "frozen" if FROZEN else "source", "| game exe:", "ok" if exe else "MISSING",
+        print("app:", "frozen" if FROZEN else "source", "| wine:" if WINE else "|", "game exe:", "ok" if exe else "MISSING",
               "| data:", scrub(str(DATA)))
         print("selftest ok")
         return 0

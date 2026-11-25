@@ -14,7 +14,9 @@ caminho para as três plataformas (macOS via MoltenVK).
 
 - **Jogável:** boot, vídeos, menus, criação do Digimon, save/load, lobby, tutorial e primeira fase,
   a 60 fps (CachyOS, NVIDIA). Fases seguintes, chefes e multijogador **não foram testados**.
-- **Publicado:** release v0.3.2 (2026-11-24; AppImage + tar.gz; antes v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
+- **Publicado:** v0.4.0 (2026-11-25, **pré-lançamento**: AppImage + tar.gz + `.zip` de Windows
+  experimental; de agora em diante todo release leva Linux e Windows) e, como "latest", o release
+  v0.3.2 (2026-11-24; AppImage + tar.gz; antes v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
   `github.com/lorransouzaaguiar/Digimon-World-4-Recomp` (preparado para ficar público: licença
   MIT, histórico com e-mail noreply; a visibilidade quem muda é o usuário).
 - **Vulkan (branch `DW4R-1`):** `src/hooks/nv2a_vk_backend.c` passa nos mesmos frames de
@@ -36,6 +38,12 @@ caminho para as três plataformas (macOS via MoltenVK).
   preferiu centralizado (`ro_squeeze`; `DW4_WS_DIALOG=0` desliga). 16:9: conferido sem
   janela no lobby e pelo usuário jogando. 21:9: só pelo usuário jogando ("tá legal"), nenhum teste
   sem janela. Lojas, escolhas e 2–4 jogadores não foram vistos.
+- **Windows (branch `DW4R-5`, 2026-11-25): prévia experimental, no release `v0.4.0`.**
+  Compilação cruzada com MinGW-w64 (`scripts/build_win.sh` → `build-win/dw4_recomp.exe`), Vulkan e
+  OpenGL dentro do `.exe`, SDL2 para janela/controle/áudio, sem launcher (`run.bat`). Passa em
+  `soak.py --wine --golden` e `--wine --gamescope --opengl --golden`; o usuário jogou no Wine com
+  janela em Vulkan (até 1440p 16:9) e, por pouco tempo, em OpenGL. **Windows real, teclado e Proton
+  não foram testados.** Veja `STATUS.md` (Port para Windows).
 - **Aberto:** crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
   assinatura no `STATUS.md`); texgen não implementado; o chão que escurece por alguns quadros;
   HUD em widescreen só conferido com 1 jogador.
@@ -82,7 +90,7 @@ empacotamento, port para outro sistema, ferramenta de teste), veja como eles res
 ## Onde fica cada coisa
 
 ```
-src/main.c                    host POSIX: sinais, crash report, log, boot do guest
+src/main.c                    host: log, boot do guest, parte comum do relatório de crash
 src/hooks/                    todo o código próprio do runtime
   nv2a_gl_backend.c           renderizador OpenGL  -> build/libdw4_gl.so (recarrega a quente)
   nv2a_vk_backend.c           renderizador Vulkan  -> build/libdw4_vk.so (recarrega a quente)
@@ -91,6 +99,8 @@ src/hooks/                    todo o código próprio do runtime
   render_opts.h               resolução interna, proporção e regras de widescreen (fade, HUD, minimapa), comum aos dois
   widescreen.c                alarga o culling do jogo em widescreen (gancho sub_000BC050_enter)
   gl_host.c                   escolhe a API (DW4_RENDERER), contexto EGL, carga/recarga (no executável)
+  host_os.h                   o que depende do sistema (caminhos, ambiente, crash, despejo de threads):
+                              host_os_posix.c (Linux) e host_os_win32.c (Windows)
   recomp_manual.c             defaults de ambiente (RECOMP_*), overrides, init dos hooks
   d3d_fence.c  input_script.c  screenshot.c  stall_watch.c
   prof.c                      amostrador de CPU (DW4_PROF; relatorio: scripts/prof_report.py)
@@ -125,6 +135,11 @@ scripts/test_pad.sh                              # plugar/desplugar controle vir
 ./launcher.sh --selftest                         # launcher fora da tela
 ./launcher.sh --screenshot 1 docs/launcher_graphics.png --lang en --size 1120x1000 --defaults   # imagens dos READMEs
 scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
+scripts/build_win.sh                             # compilação cruzada para Windows (MinGW-w64) -> build-win/; log em build-win/build.log
+scripts/soak.py --wine --golden                  # o .exe de Windows no Wine, sem tela, com os mesmos frames de referência (Vulkan)
+scripts/soak.py --wine --gamescope --opengl --golden   # o OpenGL do .exe (precisa de uma tela: gamescope sem monitor)
+scripts/package_win.sh vX.Y.Z                    # .zip de Windows em dist/ (+ .debug.exe com símbolos, não publicar); rode DEPOIS do package_release.sh
+./launcher.sh --wine                             # launcher do Linux iniciando o .exe de Windows no Wine (ABRE JANELA; saves em build-win/save_data)
 ```
 
 ## Regras
@@ -137,9 +152,9 @@ scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
 3. **Código portável entre Linux, macOS e Windows.** Código novo usa SDL2, Vulkan e C padrão;
    o que for específico de um sistema (sinais POSIX, `/proc`, `dlopen`, EGL, tratamento de falha
    de MMIO, caminhos XDG) fica isolado em arquivo ou bloco próprio, para ganhar um equivalente
-   nas outras plataformas. Nada de DirectX. Hoje `CMakeLists.txt` recusa Windows e macOS, e
-   `main.c`, `gl_host.c`, `stall_watch.c` e o empacotamento são só Linux: isso é dívida conhecida,
-   não regra.
+   nas outras plataformas: use `src/hooks/host_os.h`. Nada de DirectX. Hoje `CMakeLists.txt`
+   recusa macOS e só aceita Windows por MinGW; a recarga a quente (`dlopen`), `prof.c`, o despejo
+   de threads e o launcher empacotado são só Linux: isso é dívida conhecida, não regra.
 3a. **Dois renderizadores, um shader, os dois ficam:** o jogador escolhe a API no launcher; nunca
    remova uma para implementar a outra. O fragment shader Vulkan é porte do OpenGL: uma correção
    de imagem (estado, shader, textura) feita em um tem de ser repetida no outro e testada com
@@ -154,7 +169,7 @@ scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
 5. **Mudou algo em `xboxrecomp/`?** Atualize o patch
    (`git -C xboxrecomp diff > patches/xboxrecomp-dw4.patch`) e descreva em `PORT_NOTES.md` §4.
 6. **Reiniciar ou não:** mudança em `nv2a_gl_backend.c` / `nv2a_vk_backend.c` (e `shaders/`) chega
-   ao jogo aberto por recarga a quente; qualquer outra (executável, toolkit) exige reiniciar o jogo. Diga qual é o caso.
+   ao jogo aberto por recarga a quente (só no Linux; no Windows os renderizadores ficam no `.exe`); qualquer outra (executável, toolkit) exige reiniciar o jogo. Diga qual é o caso.
 7. **Dois idiomas:** textos do launcher (`STR` em `dw4_launcher.py`), READMEs e notas de release
    sempre em pt-BR e en-US.
 8. **Pacotes:** nenhum caminho da máquina de build e nenhuma biblioteca acima da glibc 2.38
@@ -165,7 +180,9 @@ scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
 
 ## Ao terminar uma tarefa
 
-- Rode `scripts/soak.py --golden` (e `--opengl --golden` se mexeu em renderização); se a imagem mudou de propósito, confira e atualize as
+- Rode `scripts/soak.py --golden` (e `--opengl --golden` se mexeu em renderização; e
+  `scripts/build_win.sh` + `scripts/soak.py --wine --golden` se mexeu em `host_os*`, `main.c`,
+  `gl_host.c`, CMake ou toolkit); se a imagem mudou de propósito, confira e atualize as
   referências (`scripts/golden.py <shots> --update`).
 - Atualize `STATUS.md`; em `PORT_NOTES.md` registre causa de bug, patch ou endereço novo.
 - Diga o que foi verificado e o que não foi.

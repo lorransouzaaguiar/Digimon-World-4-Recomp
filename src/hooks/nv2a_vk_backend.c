@@ -2797,6 +2797,9 @@ static const Dw4GlModule s_module = {
     .clear = tm_clear, .draw = tm_draw, .flip = tm_flip, .present_sync = tm_present_sync
 };
 
+#if defined(DW4_STATIC_RENDERERS)
+#define dw4_gl_module dw4_gl_module_vk
+#endif
 __attribute__((visibility("default")))
 const Dw4GlModule *dw4_gl_module(void)
 {
