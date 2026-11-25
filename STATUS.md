@@ -333,6 +333,15 @@ button" / "Game Start / Option" ficavam na coluna 4:3; agora não são espremida
 `PORT_NOTES.md` §7.6. Sem execução sem janela (o usuário dispensou); **confirmado pelo usuário
 jogando** ("ótimo, aprovado").
 
+## Release v0.3.2 (preparado em 2026-11-24, **não publicado**)
+
+Acabamento do widescreen: caixa de diálogo, rodapé do menu do START, loading do boot e faixa do
+título. Notas em `docs/releases/v0.3.2.md`; PR #5 (`DW4R-4` → `main`). Pacote gerado em `dist/`
+e conferido fora do projeto: `--selftest` ok; boot sem janela até o menu do título pelo AppImage
+(`Config: launcher v0.3.2`, renderizador Vulkan carregado de dentro do pacote, saves na pasta de
+teste, sem CRASH/STALL). Goldens 4:3 conferem em Vulkan e OpenGL. **Falta:** o usuário abrir o
+pacote com janela, merge do PR, tag e publicação.
+
 ## Release v0.3.1 (2026-11-24)
 
 Só a correção da tela branca (memória do guest devolvida). Notas em `docs/releases/v0.3.1.md`.
