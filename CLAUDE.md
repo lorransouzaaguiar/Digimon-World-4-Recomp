@@ -14,9 +14,9 @@ caminho para as três plataformas (macOS via MoltenVK).
 
 - **Jogável:** boot, vídeos, menus, criação do Digimon, save/load, lobby, tutorial e primeira fase,
   a 60 fps (CachyOS, NVIDIA). Fases seguintes, chefes e multijogador **não foram testados**.
-- **Publicado:** v0.4.0 (2026-11-25, **pré-lançamento**: AppImage + tar.gz + `.zip` de Windows
-  experimental; de agora em diante todo release leva Linux e Windows) e, como "latest", o release
-  v0.3.2 (2026-11-24; AppImage + tar.gz; antes v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
+- **Publicado:** release v0.4.1 (2026-11-25; AppImage + tar.gz + `.zip` de Windows com launcher;
+  todo release leva Linux e Windows, e o Windows não é mais apresentado como "experimental" — pedido
+  do usuário; antes v0.4.0, v0.3.2, v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
   `github.com/lorransouzaaguiar/Digimon-World-4-Recomp` (preparado para ficar público: licença
   MIT, histórico com e-mail noreply; a visibilidade quem muda é o usuário).
 - **Vulkan (branch `DW4R-1`):** `src/hooks/nv2a_vk_backend.c` passa nos mesmos frames de
@@ -38,12 +38,14 @@ caminho para as três plataformas (macOS via MoltenVK).
   preferiu centralizado (`ro_squeeze`; `DW4_WS_DIALOG=0` desliga). 16:9: conferido sem
   janela no lobby e pelo usuário jogando. 21:9: só pelo usuário jogando ("tá legal"), nenhum teste
   sem janela. Lojas, escolhas e 2–4 jogadores não foram vistos.
-- **Windows (branch `DW4R-5`, 2026-11-25): prévia experimental, no release `v0.4.0`.**
+- **Windows (`DW4R-5`, mesclada na `main` em 2026-11-25): prévia experimental, no release `v0.4.0`.**
   Compilação cruzada com MinGW-w64 (`scripts/build_win.sh` → `build-win/dw4_recomp.exe`), Vulkan e
-  OpenGL dentro do `.exe`, SDL2 para janela/controle/áudio, sem launcher (`run.bat`). Passa em
-  `soak.py --wine --golden` e `--wine --gamescope --opengl --golden`; o usuário jogou no Wine com
-  janela em Vulkan (até 1440p 16:9) e, por pouco tempo, em OpenGL. **Windows real, teclado e Proton
-  não foram testados.** Veja `STATUS.md` (Port para Windows).
+  OpenGL dentro do `.exe`, SDL2 para janela/controle/áudio. Passa em `soak.py --wine --golden` e
+  `--wine --gamescope --opengl --golden`; o usuário jogou no Wine com janela (Vulkan até 1440p
+  16:9; OpenGL por pouco tempo) e em **Windows 11 real com a v0.4.0** ("funcionou", sem logs).
+  **Launcher no Windows (`DW4R-6`, v0.4.1):** `DigimonWorld4-Recomp.exe` +
+  Python embutível + PySide6 no pacote, dados em `%APPDATA%\dw4-recomp\`; testado só no Wine.
+  Teclado e Proton não foram testados. Veja `STATUS.md` (Port para Windows).
 - **Aberto:** crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
   assinatura no `STATUS.md`); texgen não implementado; o chão que escurece por alguns quadros;
   HUD em widescreen só conferido com 1 jogador.
@@ -105,8 +107,8 @@ src/hooks/                    todo o código próprio do runtime
   d3d_fence.c  input_script.c  screenshot.c  stall_watch.c
   prof.c                      amostrador de CPU (DW4_PROF; relatorio: scripts/prof_report.py)
 src/recompiled/               C GERADO do default.xbe (ignorado; scripts/regen.sh)
-launcher/                     launcher Qt Quick: dw4_launcher.py, qml/Main.qml, xiso.py
-packaging/                    AppRun, .desktop, ícone, README do pacote
+launcher/                     launcher Qt Quick (Linux e Windows): dw4_launcher.py, qml/Main.qml, xiso.py
+packaging/                    AppRun, .desktop, ícone, README do pacote; windows/ (entrada .exe e README)
 scripts/                      setup, regen, soak, triage, golden, f9_diff, package_release...
 tests/scenarios/              roteiros de entrada (sintaxe em src/hooks/input_script.c)
 patches/xboxrecomp-dw4.patch  todas as mudanças no toolkit
@@ -173,7 +175,8 @@ scripts/package_win.sh vX.Y.Z                    # .zip de Windows em dist/ (+ .
 7. **Dois idiomas:** textos do launcher (`STR` em `dw4_launcher.py`), READMEs e notas de release
    sempre em pt-BR e en-US.
 8. **Pacotes:** nenhum caminho da máquina de build e nenhuma biblioteca acima da glibc 2.38
-   (`package_release.sh` verifica). Dados do usuário ficam em `~/.local/share/dw4-recomp/`.
+   (`package_release.sh` verifica). Dados do usuário ficam em `~/.local/share/dw4-recomp/` (Linux)
+   e `%APPDATA%\dw4-recomp\` (Windows).
 9. **Commits e push só quando o usuário pedir.** Release publicado é ação externa: confirme antes.
 10. **`RECOMP_PB_WALK=dma` e desligar `RECOMP_FLIP_PACING` quebram o jogo** (crash / corrupção de
     heap); não use nem exponha no launcher.

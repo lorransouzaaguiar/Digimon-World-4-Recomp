@@ -514,17 +514,34 @@ jogar e para desenvolver, correções de runtime candidatas a portar e a discuss
   do jogo, caminho da máquina de build, DLL fora da lista. O `.exe` do pacote passou no
   `soak.py --wine --golden` fora do projeto. O `run.bat` em si **não foi executado** (o Wine não
   tem PowerShell de verdade para o carimbo de hora do log; há reserva com número aleatório).
-- **Release `v0.4.0`** (2026-11-25, publicado como pré-lançamento; a "latest" segue a v0.3.2 até o
-  usuário decidir): primeiro com Linux **e** Windows — AppImage, `.tar.gz` e `.zip` de Windows, um
+- **Release `v0.4.0`** (2026-11-25; publicado como release normal e "latest" depois que o usuário
+  mesclou o PR #7 e pediu): primeiro com Linux **e** Windows — AppImage, `.tar.gz` e `.zip` de Windows, um
   `SHA256SUMS-v0.4.0.txt` só. O AppImage passou fora do projeto (`--selftest` e jogo sem janela até
   o lobby com os frames de referência, Vulkan e OpenGL); o build de Linux desta versão não foi
   jogado com janela. O usuário vai testar o `.zip` em Windows 11 real (dual boot) e voltar com os logs.
 - **Ajustes pensados para Windows real, nunca exercitados:** sono do limitador de quadros pelo
   temporizador de alta resolução do toolkit (`fps_limit.c`); `SDL_WINDOWS_DPI_AWARENESS` para
   monitores com escala (`host_os_win32.c`).
+- **Windows 11 real (usuário, 2026-11-25, v0.4.0 pelo `run.bat`): "funcionou".** Nenhum log foi
+  trazido, então desempenho, API usada e resolução nesse teste não estão registrados.
+- **Launcher no Windows (branch `DW4R-6`, 2026-11-25, publicado na v0.4.1):** o usuário esperava o
+  launcher e o pacote só tinha o `run.bat`. Agora a entrada é `DigimonWorld4-Recomp.exe`
+  (`packaging/windows/launcher_stub.c`: abre `python\pythonw.exe launcher\dw4_launcher.py`, define
+  `DW4_PACKAGED` e `DW4_APP_DIR`). O pacote leva o Python embutível oficial 3.12.10 e o PySide6
+  6.12.0 de Windows (versões e SHA-256 fixos em `package_win.sh`; PyInstaller não faz compilação
+  cruzada), podado ao que o launcher usa: `.zip` de 53 MB, 142 MB extraído. Layout igual ao do
+  Linux (`game/`, `launcher/`, `python/`). Dados do usuário em `%APPDATA%\dw4-recomp\`; o
+  `run.bat` saiu. No `dw4_launcher.py`: `WIN`/`PACKAGED`, placa de vídeo e processador pelo
+  registro, Vulkan por `vulkan-1.dll`, idioma `Portuguese_*`, relatório sem `freedesktop_os_release`.
+  **Testado só no Wine**, com os arquivos do `.zip`: `--selftest`, as cinco telas capturadas e
+  conferidas a olho (`DW4_QPA=windows` dentro do gamescope sem tela), e `--play` até o lobby com
+  os frames de referência em Vulkan e OpenGL. **Não testado:** Windows real; seletores de arquivo,
+  leitura de `.iso`, backup/importação de saves e relatório (nem no Wine).
+  Armadilhas do teste no Wine: ele não repassa variáveis `QT_*` ao programa, e a plataforma
+  "offscreen" do Qt no Windows não tem fontes (texto em quadradinhos) — por isso o `DW4_QPA`.
 - **Falta:** despejo de threads no travamento (`dw4_dump_all_threads` é um aviso no Windows);
-  amostrador de CPU (`prof.c` é só Linux); launcher para Windows (com leitura da `.iso`); o `.exe`
-  é de console (abre um terminal junto). A janela do OpenGL usa o renderizador padrão da SDL, que
+  amostrador de CPU (`prof.c` é só Linux). O `.exe` do jogo é de console, mas iniciado pelo
+  launcher não abre terminal. A janela do OpenGL usa o renderizador padrão da SDL, que
   no Windows é Direct3D por dentro da SDL — o nosso código não usa DirectX.
 
 ## Próximos passos

@@ -1,42 +1,40 @@
-Digimon World 4 - Recomp @VERSION@  (Windows x86-64)  --  EXPERIMENTAL
-======================================================================
+Digimon World 4 - Recomp @VERSION@  (Windows x86-64)
+=====================================================
 
 Port nativo NAO OFICIAL de Digimon World 4 (Xbox, 2005).
 Unofficial native port of Digimon World 4 (Xbox, 2005).
 
 @URL@
 
-ESTA E UMA VERSAO DE TESTE. Ate agora o build de Windows so rodou no Linux,
-dentro do Wine; em um Windows de verdade ele ainda nao foi testado.
-THIS IS A TEST BUILD. So far the Windows build has only run on Linux, inside
-Wine; it has not been tested on a real Windows machine yet.
-
 
 Como jogar / How to play
 ------------------------
 
-1. Extraia este .zip inteiro para uma pasta em que voce possa gravar
-   (nao dentro de "Arquivos de Programas").
-   Extract this whole .zip to a folder you can write to (not "Program Files").
+1. Extraia este .zip INTEIRO para uma pasta qualquer.
+   Extract this WHOLE .zip to any folder.
 
-2. Copie os arquivos do SEU disco de Digimon World 4 (Xbox, NTSC-U), ja
-   extraido, para a pasta game_data:  default.xbe, area.afs, ndmw.afs, ndmw.igb
-   Copy the files of YOUR OWN Digimon World 4 disc (Xbox, NTSC-U), already
-   extracted, into the game_data folder.
-   (Ainda nao ha launcher no Windows para ler a imagem .iso.)
-   (There is no launcher on Windows yet to read the .iso image.)
-
-3. De dois cliques em run.bat.  /  Double-click run.bat.
+2. Abra  DigimonWorld4-Recomp.exe  (o launcher).
+   Open  DigimonWorld4-Recomp.exe  (the launcher).
    Na primeira vez o Windows pode avisar que o programa e desconhecido
    (SmartScreen): "Mais informacoes" > "Executar assim mesmo".
    The first time, Windows may warn that the program is unknown (SmartScreen):
    "More info" > "Run anyway".
 
+3. Na tela "Jogar", escolha a imagem (.iso) do SEU disco de Digimon World 4
+   (Xbox, NTSC-U) ou uma pasta com o disco ja extraido.
+   On the "Play" screen, choose the image (.iso) of YOUR OWN Digimon World 4
+   disc (Xbox, NTSC-U) or a folder with the extracted disc.
+
+4. Clique em JOGAR.  /  Click PLAY.
+
 API grafica (Vulkan ou OpenGL), resolucao, proporcao (4:3, 16:9, 21:9), 30/60
-quadros, tela cheia e vsync: abra o run.bat no Bloco de Notas e edite as
-linhas do comeco.
+quadros, tela cheia e vsync ficam em "Graficos", no launcher.
 Graphics API (Vulkan or OpenGL), resolution, aspect ratio, 30/60 fps,
-fullscreen and vsync: open run.bat in Notepad and edit the lines at the top.
+fullscreen and vsync are under "Graphics", in the launcher.
+
+Nada precisa ser instalado: o launcher, o Python, o Qt e a SDL2 ja vem no
+pacote. O jogo NAO vem junto.
+Nothing needs to be installed. The game itself is NOT included.
 
 Controle: qualquer controle que o Windows reconheca (Xbox, PlayStation...),
 ou o teclado.  /  Pad: any controller Windows recognises, or the keyboard.
@@ -49,11 +47,18 @@ Windows 10 or 11, 64-bit; a GPU with a Vulkan or OpenGL 3.3 driver.
 Onde ficam as coisas / Where things are
 ---------------------------------------
 
-  save_data\   saves do jogo / game saves
-  logs\        um arquivo por partida / one file per session  (run-*.log)
+Saves, opcoes e logs / saves, settings and logs:   %APPDATA%\dw4-recomp\
+(cole isso na barra de enderecos do Explorador / paste it in the Explorer
+address bar; o launcher tambem abre essas pastas / the launcher opens them too)
 
-Se algo der errado, envie o arquivo mais recente de logs\ junto com o relato.
-If something goes wrong, send the newest file in logs\ with your report.
+Veio da v0.4.0? Os saves dela ficavam na pasta save_data ao lado do run.bat.
+Copie essa pasta para %APPDATA%\dw4-recomp\ antes de jogar.
+Coming from v0.4.0? Its saves were in the save_data folder next to run.bat.
+Copy that folder into %APPDATA%\dw4-recomp\ before playing.
+
+Se algo der errado: no launcher, Suporte > Criar relatorio, e envie o arquivo.
+If something goes wrong: in the launcher, Support > Create report, and send
+the file.
 
 
 Projeto de fas, sem vinculo com Bandai Namco, Toei Animation ou Microsoft.

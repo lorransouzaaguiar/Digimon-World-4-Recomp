@@ -40,9 +40,20 @@ scripts/package_win.sh vX.Y.Z      # precisa de mingw-w64-gcc; ver scripts/build
 ```
 
 Gera `...-windows-x86_64.zip`, acrescenta a linha dele em `SHA256SUMS-vX.Y.Z.txt` e deixa em
-`dist/` o `...windows-x86_64.debug.exe` (com símbolos, **não publicar**). Confira o `.exe` do
-`.zip` fora do projeto: `scripts/soak.py --wine --binary <pasta>/dw4_recomp.exe --golden` e o
-mesmo com `--gamescope --opengl` (com `game_data` ligado por symlink na pasta do pacote).
+`dist/` o `...windows-x86_64.debug.exe` (com símbolos, **não publicar**). Confira o `.zip` extraído
+fora do projeto, no Wine, sem nada na tela (prefixo próprio, `DW4_DATA_DIR=Z:<tmp>/data` com
+`game_data` ligado por symlink lá dentro):
+
+```bash
+wine DigimonWorld4-Recomp.exe --selftest                      # sem DISPLAY; código de saída 0
+# telas do launcher: o Wine não repassa QT_* e o "offscreen" do Qt no Windows não tem fontes
+DW4_QPA=windows gamescope --backend headless -- wine DigimonWorld4-Recomp.exe --screenshot 1 Z:<tmp>/pg1.png
+# jogo iniciado pelo launcher, com o roteiro do lobby, e depois scripts/golden.py <shots>
+RECOMP_HEADLESS=1 DW4_INPUT_SCRIPT=@<roteiro> DW4_SHOT_DIR=<shots> wine DigimonWorld4-Recomp.exe --play
+```
+
+Para o OpenGL, `"renderer": "opengl"` em `<tmp>/data/config/launcher.json` e o `--play` dentro do
+gamescope sem tela. Rode `wineserver -k` entre uma rodada e outra.
 
 ## 4. Conferir o pacote fora do projeto
 
