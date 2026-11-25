@@ -247,8 +247,9 @@ static inline void ro_clamp_tri_x(Nv2aVertex *t, float lo, float hi)
     }
 }
 
-/* DW4_WS_DIALOG=0 desliga as regras das tiras da interface (caixa de dialogo
- * de ponta a ponta, rodape do menu do START cortado em 4:3): volta ao
+/* DW4_WS_DIALOG=0 desliga as regras de interface em tela larga (caixa de
+ * dialogo de ponta a ponta, rodape do menu do START cortado em 4:3, linha do
+ * "Loading..." e faixa da tela de titulo de ponta a ponta): volta ao
  * comportamento antigo, para comparar antes/depois. */
 static inline int ro_dialog_on(void)
 {
@@ -356,6 +357,42 @@ static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, floa
                 fprintf(stderr, "[ROT]  %4u  (%.0f,%.0f) (%.0f,%.0f) (%.0f,%.0f)\n", i / 3,
                         (double)v[i].x, (double)v[i].y, (double)v[i + 1].x, (double)v[i + 1].y,
                         (double)v[i + 2].x, (double)v[i + 2].y);
+        /* "Loading..." do boot (antes dos logos) em tela larga.
+         *
+         * Um lote 2D com a linha do rodape (21..621 x 451..456: em 4:3 ela
+         * vai quase de ponta a ponta, com a margem de overscan) e o texto
+         * "Loading..." encostado no fim dela (461..593 x 421..451). Espremida,
+         * a linha ficava na coluna 4:3 do meio (pedido do usuario,
+         * 2026-11-24). A linha nao e espremida -- mesma margem proporcional
+         * de 4:3 -- e o texto e ancorado na borda direita, com o tamanho
+         * certo, para continuar no fim da linha. */
+        if (r0 == 1.0f && r1 == 1.0f && guest_w == 640.0f && count <= 60 && ro_dialog_on()
+                && fabsf(bx0 - 21.0f) <= 1.5f && fabsf(bx1 - 621.0f) <= 1.5f
+                && by0 >= 400.0f && fabsf(by1 - 456.0f) <= 1.5f) {
+            int line = 0;
+
+            for (uint32_t i = 0; i + 2 < count && !line; i += 3) {
+                const Nv2aVertex *t = &v[i];
+                float x0 = fminf(t[0].x, fminf(t[1].x, t[2].x));
+                float x1 = fmaxf(t[0].x, fmaxf(t[1].x, t[2].x));
+                float y0 = fminf(t[0].y, fminf(t[1].y, t[2].y));
+
+                line = x1 - x0 >= 598.0f && fabsf(y0 - 451.0f) <= 1.5f;
+            }
+            if (line) {
+                for (uint32_t i = 0; i + 2 < count; i += 3) {
+                    Nv2aVertex *t = &v[i];
+                    float x0 = fminf(t[0].x, fminf(t[1].x, t[2].x));
+                    float x1 = fmaxf(t[0].x, fmaxf(t[1].x, t[2].x));
+
+                    if (x1 - x0 >= 598.0f)
+                        continue;                       /* a linha */
+                    for (int j = 0; j < 3; j++)         /* o texto */
+                        t[j].x = guest_w - (guest_w - t[j].x) * k;
+                }
+                return;
+            }
+        }
         /* Caixa de dialogo (fala de NPC e mensagem do sistema) em tela larga
          * -- docs/WIDESCREEN_DIALOGO.md.
          *
@@ -524,6 +561,17 @@ static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, floa
             }
             /* 2D que cobre a tela inteira: fica como esta (estica junto) */
             if (x0 <= e && x1 >= guest_w - e && y0 <= e && y1 >= guest_h - e)
+                continue;
+            /* Tela de titulo: a faixa escura atras de "Press START button" /
+             * "Game Start / Option" e as duas linhas dela. Sao quadros de
+             * -13..654 (em 4:3 passam das bordas: a faixa vai de ponta a
+             * ponta) cuja altura muda entre os dois estados (284..344 e
+             * 261..369). Espremida, a faixa acabava na coluna 4:3 enquanto o
+             * tunel do fundo, que e 3D, ja ocupava a tela larga (pedido do
+             * usuario, 2026-11-24). Nao espreme; as setas e o texto seguem
+             * no centro. O HUD usa uma faixa parecida, mas de -18..659. */
+            if (guest_w == 640.0f && fabsf(x0 + 13.0f) <= 1.5f && fabsf(x1 - 654.0f) <= 1.5f
+                    && y1 - y0 <= 150.0f && ro_dialog_on())
                 continue;
             /* A foto do proprio quadro (o jogo a desenha, com zoom, ao trocar
              * de cenario): a textura JA e a imagem larga. Espremido em x o

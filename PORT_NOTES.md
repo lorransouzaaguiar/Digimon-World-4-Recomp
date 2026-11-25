@@ -675,8 +675,23 @@ comum). Desenho tirado do Amped 2 e dos dois SSX 3 (`docs/REFERENCIAS.md`), cód
     esta regra.
   - *Verificado sem janela:* 16:9, Vulkan e OpenGL, menu do START no lobby (rodapé termina na
     coluna 4:3; diálogo e HUD iguais). *Não verificado:* 21:9; a animação de abrir/fechar o menu;
-    outros menus que usem as tiras (lojas, portal).
-
+    outros menus que usem as tiras (lojas, portal). **Confirmado pelo usuário jogando.**
+- **"Loading..." do boot e faixa da tela de título de ponta a ponta (2026-11-24, DW4R-4):**
+  pedido do usuário; as duas ficavam na coluna 4:3. Rastreio sem janela em 16:9
+  (`DW4_RO_TRACE` nos flips 60, 1660 e 1820):
+  - *Loading (flip ~60, antes dos logos):* fundo preto 21..621 × −9..491 (um lote) e, noutro
+    lote 2D, a linha 21..621 × 451..456 mais o texto 461..593 × 421..451. Regra de lote em
+    `ro_squeeze`: reconhecido pela caixa do lote (21..621, terminando em y 456) com um triângulo
+    de ≥ 598 de largura em y 451; a linha não é espremida (mesma margem proporcional de 4:3) e
+    o texto é ancorado na borda direita, para continuar no fim da linha.
+  - *Título:* o túnel do fundo é 3D e já ocupava a tela larga; o que ficava em 4:3 era a faixa
+    escura atrás de "Press START button" / "Game Start / Option": três quadros de −13..654 (duas
+    linhas e a faixa), com altura que muda entre os dois estados (284..344 e 261..369), no mesmo
+    lote das setas `>` `<`. Regra por triângulo: 2D de −13..654 (±1,5) e até 150 de altura não é
+    espremido; setas, texto, logotipo e copyright seguem no centro.
+  - Não executado sem janela (o usuário dispensou); **confirmado pelo usuário jogando**
+    ("ótimo, aprovado"). `DW4_WS_DIALOG=0` desliga também estas regras.
+- **Minimapa das fases enorme — recorte do guest não era aplicado (2026-11-24, DW4R-2):** o
   painel do mapa ocupava do meio da tela até além da borda direita. Não é do widescreen: vale em
   qualquer proporção.
   - *Como foi achado:* captura F9 do usuário no OpenGL (`build/shots/f9-011.txt`): os 70 draws do

@@ -325,6 +325,14 @@ Regra em `ro_squeeze` (`src/hooks/render_opts.h`), comum aos dois renderizadores
 - **Não verificado:** lojas, perguntas com escolha, menu do portal, falas nas fases, retrato do
   lado direito (se existir), 2–4 jogadores.
 
+### Loading do boot e faixa do título de ponta a ponta (2026-11-24)
+
+Em 16:9 e 21:9 a linha do "Loading..." (antes dos logos) e a faixa escura atrás de "Press START
+button" / "Game Start / Option" ficavam na coluna 4:3; agora não são espremidas. O texto
+"Loading..." vai para o fim da linha, à direita. Regras em `ro_squeeze`; geometria em
+`PORT_NOTES.md` §7.6. Sem execução sem janela (o usuário dispensou); **confirmado pelo usuário
+jogando** ("ótimo, aprovado").
+
 ## Release v0.3.1 (2026-11-24)
 
 Só a correção da tela branca (memória do guest devolvida). Notas em `docs/releases/v0.3.1.md`.
