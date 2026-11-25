@@ -37,13 +37,26 @@ HERE = Path(__file__).resolve().parent          # no pacote congelado: pasta de 
 ROOT = HERE.parent
 FROZEN = bool(getattr(sys, "frozen", False))
 
+WIN = os.name == "nt"
+# Pacote de release: congelado pelo PyInstaller (Linux) ou Python embutido
+# iniciado pelo DigimonWorld4-Recomp.exe (Windows, que define DW4_PACKAGED).
+PACKAGED = FROZEN or bool(os.environ.get("DW4_PACKAGED"))
+EXE_NAME = "dw4_recomp.exe" if WIN else "dw4_recomp"
+
+
+def _user_data_dir() -> Path:
+    if WIN:
+        return Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming") / "dw4-recomp"
+    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "dw4-recomp"
+
+
 # APP: onde estao o executavel do jogo e lib/ (so leitura dentro de um AppImage).
 # DATA: tudo o que se grava (opcoes, logs, saves, backups, game_data/).
 #   - no repositorio e no pacote .tar.gz antigo: a propria pasta do projeto;
-#   - no AppImage / pacote congelado: ~/.local/share/dw4-recomp (XDG_DATA_HOME).
+#   - no pacote: ~/.local/share/dw4-recomp (XDG_DATA_HOME) no Linux,
+#     %APPDATA%\dw4-recomp no Windows.
 APP = Path(os.environ.get("DW4_APP_DIR") or (Path(sys.executable).resolve().parent.parent / "game" if FROZEN else ROOT))
-DATA = Path(os.environ.get("DW4_DATA_DIR") or (
-    Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "dw4-recomp" if FROZEN else ROOT))
+DATA = Path(os.environ.get("DW4_DATA_DIR") or (_user_data_dir() if PACKAGED else ROOT))
 # --wine (so a partir do codigo): este launcher, nativo no Linux, inicia o .exe
 # de Windows pelo Wine, para testar as opcoes de video no build de Windows antes
 # de existir um launcher para Windows. Prefixo e saves proprios, para nao tocar
@@ -304,7 +317,7 @@ class Backend(QObject):
     def exe(self):
         if WINE:
             return WINE_EXE if WINE_EXE.is_file() and shutil.which("wine") else None
-        for p in (APP / "dw4_recomp", APP / "build" / "dw4_recomp"):
+        for p in (APP / EXE_NAME, APP / "build" / EXE_NAME):
             if p.is_file() and os.access(p, os.X_OK):
                 return p
         return None
@@ -326,7 +339,7 @@ class Backend(QObject):
     def shot_dir(self) -> Path:
         """Capturas (F9) e caixa-preta de quadros (F12): no pacote ficam na pasta
         de dados do usuario; a partir do codigo, em build/shots como sempre."""
-        return DATA / "shots" if FROZEN else ROOT / "build" / "shots"
+        return DATA / "shots" if PACKAGED else ROOT / "build" / "shots"
 
     def missing_files(self):
         d = self.game_dir()
@@ -334,7 +347,24 @@ class Backend(QObject):
 
     # ── deteccao ────────────────────────────────────────────────────────────
     @staticmethod
+    def _win_reg(key: str, value: str) -> str:
+        """Um valor de texto do registro (HKLM); "" se nao existir."""
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key) as k:
+                return str(winreg.QueryValueEx(k, value)[0]).strip()
+        except (OSError, ImportError):
+            return ""
+
+    @staticmethod
     def _detect_gpu() -> str:
+        if WIN:
+            # Adaptadores de video instalados; o "basico" da Microsoft so se nao houver outro.
+            base = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+            names = [Backend._win_reg(base + "\\%04d" % i, "DriverDesc") for i in range(8)]
+            names = [n for n in names if n]
+            real = [n for n in names if "Microsoft" not in n]
+            return (real or names or ["—"])[0]
         for cmd, rx in ((["glxinfo", "-B"], r"OpenGL renderer string:\s*(.+)"),
                         (["lspci"], r"(?:VGA compatible controller|3D controller):\s*(.+)")):
             try:
@@ -348,6 +378,13 @@ class Backend(QObject):
 
     def _detect_vulkan(self) -> bool:
         """O renderizador Vulkan veio no pacote e o sistema tem o loader do Vulkan."""
+        if WIN:                         # o renderizador fica dentro do executavel
+            try:
+                import ctypes
+                ctypes.WinDLL("vulkan-1.dll")
+                return self.exe() is not None
+            except OSError:
+                return False
         if not any((d / "libdw4_vk.so").is_file() for d in (APP, APP / "build")):
             return False
         try:
@@ -366,7 +403,9 @@ class Backend(QObject):
             return self.cfg["lang"]
         loc = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG")
                or (locale.getlocale()[0] or ""))
-        return "pt" if loc.lower().startswith("pt") else "en"
+        # No Windows o Python devolve "Portuguese_Brazil"; o Qt, "pt_BR" em todo sistema.
+        loc = loc.lower()
+        return "pt" if loc.startswith("pt") or loc.startswith("portuguese") else "en"
 
     # ── propriedades para o QML ─────────────────────────────────────────────
     @Property("QVariantMap", notify=langChanged)
@@ -735,6 +774,9 @@ class Backend(QObject):
 
     @staticmethod
     def _cpu_name() -> str:
+        if WIN:
+            return (Backend._win_reg(r"HARDWARE\DESCRIPTION\System\CentralProcessor\0", "ProcessorNameString")
+                    or platform.processor() or "?")
         try:
             for ln in open("/proc/cpuinfo", encoding="utf-8", errors="replace"):
                 if ln.startswith("model name"):
@@ -754,10 +796,17 @@ class Backend(QObject):
         with open(last, "rb") as f:
             f.seek(max(0, last.stat().st_size - 60000))
             tail = f.read().decode("utf-8", "replace").splitlines()[-300:]
-        osr = platform.freedesktop_os_release().get("PRETTY_NAME", "?") if hasattr(platform, "freedesktop_os_release") else "?"
+        if WIN:
+            system = "%s | cpu: %s, %s threads" % (platform.platform(), self._cpu_name(), os.cpu_count() or "?")
+        else:
+            try:
+                osr = platform.freedesktop_os_release().get("PRETTY_NAME", "?")
+            except (OSError, AttributeError):
+                osr = "?"
+            system = ("%s | kernel %s | glibc %s | cpu: %s, %s threads"
+                      % (osr, platform.release(), platform.libc_ver()[1], self._cpu_name(), os.cpu_count() or "?"))
         body = ["Digimon World 4 - Recomp: report", "version: " + self.version,
-                "system: %s | kernel %s | glibc %s | cpu: %s, %s threads"
-                % (osr, platform.release(), platform.libc_ver()[1], self._cpu_name(), os.cpu_count() or "?"),
+                "system: " + system,
                 "gpu: " + self._gpu, "options: " + json.dumps({k: v for k, v in self.cfg.items() if k != "game_dir"}),
                 "game files present: " + ", ".join(n for n in GAME_FILES if n not in self.missing_files()),
                 "log: " + last.name] + self._perf_lines(last) + ["-" * 70] + tail
@@ -787,6 +836,11 @@ def main() -> int:
     if "--play" in args:
         return play_direct()
     offscreen = "--selftest" in args or "--screenshot" in args
+    if os.environ.get("DW4_QPA"):
+        # Teste do pacote de Windows no Wine: ele nao repassa variaveis QT_* ao
+        # programa, e a plataforma "offscreen" do Qt no Windows nao tem fontes
+        # (o texto sai em quadradinhos). DW4_QPA=windows captura com a real.
+        os.environ["QT_QPA_PLATFORM"] = os.environ["DW4_QPA"]
     if offscreen:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         os.environ.setdefault("QT_QUICK_BACKEND", "software")
@@ -811,7 +865,7 @@ def main() -> int:
         assert set(STR["pt"]) == set(STR["en"]), "tabelas de texto diferentes entre idiomas"
         import xiso  # noqa: F401  (confere que o leitor de imagem veio no pacote)
         exe = backend.exe()
-        print("app:", "frozen" if FROZEN else "source", "| wine:" if WINE else "|", "game exe:", "ok" if exe else "MISSING",
+        print("app:", "frozen" if FROZEN else "packaged" if PACKAGED else "source", "| wine:" if WINE else "|", "game exe:", "ok" if exe else "MISSING",
               "| data:", scrub(str(DATA)))
         print("selftest ok")
         return 0

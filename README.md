@@ -11,9 +11,9 @@ project's code replace the Xbox kernel, GPU, audio and input. No emulator.
 > copy of Digimon World 4 for the Xbox (NTSC-U). The C code is generated on your machine from your
 > `default.xbe` and is never committed.
 
-> **Linux is the only supported system today.** A **Windows build is in experimental preview**
-> (since `v0.4.0`): it runs under Wine and has not been tested on real Windows yet, and
-> it has no launcher. The macOS port has not been started; it is planned.
+> **Linux and Windows.** The Windows build exists since `v0.4.0`, with the launcher since `v0.4.1`:
+> the game was played on Windows 11; the launcher has only been tested under Wine so far. The
+> macOS port has not been started; it is planned.
 >
 > **Only the beginning of the game has been tested:** Terminal Area (the lobby), Central Area,
 > Death Valley and Humid Cave. Everything after that — later areas, bosses, the ending — has never
@@ -43,8 +43,8 @@ Cave — on the one machine it has been tested on (see
 | Internal resolution up to 4K and widescreen (16:9, 21:9): wider scenery, player panel and minimap in the screen corners, dialogue box edge to edge, menus stay 4:3 | ✅ played in the first stages |
 | Launcher restyled after the game's menus; frame-rate limit (30 by default, the console's speed; 60 is smoother but the game runs twice as fast) | ✅ new |
 | Key remapping | ⬜ not implemented |
-| Linux | ✅ the only system supported today |
-| Windows | 🧪 experimental preview (Vulkan and OpenGL, no launcher); only tested under Wine, not on real Windows |
+| Linux | ✅ where the port is developed and tested the most |
+| Windows | ✅ since v0.4.0 (Vulkan and OpenGL, same launcher); game played on Windows 11, launcher only tested under Wine |
 | macOS | ⬜ planned, not started |
 | Steam Deck | ⬜ not tested |
 
