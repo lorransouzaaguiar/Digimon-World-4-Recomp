@@ -300,6 +300,12 @@ goldens iguais em Vulkan e OpenGL; cenário de ~105 s repetido 3× sem erro.
 tempo nem quantas trocas de área teve essa sessão. Muda o endereço de toda alocação depois do primeiro free: se aparecer
 crash novo, comparar com `DW4_NO_HEAP_RECLAIM=1`.
 
+## Release v0.3.1 (2026-11-24)
+
+Só a correção da tela branca (memória do guest devolvida). Notas em `docs/releases/v0.3.1.md`.
+Pacote conferido fora do projeto (`--selftest`; boot → lobby sem janela com os 4 goldens;
+`frees=893`, nenhuma `arena exhausted`) e **aberto e jogado pelo usuário antes de publicar**.
+
 ## Release v0.3.0 (2026-11-24)
 
 Desempenho (espera por evento, Vulkan direto pela GPU, modo paralelo), widescreen (fade, HUD,

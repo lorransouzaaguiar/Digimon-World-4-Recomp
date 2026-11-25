@@ -14,7 +14,7 @@ caminho para as três plataformas (macOS via MoltenVK).
 
 - **Jogável:** boot, vídeos, menus, criação do Digimon, save/load, lobby, tutorial e primeira fase,
   a 60 fps (CachyOS, NVIDIA). Fases seguintes, chefes e multijogador **não foram testados**.
-- **Publicado:** release v0.3.0 (2026-11-24; AppImage + tar.gz; antes v0.2.0 e v0.1.0) em
+- **Publicado:** release v0.3.1 (2026-11-24; AppImage + tar.gz; antes v0.3.0, v0.2.0 e v0.1.0) em
   `github.com/lorransouzaaguiar/Digimon-World-4-Recomp` (preparado para ficar público: licença
   MIT, histórico com e-mail noreply; a visibilidade quem muda é o usuário).
 - **Vulkan (branch `DW4R-1`):** `src/hooks/nv2a_vk_backend.c` passa nos mesmos frames de
@@ -31,6 +31,8 @@ caminho para as três plataformas (macOS via MoltenVK).
 - **Aberto:** crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
   assinatura no `STATUS.md`); texgen não implementado; o chão que escurece por alguns quadros;
   HUD em widescreen só conferido com 1 jogador.
+- **Memória do guest:** `RECOMP_HEAP_RECLAIM=1` é default desde a v0.3.1 (sem ela a memória
+  contígua enche e a tela fica branca após alguns minutos); `DW4_NO_HEAP_RECLAIM=1` desliga.
 - **Licença: MIT** (`LICENSE`, escolhida em 2026-11-24). Testado só no começo do jogo: Terminal
   Area, Central Area, Death Valley e Humid Cave.
 
