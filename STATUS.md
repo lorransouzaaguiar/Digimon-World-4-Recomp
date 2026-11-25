@@ -339,8 +339,8 @@ Acabamento do widescreen: caixa de diálogo, rodapé do menu do START, loading d
 título. Notas em `docs/releases/v0.3.2.md`; PR #5 (`DW4R-4` → `main`). Pacote gerado em `dist/`
 e conferido fora do projeto: `--selftest` ok; boot sem janela até o menu do título pelo AppImage
 (`Config: launcher v0.3.2`, renderizador Vulkan carregado de dentro do pacote, saves na pasta de
-teste, sem CRASH/STALL). Goldens 4:3 conferem em Vulkan e OpenGL. **Falta:** o usuário abrir o
-pacote com janela, merge do PR, tag e publicação.
+teste, sem CRASH/STALL). Goldens 4:3 conferem em Vulkan e OpenGL. **AppImage aberto e testado pelo
+usuário com janela ("tá ok").** **Falta:** merge do PR, tag e publicação.
 
 ## Release v0.3.1 (2026-11-24)
 
