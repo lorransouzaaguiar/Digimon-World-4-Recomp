@@ -5,8 +5,8 @@ o toolkit [sp00nznet/xboxrecomp](https://github.com/sp00nznet/xboxrecomp) (v0.18
 `xboxrecomp/`). Não é emulador: o `default.xbe` vira C em `src/recompiled/` e roda sobre o runtime
 do toolkit, com renderizador próprio. Responda em português.
 
-**Objetivo: rodar em Linux, macOS e Windows.** Hoje só o Linux funciona; os outros dois ainda
-não foram começados. Há **dois renderizadores, OpenGL 3.3 e Vulkan**, e o jogador escolhe entre
+**Objetivo: rodar em Linux, macOS e Windows.** Linux e Windows funcionam (Windows desde a v0.4.0,
+por compilação cruzada); o macOS ainda não foi começado. Há **dois renderizadores, OpenGL 3.3 e Vulkan**, e o jogador escolhe entre
 eles no launcher (Gráficos → API gráfica). O Vulkan (1.0, sem extensões) é o padrão desde 2026-11-24, com o OpenGL de reserva; ele é o
 caminho para as três plataformas (macOS via MoltenVK).
 

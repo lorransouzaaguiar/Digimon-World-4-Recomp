@@ -11,9 +11,10 @@ project's code replace the Xbox kernel, GPU, audio and input. No emulator.
 > copy of Digimon World 4 for the Xbox (NTSC-U). The C code is generated on your machine from your
 > `default.xbe` and is never committed.
 
-> **Linux and Windows.** The Windows build exists since `v0.4.0`, with the launcher since `v0.4.1`:
-> the game was played on Windows 11; the launcher has only been tested under Wine so far. The
-> macOS port has not been started; it is planned.
+> **Runs on Linux and Windows**, with the same launcher, the same two renderers (Vulkan and
+> OpenGL) and one download for each system on the
+> [releases page](https://github.com/lorransouzaaguiar/Digimon-World-4-Recomp/releases). The macOS
+> port has not been started; it is planned.
 >
 > **Only the beginning of the game has been tested:** Terminal Area (the lobby), Central Area,
 > Death Valley and Humid Cave. Everything after that — later areas, bosses, the ending — has never
@@ -30,21 +31,21 @@ Cave — on the one machine it has been tested on (see
 | Milestone | |
 |---|---|
 | Pipeline: 23,472 functions lifted, 0 translation errors, 2.25 M lines of C | ✅ |
-| Native Linux host (SDL2, POSIX threads), case-insensitive game file access | ✅ |
+| Native host for Linux and Windows (SDL2 for window, controller and audio), case-insensitive game file access | ✅ |
 | Boot, intro movies (CRI Sofdec), title screen | ✅ |
 | Menus, Digimon creation, saving and loading | ✅ |
 | OpenGL 3.3 renderer with texture cache: 60 fps in the lobby (CPU renderer ~3 fps, kept as the reference) | ✅ |
 | Vulkan renderer, the default: presents straight from the graphics card (swapchain), 4K at 60 fps; OpenGL stays selectable in the launcher (Graphics → Graphics API) and draws the same picture | ✅ |
-| Low processor use: about a third of one core in the lobby (it was about two cores) | ✅ new |
+| Low processor use: about a third of one core in the lobby (it was about two cores) | ✅ |
 | Controller (XInput-style pads) and keyboard | ✅ |
 | Terminal Area (lobby), tutorial, Central Area, Death Valley and Humid Cave playable | ✅ |
 | Every area after those, bosses, the rest of the game | ⬜ never run |
 | Multiplayer (2–4 players) | ⬜ not tested yet |
 | Internal resolution up to 4K and widescreen (16:9, 21:9): wider scenery, player panel and minimap in the screen corners, dialogue box edge to edge, menus stay 4:3 | ✅ played in the first stages |
-| Launcher restyled after the game's menus; frame-rate limit (30 by default, the console's speed; 60 is smoother but the game runs twice as fast) | ✅ new |
+| Launcher styled after the game's menus, the same on Linux and Windows; frame-rate limit (30 by default, the console's speed; 60 is smoother but the game runs twice as fast) | ✅ |
 | Key remapping | ⬜ not implemented |
-| Linux | ✅ where the port is developed and tested the most |
-| Windows | ✅ since v0.4.0 (Vulkan and OpenGL, same launcher); game played on Windows 11, launcher only tested under Wine |
+| Linux (AppImage and `.tar.gz`) | ✅ where the port is developed and tested the most |
+| Windows 10/11 (`.zip`, since v0.4.0; with the launcher since v0.4.1) | ✅ Vulkan and OpenGL, no DirectX; the game was played on Windows 11; the launcher has only been tested under Wine |
 | macOS | ⬜ planned, not started |
 | Steam Deck | ⬜ not tested |
 
@@ -59,7 +60,10 @@ Everything in this README was tested on **one** computer. Nothing else has been 
 | Graphics card | NVIDIA GeForce RTX 5070, 12 GB (driver 620.73.04) |
 | Processor | AMD Ryzen 7 5700X (8 cores / 16 threads) |
 | Memory | 32 GB |
-| System | CachyOS Linux (Arch-based), kernel 7.3 |
+| System | CachyOS Linux (Arch-based), kernel 7.3; Windows 11 on the same computer (dual boot) |
+
+All the numbers below are from the Linux build. What was tested of the Windows build is in
+[its own section](#windows-build-what-was-tested).
 
 Frame rate, with the limiter off (the game then runs at up to 60 fps, twice the console's speed),
 on Vulkan:
@@ -92,6 +96,23 @@ frames on both renderers; the same run passes with a window and the Vulkan swapc
 headless compositor; plugging a virtual controller in and out 400 times while the game reads it
 passes.
 
+### Windows build: what was tested
+
+The Windows build is cross-compiled on Linux (MinGW-w64) and is the same code: same renderers,
+same shaders, same widescreen rules.
+
+- **On Windows 11** (same computer): the game was played with v0.4.0, started without the
+  launcher. It worked; no frame-rate numbers were recorded.
+- **Under Wine 11.22 on Linux:** automated runs from boot to the lobby match the same reference
+  frames as the Linux build, on Vulkan and on OpenGL. Played with a window on Vulkan (lobby,
+  Central Area, unlocking Death Valley, the tutorial; up to 1440p 16:9) and briefly on OpenGL.
+  Under Wine it ran a little below the Linux build in the heaviest places (about 55 fps in the
+  busiest part of Central Area at 1440p, where Linux holds 60).
+- **The launcher on Windows** (v0.4.1) has only been run under Wine: it opens, its five screens
+  draw correctly and the game started from it reaches the lobby with the reference frames on both
+  renderers. It has not been tried on real Windows yet; the file pickers, reading an `.iso` and
+  the report have not been exercised at all.
+
 ### Known issues
 
 - Skipping the intro movie with START can make the game quit. In automated runs without a window
@@ -104,12 +125,17 @@ passes.
   The default is 30.
 - In widescreen the loading screen is stretched to the full width, and the player panel has only
   been checked with one player.
+- Windows: if the game hangs, the log does not yet record where each thread stopped (it does on
+  Linux); the keyboard as a controller has not been tested there.
 - Tested on a single machine (above). Other GPUs, drivers and distributions are untested; AMD and
   Intel graphics have never been tried.
 
 ## Playing a release
 
-One download, nothing to install:
+One download for your system, nothing to install. The game data is **not** included: it comes
+from your own disc.
+
+### Linux
 
 1. Download `DigimonWorld4-Recomp-<version>-x86_64.AppImage` from the [releases page](https://github.com/lorransouzaaguiar/Digimon-World-4-Recomp/releases).
 2. Make it executable and open it: `chmod +x DigimonWorld4-Recomp-*.AppImage`, then double-click
@@ -129,7 +155,29 @@ run it with `--appimage-extract-and-run`, or use the `.tar.gz` package (same con
 Saves, settings and logs live in `~/.local/share/dw4-recomp/`, outside the AppImage, so replacing
 the file with a newer version keeps them.
 
+### Windows
+
+1. Download `DigimonWorld4-Recomp-<version>-windows-x86_64.zip` from the [releases page](https://github.com/lorransouzaaguiar/Digimon-World-4-Recomp/releases)
+   and extract **all of it** to any folder.
+2. Open `DigimonWorld4-Recomp.exe` (the launcher). The first time, Windows may warn that the
+   program is unknown (SmartScreen): **More info → Run anyway**.
+3. On the **Play** screen, choose the image (`.iso`) of your own Digimon World 4 disc, or a folder
+   with the disc already extracted.
+4. Click **PLAY**.
+
+The `.zip` carries the launcher (with its own Python and Qt), the recompiled game and the
+libraries it needs (SDL2, libepoxy).
+
+Requirements: Windows 10 or 11, 64-bit, and a GPU with a working Vulkan or OpenGL 3.3 driver.
+
+Saves, settings and logs live in `%APPDATA%\dw4-recomp\` (paste that in the Explorer address bar),
+outside the extracted folder, so a newer version keeps them. v0.4.0 kept its saves in a
+`save_data` folder next to `run.bat`; copy that folder into `%APPDATA%\dw4-recomp\` to keep them.
+
 ## Launcher
+
+It is the same on Linux and Windows. In a release it is what the download opens; from a source
+checkout:
 
 ```bash
 ./launcher.sh            # opens the launcher
@@ -151,7 +199,8 @@ the file with a newer version keeps them.
 The interface is in Portuguese (Brazil) or English, chosen from the system language; it can be
 changed in the sidebar. Every run through the launcher is logged to `logs/` (the last 10 are kept).
 Settings are stored in `config/launcher.json`. In a source checkout these folders are in the
-project; in a release they are under `~/.local/share/dw4-recomp/`.
+project; in a release they are under `~/.local/share/dw4-recomp/` (Linux) or
+`%APPDATA%\dw4-recomp\` (Windows).
 
 Releases bundle everything the launcher needs. From a source checkout it uses PySide6 (Qt for
 Python), which `scripts/setup.sh` installs into `.venv`; `./run.sh` starts the game without it.
@@ -171,6 +220,8 @@ default.xbe   area.afs   ndmw.afs   ndmw.igb
 Never share game files, and do not attach them to bug reports.
 
 ## Building from source
+
+The build machine is Linux; the Windows build is cross-compiled from it.
 
 Arch / CachyOS:
 
@@ -194,21 +245,42 @@ cmake --build build -j$(nproc)
 
 Compiling the generated code needs several GB of RAM; lower `-j` if the build runs out of memory.
 
-### Release package
+### Windows build (cross-compiled on Linux)
 
 ```bash
-scripts/package_release.sh v0.1.0
+sudo pacman -S --needed mingw-w64-gcc shaderc
+scripts/build_win.sh             # -> build-win/dw4_recomp.exe (log in build-win/build.log)
 ```
 
-Writes to `dist/` the `.AppImage`, a `.tar.gz` with the same content and a `SHA256SUMS` file. The
-script downloads its packaging tools into `tools/` (appimagetool and a portable Python used only to
-freeze the launcher), and refuses to finish if the package contains a game file, a path from the
-build machine, or a library that needs a glibc newer than 2.38.
-The packaged executable contains the recompiled game code; disc data is never included.
+The script fetches what it needs into `tools/win-deps/` with pinned versions and checksums: SDL2
+for MinGW, libepoxy (built from source) and an import library for `vulkan-1.dll` generated from the
+Vulkan headers. The result imports no DirectX library. To test it without leaving Linux, with
+nothing appearing on the display:
+
+```bash
+scripts/soak.py --wine --golden                        # Vulkan, under Wine, against the reference frames
+scripts/soak.py --wine --gamescope --opengl --golden   # OpenGL (needs a display: a headless gamescope)
+./launcher.sh --wine                                   # the Linux launcher starting the .exe (opens a window)
+```
+
+### Release packages
+
+```bash
+scripts/package_release.sh v0.4.1     # Linux: .AppImage and .tar.gz
+scripts/package_win.sh v0.4.1         # Windows: .zip (run it after the Linux one)
+```
+
+Both write to `dist/`, with one `SHA256SUMS` file for the three downloads, and remove the packages
+of other versions from there. They download their packaging tools into `tools/` (appimagetool and
+a portable Python to freeze the Linux launcher; the official embeddable Python and Qt for the
+Windows one) and refuse to finish if a package contains a game file, a path from the build machine,
+a library that needs a glibc newer than 2.38 (Linux) or an unexpected DLL import (Windows).
+The packaged executables contain the recompiled game code; disc data is never included.
 
 ## Controls
 
-Any controller the system reports as an Xbox/XInput pad works. The keyboard acts as controller 1:
+Any game controller SDL2 recognises works (Xbox, PlayStation and similar pads), on both systems.
+The keyboard acts as controller 1:
 
 | Key | Xbox control |
 |---|---|
@@ -224,7 +296,11 @@ Any controller the system reports as an Xbox/XInput pad works. The keyboard acts
 
 ## Reporting a problem
 
-Run with a log and attach the file:
+From a release, on either system: in the launcher, open **Support → Create report** and attach the
+text file to an issue. It carries the system, the options and the end of the last log. Never attach
+game files.
+
+From a source checkout, run with a log and attach the file:
 
 ```bash
 ./run.sh > run.log 2>&1
@@ -232,7 +308,7 @@ Run with a log and attach the file:
 
 - **Crash:** the log ends with a `[CRASH]` report.
 - **Freeze:** wait about ten seconds before closing; after 5 s without a new frame the log records
-  where every thread stopped (`[STALL]`).
+  where every thread stopped (`[STALL]`; on Windows only the stall itself is recorded for now).
 - **Picture problem:** press **F9** with the problem on screen (source builds). It writes a
   screenshot to `build/shots/`; with the OpenGL renderer it also writes a list of every draw call,
   which is what makes most picture bugs findable.
@@ -256,8 +332,13 @@ presentation mode on Vulkan.
   (nothing appears on the display), which exercises the Vulkan swapchain.
 - CPU profile without `perf`: `scripts/soak.py -e DW4_PROF=/tmp/p.txt -e DW4_PROF_FROM=3900`, then
   `scripts/prof_report.py /tmp/p.txt`.
-- The renderers (`src/hooks/nv2a_vk_backend.c`, `nv2a_gl_backend.c`) hot-reload: run
-  `cmake --build build --target dw4_vk` (or `dw4_gl`) while the game is open.
+- `scripts/soak.py --wine` runs the Windows build under Wine the same way, and `--wine --gamescope
+  --opengl` covers its OpenGL renderer.
+- The renderers (`src/hooks/nv2a_vk_backend.c`, `nv2a_gl_backend.c`) hot-reload on Linux: run
+  `cmake --build build --target dw4_vk` (or `dw4_gl`) while the game is open. On Windows both are
+  linked into the executable.
+- What depends on the operating system (paths, environment, crash report) sits behind
+  `src/hooks/host_os.h`, with one file for Linux and one for Windows.
 - Toolkit changes live in `patches/xboxrecomp-dw4.patch` and are applied by `scripts/setup.sh`.
 
 These documents are in Portuguese for now.
@@ -266,7 +347,7 @@ These documents are in Portuguese for now.
 
 The Xbox CPU is an x86, so the game's machine code is lifted function by function to C and
 compiled for x86-64. The game talks to the Xbox kernel through 128 imports, which the toolkit
-implements on Linux. It drives the graphics chip (NV2A) by writing command buffers directly; the
+implements on Linux and on Windows; window, controller and audio go through SDL2 on both. It drives the graphics chip (NV2A) by writing command buffers directly; the
 toolkit decodes those commands and this project's back end draws them -- OpenGL 3.3 or Vulkan, two
 modules behind one interface (`src/hooks/gl_module.h`) -- with the register combiners turned into a
 shader and textures cached by guest address and content.
