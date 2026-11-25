@@ -197,8 +197,59 @@ static inline int ro_scissor(const uint32_t clip[4], int wide, uint32_t gw, uint
 #define RO_DIALOG_STRIP_W 300.0f
 #define RO_DIALOG_MAX_TRIS 256      /* o painel tem 82 (fala) ou 64 (mensagem) */
 
-/* DW4_WS_DIALOG=0 desliga a regra (caixa em 4:3 no meio, como antes): serve
- * para comparar antes/depois. */
+/* Tiras da interface: fecha `strip` (um byte por triangulo, sementes ja
+ * marcadas) com todo triangulo que divide uma aresta com um de tira. Cada
+ * tira do jogo e um quadro de 640 mais uma sobra de 54 colada nele. */
+static inline void ro_strip_close(const Nv2aVertex *v, uint32_t nt, uint8_t *strip)
+{
+    for (int pass = 0; pass < 2; pass++)
+        for (uint32_t a = 0; a < nt; a++) {
+            if (strip[a])
+                continue;
+            for (uint32_t b = 0; b < nt && !strip[a]; b++) {
+                int shared = 0;
+
+                if (!strip[b])
+                    continue;
+                for (int i = 0; i < 3; i++)
+                    for (int j = 0; j < 3; j++)
+                        if (fabsf(v[a * 3 + i].x - v[b * 3 + j].x) < 0.01f
+                                && fabsf(v[a * 3 + i].y - v[b * 3 + j].y) < 0.01f) {
+                            shared++;
+                            break;
+                        }
+                if (shared >= 2)
+                    strip[a] = 1;
+            }
+        }
+}
+
+/* Corta um triangulo 2D em x = lo..hi movendo os vertices que passam do
+ * limite e levando o uv junto (o mapa de textura do triangulo e afim). Vale
+ * para os quadros retos das tiras: os dois triangulos de um quadro, cortados
+ * assim, somam exatamente o quadro cortado. */
+static inline void ro_clamp_tri_x(Nv2aVertex *t, float lo, float hi)
+{
+    float ax = t[1].x - t[0].x, ay = t[1].y - t[0].y;
+    float bx = t[2].x - t[0].x, by = t[2].y - t[0].y;
+    float det = ax * by - bx * ay, gu = 0.0f, gv = 0.0f;
+
+    if (fabsf(det) > 1e-6f) {           /* d(u)/dx e d(v)/dx no triangulo */
+        gu = ((t[1].u - t[0].u) * by - (t[2].u - t[0].u) * ay) / det;
+        gv = ((t[1].v - t[0].v) * by - (t[2].v - t[0].v) * ay) / det;
+    }
+    for (int j = 0; j < 3; j++) {
+        float c = t[j].x < lo ? lo : t[j].x > hi ? hi : t[j].x;
+
+        t[j].u += gu * (c - t[j].x);
+        t[j].v += gv * (c - t[j].x);
+        t[j].x = c;
+    }
+}
+
+/* DW4_WS_DIALOG=0 desliga as regras das tiras da interface (caixa de dialogo
+ * de ponta a ponta, rodape do menu do START cortado em 4:3): volta ao
+ * comportamento antigo, para comparar antes/depois. */
 static inline int ro_dialog_on(void)
 {
     static int on = -1;
@@ -299,7 +350,7 @@ static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, floa
          * Menus continuam em 4:3, inteiros, no meio. A caixa de dialogo nao
          * encosta na borda (termina em y = 463) e tem regra propria, logo
          * abaixo. */
-        if (trace > 1 && r0 == 1.0f && r1 == 1.0f && count <= 300
+        if (trace > 1 && r0 == 1.0f && r1 == 1.0f && count <= 3 * RO_DIALOG_MAX_TRIS
                 && ro_trace_flip(dw4_frame_count()))
             for (uint32_t i = 0; i + 2 < count; i += 3)     /* 2D: triangulo por triangulo */
                 fprintf(stderr, "[ROT]  %4u  (%.0f,%.0f) (%.0f,%.0f) (%.0f,%.0f)\n", i / 3,
@@ -370,26 +421,7 @@ static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, floa
 
                     strip[a] = x1 - x0 >= RO_DIALOG_STRIP_W;
                 }
-                for (int pass = 0; pass < 2; pass++)
-                    for (uint32_t a = 0; a < nt; a++) {
-                        if (strip[a])
-                            continue;
-                        for (uint32_t b = 0; b < nt && !strip[a]; b++) {
-                            int shared = 0;
-
-                            if (!strip[b])
-                                continue;
-                            for (int i = 0; i < 3; i++)
-                                for (int j = 0; j < 3; j++)
-                                    if (fabsf(v[a * 3 + i].x - v[b * 3 + j].x) < 0.01f
-                                            && fabsf(v[a * 3 + i].y - v[b * 3 + j].y) < 0.01f) {
-                                        shared++;
-                                        break;
-                                    }
-                            if (shared >= 2)
-                                strip[a] = 1;
-                        }
-                    }
+                ro_strip_close(v, nt, strip);
                 for (uint32_t a = 0; a < nt; a++)
                     if (!strip[a])
                         for (int j = 0; j < 3; j++)
@@ -441,6 +473,41 @@ static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, floa
                     return;
                 }
             }
+        }
+    }
+    /* Rodape do menu do START (e qualquer outro uso das tiras da interface
+     * fora da caixa de dialogo, tratada acima).
+     *
+     * As duas "caixas" do rodape sao tiras de 694 de largura que em 4:3
+     * passam das bordas da tela e sao cortadas por ela: o painel 239..933 x
+     * 366..509 com duas linhas, e a faixa 1..695 x 427..455 com as linhas
+     * -54..641 (captura f9-015 do usuario). Espremidas com o resto do menu,
+     * as pontas que a tela escondia apareciam fora da coluna 4:3 (pedido do
+     * usuario, 2026-11-24). Aqui cada tira e cortada em 0..640 antes de ser
+     * espremida, entao acaba na borda da coluna 4:3, como em 4:3 acabava na
+     * borda da tela.
+     * Semente: triangulo 2D com 640 de largura e baixo (um quadro de tela
+     * inteira ou uma imagem deslizando nao entram). */
+    if (count >= 6 && count <= 3 * RO_DIALOG_MAX_TRIS && guest_w == 640.0f && ro_dialog_on()) {
+        uint8_t strip[RO_DIALOG_MAX_TRIS];
+        uint32_t nt = count / 3, seeds = 0;
+
+        for (uint32_t a = 0; a < nt; a++) {
+            const Nv2aVertex *t = &v[a * 3];
+            float x0 = fminf(t[0].x, fminf(t[1].x, t[2].x));
+            float x1 = fmaxf(t[0].x, fmaxf(t[1].x, t[2].x));
+            float y0 = fminf(t[0].y, fminf(t[1].y, t[2].y));
+            float y1 = fmaxf(t[0].y, fmaxf(t[1].y, t[2].y));
+
+            strip[a] = t[0].rhw == 1.0f && t[1].rhw == 1.0f && t[2].rhw == 1.0f
+                       && fabsf(x1 - x0 - 640.0f) <= 2.0f && y1 - y0 <= 150.0f;
+            seeds += strip[a];
+        }
+        if (seeds) {
+            ro_strip_close(v, nt, strip);
+            for (uint32_t a = 0; a < nt; a++)
+                if (strip[a])
+                    ro_clamp_tri_x(&v[a * 3], 0.0f, guest_w);
         }
     }
     for (uint32_t i = 0; i + 2 < count; i += 3) {

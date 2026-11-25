@@ -317,6 +317,11 @@ Regra em `ro_squeeze` (`src/hooks/render_opts.h`), comum aos dois renderizadores
   os dois tipos de caixa parados, a entrada deslizando, o menu do START e o HUD iguais a antes;
   goldens 4:3 iguais nos dois renderizadores.
 - **Confirmado pelo usuário jogando (2026-11-24):** testou em alguns personagens, "tá bom assim".
+- **Rodapé do menu do START (mesmo dia, depois do commit `cb37217`):** as duas caixas do rodapé
+  passavam da coluna 4:3 em tela larga; agora as tiras são cortadas em 0..640 antes de serem
+  espremidas (`PORT_NOTES.md` §7.6). Verificado sem janela em 16:9 nos dois renderizadores;
+  a animação do menu e outros menus não foram vistos sem janela. **Confirmado pelo usuário
+  jogando:** "ficou ótimo assim, funcionou".
 - **Não verificado:** lojas, perguntas com escolha, menu do portal, falas nas fases, retrato do
   lado direito (se existir), 2–4 jogadores.
 

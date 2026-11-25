@@ -660,7 +660,23 @@ comum). Desenho tirado do Amped 2 e dos dois SSX 3 (`docs/REFERENCIAS.md`), cód
     erradas). Passou para `f1060`. Conferir no log: `[CONTIG] ... free ... 2048 KB` (a textura do
     vídeo) tem de sair no instante do `f1060`, não no do `f1600`. `lobby.txt` (goldens) usa
     `f1000` e tem o mesmo risco.
-- **Minimapa das fases enorme — recorte do guest não era aplicado (2026-11-24, DW4R-2):** o
+- **Rodapé do menu do START cortado em 4:3 (2026-11-24, DW4R-4):** em tela larga as duas
+  "caixas" do rodapé passavam da coluna 4:3 em que o resto do menu fica (pedido do usuário).
+  - *Geometria (captura `f9-015` do usuário, draws 669–674, atlas de interface, blend 302/303):*
+    são as mesmas tiras de 694 da caixa de diálogo — painel 239..933 × 366..509 com duas linhas
+    (239..933), e faixa 1..695 × 427..455 com as linhas −54..641. Em 4:3 a tela corta o que passa
+    de 0..640; espremidas, as pontas escondidas apareciam (o painel ia até a borda direita da
+    tela larga e as linhas começavam antes da coluna).
+  - *Regra (`ro_squeeze`, antes do laço geral):* em lote 2D pequeno (≤ 256 triângulos), tira =
+    triângulo de 640 de largura e até 150 de altura, mais os que dividem aresta com ele
+    (`ro_strip_close`). Cada triângulo de tira é cortado em x = 0..640 movendo os vértices e
+    levando o uv pelo gradiente do triângulo (`ro_clamp_tri_x`); depois é espremido como o
+    resto. A caixa de diálogo é tratada antes e não chega aqui. `DW4_WS_DIALOG=0` desliga também
+    esta regra.
+  - *Verificado sem janela:* 16:9, Vulkan e OpenGL, menu do START no lobby (rodapé termina na
+    coluna 4:3; diálogo e HUD iguais). *Não verificado:* 21:9; a animação de abrir/fechar o menu;
+    outros menus que usem as tiras (lojas, portal).
+
   painel do mapa ocupava do meio da tela até além da borda direita. Não é do widescreen: vale em
   qualquer proporção.
   - *Como foi achado:* captura F9 do usuário no OpenGL (`build/shots/f9-011.txt`): os 70 draws do
