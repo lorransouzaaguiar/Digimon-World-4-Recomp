@@ -96,8 +96,69 @@ index ae6228d..2f93e34 100644
      # Mouse+keyboard pad (RECOMP_MKB) reads Win32 raw input.
      target_sources(xbox_input PRIVATE mkb_input.c)
      # mingw-w64's libxinput.a imports XINPUT1_3.dll, the DirectX June 2010
+diff --git a/src/input/keyboard.c b/src/input/keyboard.c
+index 99ffa12..05d8180 100644
+--- a/src/input/keyboard.c
++++ b/src/input/keyboard.c
+@@ -147,8 +147,46 @@ static int row_control(const xbox_key_row *r)
+     return -1;
+ }
+ 
++/* DW4 port: RECOMP_KEYMAP="a=space;start=enter;left_stick_up=w,numpad8"
++ * replaces the keys of the controls it names (input_map.h names for controls
++ * and keys; "none" leaves a control with no key); controls it does not name
++ * keep the map above. Read once. */
++static void keymap_env_apply(InputBindings *b)
++{
++    const char *spec = getenv("RECOMP_KEYMAP");
++    char buf[1024], *p, *next;
++
++    if (!spec || !*spec || strlen(spec) >= sizeof buf)
++        return;
++    strcpy(buf, spec);
++    for (p = buf; p && *p; p = next) {
++        char *eq;
++        int control;
++
++        next = strchr(p, ';');
++        if (next)
++            *next++ = 0;
++        eq = strchr(p, '=');
++        if (!eq)
++            continue;
++        *eq++ = 0;
++        while (*p == ' ')
++            p++;
++        control = xbox_InputMap_ControlFromName(p);
++        if (control >= 0)
++            xbox_InputMap_BindingsParse(b, control, eq);
++    }
++}
++
+ void xbox_InputKeyboardBindings(InputBindings *b)
+ {
++    static InputBindings cached;
++    static int have;
++
++    if (have) {
++        *b = cached;
++        return;
++    }
+     memset(b, 0, sizeof *b);
+     /* Full deflection on a diagonal, as this map has always given. */
+     b->diagonal = INPUT_DIAGONAL_FULL;
+@@ -159,6 +197,9 @@ void xbox_InputKeyboardBindings(InputBindings *b)
+             if (c >= 0 && r->vk[k] && b->count[c] < INPUT_BINDINGS_PER_CONTROL)
+                 b->key[c][b->count[c]++] = r->vk[k];
+     }
++    keymap_env_apply(b);
++    cached = *b;
++    have = 1;
+ }
+ 
+ void xbox_InputKeyboardState(XBOX_INPUT_STATE *out)
 diff --git a/src/input/xinput_device.c b/src/input/xinput_device.c
-index 5175387..8ed4922 100644
+index 5175387..57cd068 100644
 --- a/src/input/xinput_device.c
 +++ b/src/input/xinput_device.c
 @@ -49,7 +49,7 @@ static void keyboard_merge(XBOX_INPUT_STATE *pState)
@@ -166,11 +227,47 @@ index 5175387..8ed4922 100644
          controller = g_pads[port];
      }
      g_controller_connected[port] =
+@@ -278,6 +302,35 @@ int xbox_InputAnyOpen(void)
+     return any;
+ }
+ 
++/* DW4 port: what is held on the real controller in a port, as a mask of
++ * (1u << SDL_CONTROLLER_BUTTON_*), with bits 30 and 31 for the left and right
++ * triggers past half way. 0 with no controller there. Unlike
++ * xbox_InputGetState it leaves the keyboard stand-in out and moves no packet
++ * number, so a watcher (the port's quit shortcut) can poll it from its own
++ * thread without the title seeing anything. */
++unsigned xbox_InputPadHeld(DWORD dwPort)
++{
++    SDL_GameController *c;
++    unsigned held = 0;
++
++    if (dwPort >= XBOX_MAX_CONTROLLERS)
++        return 0;
++    update_controllers();
++    SDL_LockJoysticks();
++    c = controller_for_port_locked(dwPort);
++    if (c) {
++        for (int b = 0; b < SDL_CONTROLLER_BUTTON_MAX && b < 30; b++)
++            if (SDL_GameControllerGetButton(c, (SDL_GameControllerButton)b))
++                held |= 1u << b;
++        if (SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16000)
++            held |= 1u << 30;
++        if (SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16000)
++            held |= 1u << 31;
++    }
++    SDL_UnlockJoysticks();
++    return held;
++}
++
+ void xbox_InputInit(void)
+ {
+     /* Keep the default SIGINT/SIGTERM: SDL would turn them into an SDL_QUIT
 diff --git a/src/input/xinput_xbox.h b/src/input/xinput_xbox.h
-index 260fa3f..e05f9fb 100644
+index 260fa3f..1f2c629 100644
 --- a/src/input/xinput_xbox.h
 +++ b/src/input/xinput_xbox.h
-@@ -109,11 +109,15 @@ BOOL xbox_InputIsConnected(DWORD dwPort);
+@@ -109,11 +109,19 @@ BOOL xbox_InputIsConnected(DWORD dwPort);
   */
  DWORD xbox_InputGetCapabilities(DWORD dwPort, DWORD dwFlags, XBOX_INPUT_CAPABILITIES *pCaps);
  
@@ -184,6 +281,10 @@ index 260fa3f..e05f9fb 100644
 + * with NULL when it starts pumping); opens/closes pads on device events. */
 +union SDL_Event;
 +void xbox_InputSdlDeviceEvent(const union SDL_Event *ev);
++/* DW4 port: buttons held on the real controller in a port, as
++ * (1u << SDL_CONTROLLER_BUTTON_*), bits 30/31 = left/right trigger; no
++ * keyboard stand-in, no packet number moved. See xinput_device.c. */
++unsigned xbox_InputPadHeld(DWORD dwPort);
  #endif
  
  #ifdef __cplusplus
@@ -1411,7 +1512,7 @@ index cee70c0..fb823d6 100644
  #include <stdio.h>
  #include <stdlib.h>
 diff --git a/src/video/fb_present_sdl.c b/src/video/fb_present_sdl.c
-index b9b8c3e..bef99b2 100644
+index b9b8c3e..1c5307a 100644
 --- a/src/video/fb_present_sdl.c
 +++ b/src/video/fb_present_sdl.c
 @@ -33,16 +33,19 @@
@@ -1630,7 +1731,95 @@ index b9b8c3e..bef99b2 100644
  
      pthread_attr_init(&attr);
      pthread_attr_setstacksize(&attr, stack);
-@@ -274,7 +409,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -263,6 +398,87 @@ static int start_guest(void)
+ 
+ /* ── The window, on the process main thread ───────────────────────────── */
+ 
++/* DW4 port: which display the window opens on.
++ *
++ * The launcher lists the displays with another library (Qt), and the two do
++ * not agree on names, on numbering, or even on where the desktop's origin is
++ * (X11: the corner of the whole layout; Windows and Wine: the corner of the
++ * primary display, so others have negative coordinates; Wayland: neither has
++ * a primary). What both do agree on is the LAYOUT, so the choice is passed in
++ * ways that do not depend on the origin, tried in this order:
++ *
++ *   RECOMP_DISPLAY_NAME=<text>   the display whose SDL name contains it
++ *   RECOMP_DISPLAY_RANK=<k>/<n>  the k-th of n displays (0-based) when they
++ *                                are sorted left to right, then top to bottom;
++ *                                used only if SDL also sees n displays
++ *   RECOMP_DISPLAY_AT=<x>,<y>    a point inside the display, measured from the
++ *                                top-left corner of the box around ALL displays
++ *   RECOMP_DISPLAY=<n>           SDL display index
++ *
++ * 0 = the primary display when none is set or none matches. */
++static int pick_display(void)
++{
++    const char *name = getenv("RECOMP_DISPLAY_NAME"), *at = getenv("RECOMP_DISPLAY_AT");
++    const char *rank = getenv("RECOMP_DISPLAY_RANK"), *idx = getenv("RECOMP_DISPLAY");
++    SDL_Rect b[16];
++    int n = SDL_GetNumVideoDisplays(), x = 0, y = 0, k = 0, of = 0, pick = -1;
++    int min_x = 0, min_y = 0;
++    const char *how = "";
++
++    if (n < 1 || (!name && !at && !rank && !idx))
++        return 0;
++    if (n > 16)
++        n = 16;
++    for (int i = 0; i < n; i++) {
++        if (SDL_GetDisplayBounds(i, &b[i]) != 0)
++            b[i].x = b[i].y = b[i].w = b[i].h = 0;
++        if (i == 0 || b[i].x < min_x) min_x = b[i].x;
++        if (i == 0 || b[i].y < min_y) min_y = b[i].y;
++    }
++    for (int i = 0; name && *name && pick < 0 && i < n; i++) {
++        const char *dn = SDL_GetDisplayName(i);
++        if (dn && strstr(dn, name)) {
++            pick = i;
++            how = "name";
++        }
++    }
++    if (pick < 0 && rank && sscanf(rank, "%d/%d", &k, &of) == 2 && of == n && k >= 0 && k < n)
++        for (int i = 0; pick < 0 && i < n; i++) {
++            int before = 0;             /* displays that come before display i in the order */
++            for (int j = 0; j < n; j++)
++                if (j != i && (b[j].x < b[i].x || (b[j].x == b[i].x && b[j].y < b[i].y)
++                               || (b[j].x == b[i].x && b[j].y == b[i].y && j < i)))
++                    before++;
++            if (before == k) {
++                pick = i;
++                how = "layout order";
++            }
++        }
++    if (pick < 0 && at && sscanf(at, "%d,%d", &x, &y) == 2)
++        for (int i = 0; pick < 0 && i < n; i++)
++            if (x + min_x >= b[i].x && x + min_x < b[i].x + b[i].w
++                    && y + min_y >= b[i].y && y + min_y < b[i].y + b[i].h) {
++                pick = i;
++                how = "position";
++            }
++    if (pick < 0 && idx && atoi(idx) >= 0 && atoi(idx) < n) {
++        pick = atoi(idx);
++        how = "index";
++    }
++    fprintf(stderr, "  [FBWIN] display asked: name=\"%s\" rank=%s at=%s index=%s\n",
++            name ? name : "", rank ? rank : "-", at ? at : "-", idx ? idx : "-");
++    for (int i = 0; i < n; i++)
++        fprintf(stderr, "  [FBWIN] display %d: \"%s\" %dx%d at %d,%d%s\n", i,
++                SDL_GetDisplayName(i) ? SDL_GetDisplayName(i) : "?", b[i].w, b[i].h, b[i].x, b[i].y,
++                i == pick ? " <- chosen" : "");
++    if (pick < 0) {
++        fprintf(stderr, "  [FBWIN] the requested display was not found; using the primary\n");
++        return 0;
++    }
++    fprintf(stderr, "  [FBWIN] window on display %d (by %s)\n", pick, how);
++    return pick;
++}
++
+ static int env_on(const char *name)
+ {
+     const char *e = getenv(name);
+@@ -274,7 +490,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
      SDL_Window *win;
      SDL_Renderer *ren;
      SDL_Texture *tex = NULL;
@@ -1639,7 +1828,7 @@ index b9b8c3e..bef99b2 100644
      uint64_t shown_seq = 0, t_title = 0, flips_title = 0;
      const char *e;
      int vsync, scale, quit = 0, guest_done = 0, dirty = 1;
-@@ -304,13 +439,50 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -304,13 +520,53 @@ int xbox_HostWindowMain(int (*guest_main)(void))
      if (env_on("RECOMP_FULLSCREEN"))
          window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
  
@@ -1651,6 +1840,7 @@ index b9b8c3e..bef99b2 100644
 +     * launcher passes the internal resolution), shrunk to fit the display's
 +     * usable area with its shape kept. RECOMP_WINDOW_SCALE still works. */
 +    int win_w = (int)FB_W * scale, win_h = (int)FB_H * scale;
++    int disp = pick_display();
 +    {
 +        const char *ws = getenv("RECOMP_WINDOW_SIZE");
 +        int w = 0, h = 0;
@@ -1660,7 +1850,7 @@ index b9b8c3e..bef99b2 100644
 +            win_w = w;
 +            win_h = h;
 +        }
-+        if (SDL_GetDisplayUsableBounds(0, &use) == 0 && use.w > 0 && use.h > 0
++        if (SDL_GetDisplayUsableBounds(disp, &use) == 0 && use.w > 0 && use.h > 0
 +                && (win_w > use.w || win_h > use.h)) {
 +            double k = (double)use.w / win_w;
 +            if ((double)use.h / win_h < k)
@@ -1672,7 +1862,8 @@ index b9b8c3e..bef99b2 100644
 +    }
 +    win = NULL;
 +    if (env_on("RECOMP_WINDOW_VULKAN")) {
-+        win = SDL_CreateWindow(s_title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
++        win = SDL_CreateWindow(s_title, SDL_WINDOWPOS_CENTERED_DISPLAY(disp),
++                               SDL_WINDOWPOS_CENTERED_DISPLAY(disp),
 +                               win_w, win_h, window_flags | SDL_WINDOW_VULKAN);
 +        if (win)
 +            s_vk_window = win;
@@ -1681,7 +1872,8 @@ index b9b8c3e..bef99b2 100644
 +                    SDL_GetError());
 +    }
 +    if (!win)
-+        win = SDL_CreateWindow(s_title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
++        win = SDL_CreateWindow(s_title, SDL_WINDOWPOS_CENTERED_DISPLAY(disp),
++                               SDL_WINDOWPOS_CENTERED_DISPLAY(disp),
 +                               win_w, win_h,
 +                               window_flags);
 +    ren = (win && !s_vk_window) ? SDL_CreateRenderer(win, -1,
@@ -1695,7 +1887,7 @@ index b9b8c3e..bef99b2 100644
          fprintf(stderr, "  [FBWIN] SDL window/renderer failed (%s); running headless\n",
                  SDL_GetError());
          if (win)
-@@ -318,8 +490,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -318,8 +574,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
          SDL_QuitSubSystem(FBWIN_SDL_SUBSYSTEMS);
          return guest_main();
      }
@@ -1707,7 +1899,7 @@ index b9b8c3e..bef99b2 100644
          SDL_RendererInfo ri;
          if (SDL_GetRendererInfo(ren, &ri) == 0)
              fprintf(stderr, "  [FBWIN] framebuffer window open (%ux%u, SDL %s renderer,"
-@@ -330,7 +503,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -330,7 +587,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
      s_guest_done_event = SDL_RegisterEvents(2);
      if (s_guest_done_event == (Uint32)-1) {
          fprintf(stderr, "  [FBWIN] SDL_RegisterEvents failed; running headless\n");
@@ -1718,7 +1910,7 @@ index b9b8c3e..bef99b2 100644
          SDL_DestroyWindow(win);
          SDL_QuitSubSystem(FBWIN_SDL_SUBSYSTEMS);
          return guest_main();
-@@ -341,12 +516,15 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -341,12 +600,15 @@ int xbox_HostWindowMain(int (*guest_main)(void))
       * game controllers; the input layer then only reads them. */
      xbox_InputSetMainPump(1);
      xbox_InputSdlInit();
@@ -1735,7 +1927,7 @@ index b9b8c3e..bef99b2 100644
          SDL_DestroyWindow(win);
          SDL_QuitSubSystem(FBWIN_SDL_SUBSYSTEMS);
          return guest_main();
-@@ -356,7 +534,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -356,7 +618,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
          SDL_Event ev;
          uint64_t seq, now;
          const uint8_t *px = NULL;
@@ -1744,7 +1936,7 @@ index b9b8c3e..bef99b2 100644
  
          /* Before the first flip, poll at the display rate: the window then
           * reads the display surface itself. After, the flip's event wakes
-@@ -366,6 +544,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -366,6 +628,7 @@ int xbox_HostWindowMain(int (*guest_main)(void))
                  /* Keys for the pad stand-in, and the window events that
                   * release them; it only reads the event. */
                  xbox_InputSdlEvent(&ev);
@@ -1752,7 +1944,7 @@ index b9b8c3e..bef99b2 100644
                  if (ev.type == SDL_QUIT)
                      quit = 1;
                  else if (ev.type == s_guest_done_event)
-@@ -379,6 +558,29 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -379,6 +642,29 @@ int xbox_HostWindowMain(int (*guest_main)(void))
              } while (SDL_PollEvent(&ev));
          }
  
@@ -1782,7 +1974,7 @@ index b9b8c3e..bef99b2 100644
          pthread_mutex_lock(&s_lock);
          seq = s_ready_seq;
          if (seq != shown_seq) {
-@@ -392,7 +594,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -392,7 +678,9 @@ int xbox_HostWindowMain(int (*guest_main)(void))
              shown_seq = seq;
              px = s_slot[s_front].px;
              bpp = s_slot[s_front].bpp;
@@ -1793,7 +1985,7 @@ index b9b8c3e..bef99b2 100644
          } else if (!shown_seq && s_fb_va && s_fb_pitch) {
              /* No flip yet: the display surface, as the GDI window reads it. */
              bpp = s_fb_pitch / FB_W;
-@@ -400,21 +604,60 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -400,21 +688,60 @@ int xbox_HostWindowMain(int (*guest_main)(void))
              if (bpp == 2 || bpp == 4)
                  px = (const uint8_t *)((uintptr_t)s_fb_va + xbox_GetMemoryOffset());
          }
@@ -1857,7 +2049,7 @@ index b9b8c3e..bef99b2 100644
              dirty = 0;
              SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
              SDL_RenderClear(ren);
-@@ -452,15 +695,21 @@ int xbox_HostWindowMain(int (*guest_main)(void))
+@@ -452,15 +779,21 @@ int xbox_HostWindowMain(int (*guest_main)(void))
       * start calling SDL_GameControllerUpdate while SDL goes down. */
      if (tex)
          SDL_DestroyTexture(tex);

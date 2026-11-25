@@ -39,6 +39,19 @@ Nothing needs to be installed. The game itself is NOT included.
 Controle: qualquer controle que o Windows reconheca (Xbox, PlayStation...),
 ou o teclado.  /  Pad: any controller Windows recognises, or the keyboard.
 
+Fechar o jogo (tela cheia): Ctrl+Q no teclado, ou Back+Start segurados por
+1 segundo no controle. Troque em "Controles", no launcher.
+Quit the game (fullscreen): Ctrl+Q on the keyboard, or Back+Start held for
+1 second on the controller. Change it under "Controls", in the launcher.
+
+FPS, CPU e GPU na tela: F2 no teclado ou L3+R3 no controle (tambem em
+"Controles").  /  FPS, CPU and GPU on screen: F2 on the keyboard or L3+R3 on
+the controller (also under "Controls").
+
+Atualizacoes: o launcher avisa quando sai uma versao nova e a instala pelo
+botao "Atualizar agora" (tela Jogar).  /  Updates: the launcher tells you
+when a new version is out and installs it with "Update now" (Play screen).
+
 Requisitos / Requirements: Windows 10 ou 11, 64 bits; placa de video com
 driver Vulkan ou OpenGL 3.3 (NVIDIA, AMD ou Intel atualizados).
 Windows 10 or 11, 64-bit; a GPU with a Vulkan or OpenGL 3.3 driver.

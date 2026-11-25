@@ -67,6 +67,12 @@ void dw4_hooks_set_env_defaults(void)
      * tela de selecao). Esta opcao faz todos girarem como no hardware. */
     env_default("RECOMP_STRIP_ALT_WINDING", "1");
     env_default("RECOMP_USB", "1");
+    /* As quatro portas de controle do Xbox (multijogador local de ate 4). O
+     * toolkit pluga um controle por porta no barramento emulado, um depois do
+     * outro, e cada porta le o controle SDL de mesmo numero; porta sem
+     * controle de verdade so informa "nada apertado". O launcher grava de 1 a
+     * 4 (Controles -> Portas de controle). */
+    env_default("RECOMP_USB_PADS", "4");
     /* O alocador contiguo comecava em fisico 0x1000, dentro da faixa numerica
      * da imagem (0x10000..0x4FD000). O driver USB entrega enderecos fisicos
      * ao controlador (HCCA 0x00082000, EDs 0x000826A0) e o modelo OHCI os
@@ -108,6 +114,8 @@ void dw4_hooks_init(void)
     dw4_screenshot_init();
     dw4_input_script_init();
     dw4_stall_watch_init();
+    dw4_osd_init();
+    dw4_quit_hotkey_init();
     dw4_prof_init();
 }
 

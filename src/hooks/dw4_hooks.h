@@ -70,6 +70,19 @@ void dw4_fps_limit_tick(void);
 /* input_script.c: DW4_INPUT_SCRIPT="sleep:17 enter! z! quit" ou @arquivo. */
 void dw4_input_script_init(void);
 
+/* quit_hotkey.c: atalho que fecha o jogo (DW4_QUIT_KEYS, DW4_QUIT_PAD). */
+void dw4_quit_hotkey_init(void);
+/* Nome de tecla ("ctrl", "q", "f4", "esc") -> VK; 0 se desconhecida. */
+int dw4_key_vk(const char *name);
+/* Nome de botao ("back", "lb", "lt") -> bit de xbox_InputPadHeld; 0 se desconhecido. */
+unsigned dw4_pad_button_bit(const char *name);
+
+/* osd.c: mostrador de FPS / CPU / GPU (DW4_OSD, DW4_OSD_KEYS, DW4_OSD_PAD). */
+void dw4_osd_init(void);
+void dw4_osd_toggle(void);
+int dw4_osd_visible(void);
+void dw4_osd_sample(void);             /* thread dos atalhos: refaz os numeros */
+
 /* stall_watch.c: DW4_STALL_MS sem flip -> despeja todas as threads no log. */
 void dw4_stall_watch_init(void);
 void dw4_dump_all_threads(void);

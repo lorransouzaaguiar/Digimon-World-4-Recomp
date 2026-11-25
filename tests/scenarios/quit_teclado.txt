@@ -1,0 +1,13 @@
+# Atalho de fechar pelo teclado (src/hooks/quit_hotkey.c). O jogo tem de sair
+# sozinho com "[QUIT] atalho de saida (teclado)" ANTES do mark "nao-fechou".
+#   scripts/soak.py --scenario tests/scenarios/quit_teclado.txt --timeout 60
+# (o soak da INCOMPLETO de proposito: o roteiro nao chega ao "quit"; o que vale
+#  e a linha [QUIT] no log e a ausencia do mark)
+sleep:8
+q*0.3              # so uma das teclas: nao pode fechar
+sleep:1
+mark:antes-do-atalho
+combo:ctrl+q*0.5
+sleep:5
+mark:nao-fechou
+quit

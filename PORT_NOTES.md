@@ -326,6 +326,58 @@ Linux (SDL2 + nosso Vulkan; regra 3, nada de DirectX), então o patch acrescenta
 Resultado conferido com `objdump -p`: o `.exe` importa só `KERNEL32`, `SHELL32`, `WINMM`, a CRT
 universal, `SDL2.dll` e `vulkan-1.dll` — nenhuma DLL do DirectX. Fora do Windows nada muda.
 
+### 4.17 `src/input/xinput_device.c`, `xinput_xbox.h` — botões do controle de verdade (2026-11-25, DW4R-6)
+
+`unsigned xbox_InputPadHeld(DWORD porta)`: o que está apertado no controle daquela porta, como
+máscara de `1u << SDL_CONTROLLER_BUTTON_*` (bits 30 e 31 = gatilhos esquerdo e direito além da
+metade); 0 sem controle. É para o atalho de fechar (`src/hooks/quit_hotkey.c`), que olha os
+controles de uma thread própria: `xbox_InputGetState` não servia porque mistura o teclado que faz
+as vezes do controle 1 (Backspace+Enter viraria Back+Start) e avança o número de pacote que o
+jogo usa para detectar mudança. Só existe no ramo SDL (o único que compilamos).
+
+### 4.18 `src/input/keyboard.c` — teclas do teclado-controle configuráveis (2026-11-25, DW4R-6)
+
+`RECOMP_KEYMAP="a=space;start=enter;left_stick_up=w,numpad8"` troca as teclas dos comandos que
+nomeia (nomes de comando e de tecla de `input_map.c`; `none` deixa o comando sem tecla); os outros
+ficam com o mapa fixo. O toolkit já tinha as peças (`xbox_InputMap_BindingsParse`), mas
+`xbox_InputKeyboardBindings` remontava o mapa fixo a cada leitura, sem nenhuma entrada de
+configuração. Agora o mapa é montado uma vez (com a variável aplicada) e guardado. O launcher
+grava só os comandos trocados (Controles → Teclado como controle 1).
+
+### 4.19 `src/video/fb_present_sdl.c` — escolher o monitor (2026-11-25, DW4R-6)
+
+A janela era sempre criada centrada no monitor 0 da SDL. `pick_display()` escolhe outro e a janela
+nasce em `SDL_WINDOWPOS_CENTERED_DISPLAY` (o limite de tamanho usa a área útil dele; a tela cheia
+é `FULLSCREEN_DESKTOP`, que fica no monitor em que a janela nasceu).
+
+O difícil é dizer **qual**: o launcher lista os monitores pelo Qt e o jogo pela SDL, e os dois
+não combinam em nome ("DP-1" × "LG Electronics LG HDR WFHD" × "Display2" no Wine), em numeração,
+nem na origem das coordenadas — X11: canto do conjunto; Windows e Wine: canto do monitor
+principal, com os outros em coordenadas negativas (`-2560,0`); Wayland nem tem monitor principal,
+então o launcher não sabe qual o Wine vai tomar por origem. As duas primeiras tentativas mandavam
+um ponto absoluto e no Wine ele caía no monitor errado (logs do usuário, 2026-11-25). O que os
+dois lados veem igual é a **disposição**, e é ela que vai, em quatro pistas tentadas nesta ordem:
+
+| Variável | Pista |
+|---|---|
+| `RECOMP_DISPLAY_NAME` | texto contido no nome da SDL (quando os nomes casam) |
+| `RECOMP_DISPLAY_RANK=k/n` | o k-ésimo de n monitores na ordem esquerda→direita, cima→baixo; só vale se a SDL também vê n |
+| `RECOMP_DISPLAY_AT=x,y` | ponto dentro do monitor, medido do canto do retângulo que envolve **todos** os monitores |
+| `RECOMP_DISPLAY=<i>` | índice da SDL |
+
+O log mostra o que foi pedido, os monitores vistos e a pista que decidiu (`[FBWIN] display ...`).
+Limites: dois monitores espelhados na mesma posição não se distinguem; no Wayland o compositor
+pode ignorar a posição de uma janela comum. Com dois monitores o usuário confirmou esta versão no Linux (Wayland) e
+no `.exe` pelo Wine (2026-11-25). Windows real: não testado.
+
+**Quatro controles (sem patch):** o toolkit já tinha `RECOMP_USB_PADS=1..4` (`src/usb/ohci.c`): pluga
+um controle por porta do hub raiz emulado, um após o outro, nas portas 3, 4, 1, 2 (= jogadores 1 a
+4 para o XAPI), e o controle `n` do barramento lê o controle SDL `n`. O padrão dele é 1; o port
+passou a definir 4 (`recomp_manual.c`; launcher: Controles → Portas de controle). Porta sem
+controle de verdade fica "conectada, nada apertado". Com 4, o boot até o lobby confere com os
+frames de referência. **Não testado com mais de um controle nem visto o que o jogo faz com as
+portas vazias.**
+
 ## 5. Hooks (`src/hooks/`)
 
 | Arquivo | Função |
@@ -338,6 +390,8 @@ universal, `SDL2.dll` e `vulkan-1.dll` — nenhuma DLL do DirectX. Fora do Windo
 | `nv2a_vk_backend.c`, `shaders/` | renderizador Vulkan, compilado como `libdw4_vk.so` (§7.5) |
 | `gl_host.c`, `gl_module.h` | escolha da API (`DW4_RENDERER=opengl\|vulkan\|cpu`), contexto EGL, carga/recarga do renderizador, `DW4_SW_RENDER=1` |
 | `stall_watch.c` | amostrador de travamento (`DW4_STALL_MS`) |
+| `quit_hotkey.c` | atalho que fecha o jogo: `DW4_QUIT_KEYS` (padrão `ctrl+q`, na hora) e `DW4_QUIT_PAD` (padrão `back+start`, segurados `DW4_QUIT_HOLD_MS`=1000); `off` desliga. Thread própria a cada 20 ms, então vale com o jogo travado. Sai por `fflush` + `_exit(0)`, como o `quit` dos roteiros: pedir o fechamento pela janela (`SDL_QUIT` → `exit()`) derrubou o processo dentro da camada de swapchain do gamescope, com o renderizador Vulkan ainda apresentando (§8) |
+| `osd.c` | mostrador de FPS / CPU / GPU: `DW4_OSD=1` (já visível), `DW4_OSD_KEYS` (padrão `f2`), `DW4_OSD_PAD` (padrão `l3+r3`), lidos pela thread de `quit_hotkey.c`. Não tem renderizador de texto: monta um lote 2D sem textura (fonte 5x7, um retângulo por trecho aceso) que `gl_host.c` entrega ao renderizador em uso antes do `present_sync`/`flip`, na última superfície de tela em que o jogo desenhou, com o estado do último lote dela (blend ligado, sem teste de profundidade). Em tela larga o x sai deslocado de `-320·(wide−1)` para o aperto de `ro_squeeze` devolvê-lo ao canto da tela. CPU e GPU vêm de `host_os.h` (`dw4_os_cpu_times` — a CPU é a média de todos os núcleos do sistema, de `/proc/stat` ou `GetSystemTimes` —, `dw4_os_gpu_percent`: NVML, sysfs da AMD, contadores "GPU Engine" no Windows por `pdh.dll` carregada em tempo de execução) |
 | `dw4_hooks.h` | `LOG_ONCE`, protótipos |
 
 Defaults aplicados pelo binário (qualquer `RECOMP_*` já definido no ambiente vence):
@@ -974,6 +1028,30 @@ Perfil do lobby depois da DW4R-2 (28% de um núcleo no total): executor ~68% (de
 transformação de vértices do toolkit: `draw_primitive`, `fetch_attr`, `backend_from_xf`,
 `raster_xf_clipped`; o renderizador Vulkan é ~6%), jogo ~25%, áudio ~5%. O próximo ganho de CPU
 está no executor do toolkit (cache de vértices pós-transformação, como SSX 3 / Amped 2 fizeram).
+
+### Atalho de fechar e atualização do launcher (2026-11-25, DW4R-6)
+
+- **Roteiros:** `tests/scenarios/quit_teclado.txt` e `quit_controle.txt` (controle virtual da SDL).
+  Passos novos em `input_script.c`: `combo:<t1+t2>[*seg]` (várias teclas juntas) e
+  `vpad_hold:<b1+b2>[*seg]` (botões do controle virtual). O jogo tem de sair com
+  `[QUIT] atalho de saida (...)` **antes** do `mark:nao-fechou`; por isso o `soak.py` responde
+  `INCOMPLETO` (o roteiro não chega ao `quit`), e com `--gamescope` responde `CRASH` porque o
+  gamescope sai por sinal ao fechar: o que vale é o log, sem `[CRASH]`.
+- **Fechar pela janela cai na saída (aberto):** a primeira versão do atalho empurrava um
+  `SDL_QUIT`, o mesmo caminho do botão de fechar da janela (`fb_present_sdl.c`: `exit(0)` com o
+  swapchain vivo). Em `soak.py --gamescope` isso deu `[CRASH] SIGSEGV` em
+  `libVkLayer_FROG_gamescope_wsi` 1 vez em 1, com a thread do executor no meio de um present. O
+  atalho passou a sair por `_exit(0)` (3 em 3 sem crash). O botão de fechar da janela continua no
+  caminho antigo; não se sabe se cai fora do gamescope. Se cair, o launcher mostra "fechou com
+  erro" ao fechar a janela.
+- **Mostrador de desempenho:** `tests/scenarios/osd.txt` liga pela tecla, desliga e religa pelo
+  controle virtual e grava capturas (`osd_*.bmp`); `-e DW4_OSD=1` em qualquer roteiro deixa o
+  mostrador nas capturas (os frames de referência só conferem com ele desligado). Visto em
+  Vulkan e OpenGL, 480p 4:3, 1080p 16:9 e 720p 21:9, no boot e no lobby, e no `.exe` pelo Wine
+  (GPU `--`). Os contadores do Windows (`pdh.dll`) não rodaram em lugar nenhum.
+- **`scripts/test_updater.py`** (~2 s, sem janela, numa pasta temporária): um servidor HTTP local
+  faz as vezes da API do GitHub. `--online` consulta também o release de verdade. O launcher só
+  aceita trocar o endereço consultado por `DW4_UPDATE_API=http://127.0.0.1:...`.
 
 ## 9. Pendências conhecidas
 

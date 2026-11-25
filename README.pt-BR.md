@@ -192,9 +192,9 @@ mantê-los.
 
 | Tela | O que faz |
 |---|---|
-| Jogar | arquivos do jogo: escolha a imagem do disco (`.iso`) ou uma pasta; placa de vídeo detectada, versão, botão Jogar |
-| Gráficos | API gráfica (Vulkan ou OpenGL); resolução interna (480p a 4K), proporção (4:3, 16:9, 21:9) e limite de quadros (30 ou 60); tela cheia e sincronização vertical; o modo paralelo experimental |
-| Controles | teclado como controle 1 ligado/desligado, tabela de teclas |
+| Jogar | arquivos do jogo: escolha a imagem do disco (`.iso`) ou uma pasta; placa de vídeo detectada, versão, botão Jogar; atualizações (veja abaixo) |
+| Gráficos | API gráfica (Vulkan ou OpenGL); resolução interna (480p a 4K), proporção (4:3, 16:9, 21:9) e limite de quadros (30 ou 60); monitor em que o jogo abre, tela cheia e sincronização vertical; o modo paralelo experimental |
+| Controles | teclado como controle 1 ligado/desligado; atalhos para fechar o jogo e para o mostrador de FPS/CPU/GPU (teclado e controle); tabela de teclas |
 | Saves e dados | pasta dos saves, lista de saves, backup, exportar e importar `.zip` (os saves atuais são guardados antes) |
 | Suporte | problemas conhecidos, o que tentar se o jogo estiver lento, pasta de logs, relatório de problema (sistema, processador, placa de vídeo, opções, resumo dos quadros por segundo) sem o nome da sua pasta pessoal |
 
@@ -280,10 +280,30 @@ build, biblioteca que peça glibc mais nova que a 2.38 (Linux) ou uma DLL import
 (Windows).
 Os executáveis dos pacotes contêm o código recompilado do jogo; os dados do disco nunca vão junto.
 
+### Atualizações
+
+Depois da v0.4.1, o launcher procura a versão mais recente nos releases do GitHub: ao abrir (no máximo uma
+consulta a cada 6 horas; dá para desligar) ou pelo botão **Procurar atualização**, na tela Jogar.
+
+- **AppImage** (numa pasta em que você pode gravar) e **`.zip` de Windows**: o botão **Atualizar
+  agora** baixa o pacote, confere o tamanho e o SHA-256 publicados no release e reabre o launcher
+  na versão nova. Nada é instalado sem você pedir; saves e opções ficam onde estão.
+- **`.tar.gz` de Linux e código-fonte**: o launcher só avisa e abre a página do release.
+
+A v0.4.1 e as anteriores não têm essa função: para sair delas, baixe o pacote novo uma vez pela
+página de releases. Testado com um servidor local fazendo as vezes do GitHub e, no Windows, só no
+Wine; ainda não foi usado com um release de verdade.
+
 ## Controles
 
 Qualquer controle que a SDL2 reconheça funciona (Xbox, PlayStation e parecidos), nos dois
-sistemas. O teclado age como o controle 1:
+sistemas. O jogo enxerga **4 portas de controle**, como no Xbox, para o multijogador local de até
+4 jogadores: os controles ocupam as portas na ordem em que o sistema os reconhece (o número de
+portas muda em **Controles → Portas de controle**; sem o launcher, `RECOMP_USB_PADS=1..4`).
+**Jogado com um controle; com dois ou mais ainda não foi testado.**
+
+O teclado age como o controle 1. As teclas abaixo são o padrão e podem ser trocadas no launcher
+(**Controles → Teclado como controle 1**):
 
 | Tecla | Controle do Xbox |
 |---|---|
@@ -296,6 +316,34 @@ sistemas. O teclado age como o controle 1:
 | Q / E | White / Black |
 | 1 / 3 | Gatilho esquerdo / direito |
 | Shift / Ctrl | Clique do analógico esquerdo / direito |
+
+### Fechar o jogo
+
+Em tela cheia não há botão de fechar. Dois atalhos fecham o jogo, e os dois podem ser trocados ou
+desligados no launcher (**Controles → Fechar o jogo**):
+
+| Onde | Padrão | Como funciona |
+|---|---|---|
+| Teclado | `Ctrl` + `Q` | fecha na hora; aceita de 1 a 4 teclas juntas |
+| Controle | `Back` + `Start` | segurados por 1 segundo, em qualquer controle; de 2 a 4 botões |
+
+O que não foi salvo dentro do jogo é perdido, como ao fechar a janela. Sem o launcher:
+`DW4_QUIT_KEYS=alt+f4 DW4_QUIT_PAD=lb+rb+start ./run.sh` (`off` desliga).
+
+### Mostrador de desempenho
+
+Um mostrador no canto de cima da tela, à esquerda, com **FPS**, uso de **CPU** e uso de **GPU**,
+nos dois renderizadores e em qualquer resolução. `F2` no teclado ou `L3` + `R3` no controle mostram
+e escondem; a tecla, os botões e "já mostrar ao abrir o jogo" ficam no launcher
+(**Controles → Mostrador de desempenho**).
+
+- **CPU:** ocupação média de todos os núcleos do computador, como no monitor do sistema (inclui os outros programas).
+- **GPU:** ocupação da placa inteira, não só do jogo. Lida do driver da NVIDIA (NVML) ou, no
+  Linux, do `gpu_busy_percent` das placas AMD; no Windows, nas outras placas, dos contadores do
+  sistema. Aparece `--` quando o sistema não informa (Intel no Linux, Wine). Conferido só numa
+  NVIDIA no Linux; o caminho do Windows não foi testado num Windows de verdade.
+
+Sem o launcher: `DW4_OSD=1 DW4_OSD_KEYS=f2 DW4_OSD_PAD=l3+r3 ./run.sh`.
 
 ## Relatar um problema
 

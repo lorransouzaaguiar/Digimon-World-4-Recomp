@@ -9,6 +9,7 @@
 
 #define _GNU_SOURCE
 #include <dirent.h>
+#include <dlfcn.h>
 #include <execinfo.h>
 #include <limits.h>
 #include <signal.h>
@@ -207,6 +208,82 @@ void dw4_dump_all_threads(void)
         nanosleep(&ts, NULL);
     }
     closedir(d);
+}
+
+/* ── Mostrador de desempenho (osd.c) ───────────────────────────────────────── */
+
+int dw4_os_cpu_times(double *busy, double *total)
+{
+    /* /proc/stat, linha "cpu": user nice system idle iowait irq softirq steal */
+    unsigned long long v[8] = { 0 };
+    FILE *f = fopen("/proc/stat", "r");
+    int n;
+
+    if (!f)
+        return 0;
+    n = fscanf(f, "cpu %llu %llu %llu %llu %llu %llu %llu %llu",
+               &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7]);
+    fclose(f);
+    if (n < 4)
+        return 0;
+    *busy = (double)(v[0] + v[1] + v[2] + v[5] + v[6] + v[7]);
+    *total = *busy + (double)(v[3] + v[4]);
+    return 1;
+}
+
+/* NVIDIA: a biblioteca de gerencia do driver (NVML), carregada so se existir. */
+static int gpu_nvml(void)
+{
+    static int state;                   /* 0 nao tentou, 1 pronto, -1 nao ha */
+    static void *dev;
+    static int (*get_util)(void *, unsigned *);
+    unsigned util[2] = { 0, 0 };        /* nvmlUtilization_t: gpu, memory */
+
+    if (!state) {
+        void *lib = dlopen("libnvidia-ml.so.1", RTLD_NOW | RTLD_LOCAL);
+        int (*init)(void) = lib ? (int (*)(void))dlsym(lib, "nvmlInit_v2") : NULL;
+        int (*by_index)(unsigned, void **) =
+            lib ? (int (*)(unsigned, void **))dlsym(lib, "nvmlDeviceGetHandleByIndex_v2") : NULL;
+
+        get_util = lib ? (int (*)(void *, unsigned *))dlsym(lib, "nvmlDeviceGetUtilizationRates") : NULL;
+        state = init && by_index && get_util && init() == 0 && by_index(0, &dev) == 0 ? 1 : -1;
+    }
+    if (state < 0 || get_util(dev, util) != 0)
+        return -1;
+    return (int)util[0];
+}
+
+/* AMD (amdgpu): /sys/class/drm/cardN/device/gpu_busy_percent. */
+static int gpu_sysfs(void)
+{
+    static char path[64];
+    static int state;
+    FILE *f;
+    int v = -1;
+
+    for (int i = 0; !state && i < 8; i++) {
+        snprintf(path, sizeof path, "/sys/class/drm/card%d/device/gpu_busy_percent", i);
+        if (access(path, R_OK) == 0)
+            state = 1;
+    }
+    if (state != 1) {
+        state = -1;
+        return -1;
+    }
+    f = fopen(path, "r");
+    if (f) {
+        if (fscanf(f, "%d", &v) != 1)
+            v = -1;
+        fclose(f);
+    }
+    return v;
+}
+
+int dw4_os_gpu_percent(void)
+{
+    int v = gpu_nvml();
+
+    return v >= 0 ? v : gpu_sysfs();
 }
 
 #endif /* !_WIN32 */

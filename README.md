@@ -190,9 +190,9 @@ checkout:
 
 | Screen | What it does |
 |---|---|
-| Play | game files: pick a disc image (`.iso`) or a folder; detected graphics card, version, Play button |
-| Graphics | graphics API (Vulkan or OpenGL); internal resolution (480p to 4K), aspect ratio (4:3, 16:9, 21:9) and frame-rate limit (30 or 60); fullscreen and vertical sync; the experimental parallel mode |
-| Controls | keyboard as controller 1 on/off, the key table |
+| Play | game files: pick a disc image (`.iso`) or a folder; detected graphics card, version, Play button; updates (see below) |
+| Graphics | graphics API (Vulkan or OpenGL); internal resolution (480p to 4K), aspect ratio (4:3, 16:9, 21:9) and frame-rate limit (30 or 60); the display the game opens on, fullscreen and vertical sync; the experimental parallel mode |
+| Controls | keyboard as controller 1 on/off; shortcuts that quit the game and toggle the FPS/CPU/GPU overlay (keyboard and controller); the key table |
 | Saves & data | save folder, list of saves, backup, `.zip` export and import (the current saves are backed up first) |
 | Support | known issues, what to try if the game is slow, log folder, a problem report (system, processor, graphics card, options, frame-rate summary) without your home folder's name |
 
@@ -277,10 +277,31 @@ Windows one) and refuse to finish if a package contains a game file, a path from
 a library that needs a glibc newer than 2.38 (Linux) or an unexpected DLL import (Windows).
 The packaged executables contain the recompiled game code; disc data is never included.
 
+### Updates
+
+After v0.4.1, the launcher looks for the latest version in the GitHub releases: when it opens (at most one
+request every 6 hours; it can be turned off) or with the **Check for updates** button on the Play
+screen.
+
+- **AppImage** (in a folder you can write to) and the **Windows `.zip`**: **Update now** downloads
+  the package, checks the size and SHA-256 published in the release, and reopens the launcher on
+  the new version. Nothing is installed unless you ask; saves and options stay where they are.
+- **Linux `.tar.gz` and source checkouts**: the launcher only tells you and opens the release page.
+
+v0.4.1 and earlier do not have this: to leave them, download the new package once from the
+releases page. Tested against a local server standing in for GitHub and, on Windows, only under
+Wine; it has not been used with a real release yet.
+
 ## Controls
 
 Any game controller SDL2 recognises works (Xbox, PlayStation and similar pads), on both systems.
-The keyboard acts as controller 1:
+The game sees **4 controller ports**, like the Xbox, for local multiplayer with up to 4 players:
+controllers take the ports in the order the system reports them (the number of ports can be changed
+under **Controls → Controller ports**; without the launcher, `RECOMP_USB_PADS=1..4`).
+**Played with one controller; two or more have not been tested yet.**
+
+The keyboard acts as controller 1. The keys below are the defaults and can be changed in the
+launcher (**Controls → Keyboard as controller 1**):
 
 | Key | Xbox control |
 |---|---|
@@ -293,6 +314,34 @@ The keyboard acts as controller 1:
 | Q / E | White / Black |
 | 1 / 3 | Left / right trigger |
 | Shift / Ctrl | Left / right stick click |
+
+### Quitting the game
+
+Fullscreen has no close button. Two shortcuts quit the game, and both can be changed or turned off
+in the launcher (**Controls → Quit the game**):
+
+| Where | Default | How it works |
+|---|---|---|
+| Keyboard | `Ctrl` + `Q` | quits at once; takes 1 to 4 keys together |
+| Controller | `Back` + `Start` | held for 1 second, on any controller; 2 to 4 buttons |
+
+Anything not saved inside the game is lost, as when closing the window. Without the launcher:
+`DW4_QUIT_KEYS=alt+f4 DW4_QUIT_PAD=lb+rb+start ./run.sh` (`off` turns one off).
+
+### Performance overlay
+
+An overlay in the top-left corner of the screen with **FPS**, **CPU** use and **GPU** use, on both
+renderers and at any resolution. `F2` on the keyboard or `L3` + `R3` on the controller show and
+hide it; the key, the buttons and "already showing when the game starts" are in the launcher
+(**Controls → Performance overlay**).
+
+- **CPU:** average load of all the computer's cores, as in the system monitor (other programs included).
+- **GPU:** load of the whole card, not only the game. Read from the NVIDIA driver (NVML) or, on
+  Linux, from AMD's `gpu_busy_percent`; on Windows, for other cards, from the system counters. It
+  shows `--` when the system does not report it (Intel on Linux, Wine). Checked only on an NVIDIA
+  card on Linux; the Windows path has not been tested on real Windows.
+
+Without the launcher: `DW4_OSD=1 DW4_OSD_KEYS=f2 DW4_OSD_PAD=l3+r3 ./run.sh`.
 
 ## Reporting a problem
 

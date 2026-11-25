@@ -31,6 +31,17 @@ void dw4_os_env_default(const char *name, const char *value);
  * os do port, antes de qualquer init). */
 void dw4_os_env_defaults(void);
 
+/* Tempo de processador do SISTEMA inteiro ate agora, somados todos os nucleos:
+ * *busy = segundos ocupados, *total = ocupados + ociosos. A diferenca entre
+ * duas leituras da a ocupacao media dos nucleos (busy/total). 0 se falhou. */
+int dw4_os_cpu_times(double *busy, double *total);
+
+/* Ocupacao da placa de video, 0..100, ou -1 quando o sistema nao informa.
+ * E da placa inteira, nao so deste processo. Pode demorar alguns ms: nao
+ * chamar da thread do renderizador. Linux: NVIDIA (NVML) e AMD (sysfs).
+ * Windows: NVIDIA (NVML) e, nas outras, os contadores "GPU Engine" do sistema. */
+int dw4_os_gpu_percent(void);
+
 /* Falhas de acesso: primeiro os registradores de hardware emulados do toolkit
  * (APU, AC'97, OHCI); o que sobrar vira relatorio de crash no log. No POSIX
  * instala tambem o despejo por SIGUSR1 (ver dw4_dump_all_threads). */

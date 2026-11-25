@@ -23,6 +23,10 @@
  *   ringdump           grava a caixa-preta de quadros (o mesmo que F12)
  *   vpad / vpad_off    conecta / desconecta um controle virtual (teste de
  *                      plugar o controle com o jogo aberto, sem hardware)
+ *   combo:<t1+t2>[*seg]      segura varias teclas ao mesmo tempo (nomes de
+ *                            quit_hotkey.c: ctrl, f4, esc...); padrao 0,3 s
+ *   vpad_hold:<b1+b2>[*seg]  segura botoes do controle virtual (a b x y back
+ *                            start lb rb l3 r3 up down left right); padrao 0,3 s
  *   quit               encerra o processo com codigo 0 (run automatizado OK)
  *   <t>:<tecla>[*seg]  forma antiga: toque no instante absoluto <t> s do boot
  *
@@ -162,6 +166,56 @@ static int wait_changed(const Baseline *b, double timeout)
     return 0;
 }
 
+static int vpad_index = -1;         /* controle virtual da SDL (passo vpad) */
+
+/* combo:<t1+t2>[*seg] e vpad_hold:<b1+b2>[*seg]: varias entradas juntas. */
+static void hold_many(const char *what, char *spec, int pad, double t0)
+{
+    int vks[8], n = 0;
+    unsigned mask = 0;
+    double hold = 0.3;
+    char *star = strchr(spec, '*'), *save = NULL;
+    SDL_Joystick *joy = NULL;
+
+    if (star) { *star++ = '\0'; hold = atof(star); }
+    fprintf(stderr, "[SCRIPT] %s %s por %.2f s (t=%.1fs)\n", what, spec, hold, now_s() - t0);
+    for (char *t = strtok_r(spec, "+", &save); t; t = strtok_r(NULL, "+", &save)) {
+        if (pad) {
+            unsigned bit = dw4_pad_button_bit(t);
+            if (!bit || bit >= (1u << SDL_CONTROLLER_BUTTON_MAX)) {
+                fprintf(stderr, "[SCRIPT] botao desconhecido: %s\n", t);
+                return;
+            }
+            mask |= bit;
+        } else {
+            int vk = dw4_key_vk(t);
+            if (!vk || n == 8) {
+                fprintf(stderr, "[SCRIPT] tecla desconhecida: %s\n", t);
+                return;
+            }
+            vks[n++] = vk;
+        }
+    }
+    if (pad) {
+        joy = vpad_index >= 0 ? SDL_JoystickOpen(vpad_index) : NULL;
+        if (!joy) {
+            fprintf(stderr, "[SCRIPT] vpad_hold sem controle virtual (use vpad antes)\n");
+            return;
+        }
+    }
+    for (int down = 1; down >= 0; down--) {
+        for (int b = 0; pad && b < SDL_CONTROLLER_BUTTON_MAX; b++)
+            if (mask & (1u << b))
+                SDL_JoystickSetVirtualButton(joy, b, (Uint8)down);
+        for (int i = 0; i < n; i++)
+            xbox_InputKeySet(vks[i], down);
+        if (down)
+            sleep_s(hold);
+    }
+    if (joy)
+        SDL_JoystickClose(joy);
+}
+
 /* ── Execucao ──────────────────────────────────────────────────────────────── */
 
 static void run_step(char *tok, double t0)
@@ -172,8 +226,6 @@ static void run_step(char *tok, double t0)
     if (strcasecmp(tok, "vpad") == 0 || strcasecmp(tok, "vpad_off") == 0) {
         /* Conecta / desconecta um controle virtual da SDL (Xbox 360): o mesmo
          * caminho de plugar um controle com o jogo aberto, sem hardware. */
-        static int vpad_index = -1;
-
         if (!SDL_WasInit(SDL_INIT_JOYSTICK))
             SDL_InitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
         if (tok[4] == '\0' && vpad_index < 0) {
@@ -255,6 +307,10 @@ static void run_step(char *tok, double t0)
                      colon);
             fprintf(stderr, "[SCRIPT] shot %s %s\n", path,
                     dw4_screenshot_save(path) ? "ok" : "FALHOU");
+        } else if (strcasecmp(tok, "combo") == 0) {
+            hold_many("combo", colon, 0, t0);
+        } else if (strcasecmp(tok, "vpad_hold") == 0) {
+            hold_many("vpad_hold", colon, 1, t0);
         } else if (strcasecmp(tok, "mark") == 0) {
             fprintf(stderr, "[SCRIPT] mark %s (t=%.1fs, %llu flips)\n", colon,
                     now_s() - t0, (unsigned long long)dw4_frame_count());
