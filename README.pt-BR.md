@@ -13,7 +13,7 @@ Não é um emulador.
 > partir do seu `default.xbe` e nunca é versionado.
 
 > **Hoje o Linux é o único sistema suportado.** Há um **build de Windows em prévia experimental**
-> (pré-lançamento `v0.4.0`): roda no Wine, ainda não foi testado em Windows de verdade e não
+> (desde a `v0.4.0`): roda no Wine, ainda não foi testado em Windows de verdade e não
 > tem launcher. O port para macOS não foi começado; está planejado.
 >
 > **Só o começo do jogo foi testado:** Terminal Area (o lobby), Central Area, Death Valley e Humid

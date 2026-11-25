@@ -12,7 +12,7 @@ project's code replace the Xbox kernel, GPU, audio and input. No emulator.
 > `default.xbe` and is never committed.
 
 > **Linux is the only supported system today.** A **Windows build is in experimental preview**
-> (pre-release `v0.4.0`): it runs under Wine and has not been tested on real Windows yet, and
+> (since `v0.4.0`): it runs under Wine and has not been tested on real Windows yet, and
 > it has no launcher. The macOS port has not been started; it is planned.
 >
 > **Only the beginning of the game has been tested:** Terminal Area (the lobby), Central Area,

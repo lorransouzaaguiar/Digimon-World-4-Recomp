@@ -14,7 +14,9 @@ caminho para as três plataformas (macOS via MoltenVK).
 
 - **Jogável:** boot, vídeos, menus, criação do Digimon, save/load, lobby, tutorial e primeira fase,
   a 60 fps (CachyOS, NVIDIA). Fases seguintes, chefes e multijogador **não foram testados**.
-- **Publicado:** release v0.3.2 (2026-11-24; AppImage + tar.gz; antes v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
+- **Publicado:** v0.4.0 (2026-11-25, **pré-lançamento**: AppImage + tar.gz + `.zip` de Windows
+  experimental; de agora em diante todo release leva Linux e Windows) e, como "latest", o release
+  v0.3.2 (2026-11-24; AppImage + tar.gz; antes v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
   `github.com/lorransouzaaguiar/Digimon-World-4-Recomp` (preparado para ficar público: licença
   MIT, histórico com e-mail noreply; a visibilidade quem muda é o usuário).
 - **Vulkan (branch `DW4R-1`):** `src/hooks/nv2a_vk_backend.c` passa nos mesmos frames de
@@ -36,7 +38,7 @@ caminho para as três plataformas (macOS via MoltenVK).
   preferiu centralizado (`ro_squeeze`; `DW4_WS_DIALOG=0` desliga). 16:9: conferido sem
   janela no lobby e pelo usuário jogando. 21:9: só pelo usuário jogando ("tá legal"), nenhum teste
   sem janela. Lojas, escolhas e 2–4 jogadores não foram vistos.
-- **Windows (branch `DW4R-5`, 2026-11-25): prévia experimental, pré-lançamento `v0.4.0`.**
+- **Windows (branch `DW4R-5`, 2026-11-25): prévia experimental, no release `v0.4.0`.**
   Compilação cruzada com MinGW-w64 (`scripts/build_win.sh` → `build-win/dw4_recomp.exe`), Vulkan e
   OpenGL dentro do `.exe`, SDL2 para janela/controle/áudio, sem launcher (`run.bat`). Passa em
   `soak.py --wine --golden` e `--wine --gamescope --opengl --golden`; o usuário jogou no Wine com
@@ -136,7 +138,7 @@ scripts/package_release.sh vX.Y.Z                # AppImage + tar.gz em dist/
 scripts/build_win.sh                             # compilação cruzada para Windows (MinGW-w64) -> build-win/; log em build-win/build.log
 scripts/soak.py --wine --golden                  # o .exe de Windows no Wine, sem tela, com os mesmos frames de referência (Vulkan)
 scripts/soak.py --wine --gamescope --opengl --golden   # o OpenGL do .exe (precisa de uma tela: gamescope sem monitor)
-scripts/package_win.sh vX.Y.Z                    # .zip de Windows em dist/ (+ .debug.exe com símbolos, não publicar)
+scripts/package_win.sh vX.Y.Z                    # .zip de Windows em dist/ (+ .debug.exe com símbolos, não publicar); rode DEPOIS do package_release.sh
 ./launcher.sh --wine                             # launcher do Linux iniciando o .exe de Windows no Wine (ABRE JANELA; saves em build-win/save_data)
 ```
 

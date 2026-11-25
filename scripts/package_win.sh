@@ -98,8 +98,10 @@ with zipfile.ZipFile(name + ".zip", "w", zipfile.ZIP_DEFLATED, compresslevel=9) 
             z.write(os.path.join(base, f))
 PY
 )
-(cd "$DIST" && sha256sum "$NAME.zip" > "SHA256SUMS-$VERSION-windows.txt" &&
-    cat "SHA256SUMS-$VERSION-windows.txt")
+# Um arquivo de checksums por versao, dividido com scripts/package_release.sh
+# (que o recria: rode o do Linux primeiro e este depois).
+(cd "$DIST" && { grep -v -F "$NAME.zip" "SHA256SUMS-$VERSION.txt" 2>/dev/null || true; } > .sums.tmp &&
+    sha256sum "$NAME.zip" >> .sums.tmp && mv .sums.tmp "SHA256SUMS-$VERSION.txt" && cat "SHA256SUMS-$VERSION.txt")
 echo "DLLs importadas: $(echo $DLLS)"
 echo "pacote: $PKG.zip ($(du -h "$PKG.zip" | cut -f1))"
 echo "simbolos (nao publicar): $DIST/$NAME.debug.exe"
