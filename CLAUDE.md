@@ -177,6 +177,9 @@ scripts/package_win.sh vX.Y.Z                    # .zip de Windows em dist/ (+ .
 8. **Pacotes:** nenhum caminho da máquina de build e nenhuma biblioteca acima da glibc 2.38
    (`package_release.sh` verifica). Dados do usuário ficam em `~/.local/share/dw4-recomp/` (Linux)
    e `%APPDATA%\dw4-recomp\` (Windows).
+8a. **`dist/` só guarda a versão mais nova.** Ao criar uma versão, os pacotes das outras saem de
+   `dist/` (`scripts/dist_prune.sh vX.Y.Z`, que `package_release.sh` e `package_win.sh` já chamam).
+   Vai junto o `.debug.exe` de Windows das versões antigas; os pacotes publicados continuam no GitHub.
 9. **Commits e push só quando o usuário pedir.** Release publicado é ação externa: confirme antes.
 10. **`RECOMP_PB_WALK=dma` e desligar `RECOMP_FLIP_PACING` quebram o jogo** (crash / corrupção de
     heap); não use nem exponha no launcher.

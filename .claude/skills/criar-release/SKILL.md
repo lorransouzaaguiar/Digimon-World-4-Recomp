@@ -23,6 +23,10 @@ entra em "problemas conhecidos". Sempre o aviso de que os arquivos do jogo não 
 
 ## 3. Pacote
 
+Regra do projeto: `dist/` só guarda a versão que está sendo criada. Os dois scripts abaixo chamam
+`scripts/dist_prune.sh vX.Y.Z`, que apaga de `dist/` os pacotes das outras versões (inclusive o
+`.debug.exe` de Windows delas). Não recrie pacotes de versões antigas ali.
+
 ```bash
 DW4_URL=https://github.com/lorransouzaaguiar/Digimon-World-4-Recomp scripts/package_release.sh vX.Y.Z
 ```

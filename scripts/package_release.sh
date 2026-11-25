@@ -35,6 +35,7 @@ GLIBC_MAX="2.38"          # o build falha se algo no pacote pedir mais que isto
 TOOL="$ROOT/tools/appimagetool-x86_64.AppImage"
 
 ls src/recompiled/*.c >/dev/null 2>&1 || { echo "Sem codigo gerado. Rode antes: scripts/regen.sh" >&2; exit 1; }
+scripts/dist_prune.sh "$VERSION"      # regra do projeto: dist/ so guarda a versao que esta sendo criada
 mkdir -p "$ROOT/tools"
 if [ ! -x "$PY" ]; then
     curl -fsSL -o "$ROOT/tools/python-standalone.tar.gz" "$PY_URL"

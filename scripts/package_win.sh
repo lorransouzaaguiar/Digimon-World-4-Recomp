@@ -48,6 +48,8 @@ SHIBOKEN_SHA256=a1906cb8116869178c64b6bab52623bbc8b4ceed7b30bfc3c9aa0f6e67f6438e
 die() { echo "package_win: ERRO: $*" >&2; exit 1; }
 check_sha() { echo "$1  $2" | sha256sum -c --quiet - || die "SHA-256 nao confere: $2"; }
 
+scripts/dist_prune.sh "$VERSION"      # regra do projeto: dist/ so guarda a versao que esta sendo criada
+
 # ── 0. Python e Qt de Windows ────────────────────────────────────────────────
 mkdir -p "$DL"
 if [ ! -f "$DL/$PY_ZIP" ]; then
