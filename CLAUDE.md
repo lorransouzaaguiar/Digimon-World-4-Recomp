@@ -180,6 +180,9 @@ scripts/package_win.sh vX.Y.Z                    # .zip de Windows em dist/ (+ .
 8a. **`dist/` só guarda a versão mais nova.** Ao criar uma versão, os pacotes das outras saem de
    `dist/` (`scripts/dist_prune.sh vX.Y.Z`, que `package_release.sh` e `package_win.sh` já chamam).
    Vai junto o `.debug.exe` de Windows das versões antigas; os pacotes publicados continuam no GitHub.
+8b. **Título do release: só o nome do projeto e a versão**, `Digimon World 4 — Recomp vX.Y.Z`, como
+   da v0.1.0 à v0.3.2. Nada de descrição no título ("— launcher no Windows" etc.): o que mudou vai
+   nas notas.
 9. **Commits e push só quando o usuário pedir.** Release publicado é ação externa: confirme antes.
 10. **`RECOMP_PB_WALK=dma` e desligar `RECOMP_FLIP_PACING` quebram o jogo** (crash / corrupção de
     heap); não use nem exponha no launcher.
