@@ -21,6 +21,31 @@ Crie `docs/releases/vX.Y.Z.md` seguindo `docs/releases/v0.1.0.md`: links no topo
 mudou, problemas conhecidos, como relatar. Escreva só o que foi verificado; o que não foi testado
 entra em "problemas conhecidos". Sempre o aviso de que os arquivos do jogo não vêm junto.
 
+Os links de idioma do topo precisam de âncora explícita **e própria de cada versão**:
+
+- o GitHub **não** cria âncora para os títulos no texto de um release (cria nos arquivos do
+  repositório), então `[...](#english)` não rola a página;
+- a página que lista os releases mostra vários de uma vez: com a mesma âncora em todos, o clique
+  num release antigo levava ao texto do mais novo. Por isso o id leva a versão (pontos viram hífens).
+
+Formato (o GitHub prefixa o id com `user-content-`), aqui para a v0.4.1:
+
+```markdown
+**[English](#user-content-en-v0-4-1) · [Português (Brasil)](#user-content-pt-br-v0-4-1)**
+
+<a id="en-v0-4-1"></a>
+
+## English
+...
+<a id="pt-br-v0-4-1"></a>
+
+## Português (Brasil)
+```
+
+Depois de publicar, confira no `body_html` do release (API com
+`Accept: application/vnd.github.html+json`) que existem `id="user-content-en-<versão>"` e
+`id="user-content-pt-br-<versão>"`.
+
 ## 3. Pacote
 
 Regra do projeto: `dist/` só guarda a versão que está sendo criada. Os dois scripts abaixo chamam
@@ -88,6 +113,7 @@ guarda. Nunca imprima o token.
 ```bash
 TOKEN=$(printf 'protocol=https\nhost=github.com\n\n' | git credential fill | sed -n 's/^password=//p')
 R=lorransouzaaguiar/Digimon-World-4-Recomp
+# título ("name"): só a versão, "vX.Y.Z" — sem o nome do projeto e sem descrição
 # corpo: JSON gerado em Python com open("docs/releases/vX.Y.Z.md").read()
 curl -s -X POST -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/$R/releases --data-binary @rel.json
 # anexos: POST https://uploads.github.com/repos/$R/releases/<id>/assets?name=<arquivo>  (application/octet-stream)

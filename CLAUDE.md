@@ -5,8 +5,8 @@ o toolkit [sp00nznet/xboxrecomp](https://github.com/sp00nznet/xboxrecomp) (v0.18
 `xboxrecomp/`). Não é emulador: o `default.xbe` vira C em `src/recompiled/` e roda sobre o runtime
 do toolkit, com renderizador próprio. Responda em português.
 
-**Objetivo: rodar em Linux, macOS e Windows.** Hoje só o Linux funciona; os outros dois ainda
-não foram começados. Há **dois renderizadores, OpenGL 3.3 e Vulkan**, e o jogador escolhe entre
+**Objetivo: rodar em Linux, macOS e Windows.** Linux e Windows funcionam (Windows desde a v0.4.0,
+por compilação cruzada); o macOS ainda não foi começado. Há **dois renderizadores, OpenGL 3.3 e Vulkan**, e o jogador escolhe entre
 eles no launcher (Gráficos → API gráfica). O Vulkan (1.0, sem extensões) é o padrão desde 2026-11-24, com o OpenGL de reserva; ele é o
 caminho para as três plataformas (macOS via MoltenVK).
 
@@ -180,6 +180,8 @@ scripts/package_win.sh vX.Y.Z                    # .zip de Windows em dist/ (+ .
 8a. **`dist/` só guarda a versão mais nova.** Ao criar uma versão, os pacotes das outras saem de
    `dist/` (`scripts/dist_prune.sh vX.Y.Z`, que `package_release.sh` e `package_win.sh` já chamam).
    Vai junto o `.debug.exe` de Windows das versões antigas; os pacotes publicados continuam no GitHub.
+8b. **Título do release: só a versão, `vX.Y.Z`.** Nada mais: nem o nome do projeto, nem descrição
+   do que mudou. O que mudou vai nas notas.
 9. **Commits e push só quando o usuário pedir.** Release publicado é ação externa: confirme antes.
 10. **`RECOMP_PB_WALK=dma` e desligar `RECOMP_FLIP_PACING` quebram o jogo** (crash / corrupção de
     heap); não use nem exponha no launcher.
