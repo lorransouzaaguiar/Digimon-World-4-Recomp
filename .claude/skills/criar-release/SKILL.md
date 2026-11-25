@@ -88,7 +88,7 @@ guarda. Nunca imprima o token.
 ```bash
 TOKEN=$(printf 'protocol=https\nhost=github.com\n\n' | git credential fill | sed -n 's/^password=//p')
 R=lorransouzaaguiar/Digimon-World-4-Recomp
-# título ("name"): sempre "Digimon World 4 — Recomp vX.Y.Z", sem descrição do que mudou
+# título ("name"): só a versão, "vX.Y.Z" — sem o nome do projeto e sem descrição
 # corpo: JSON gerado em Python com open("docs/releases/vX.Y.Z.md").read()
 curl -s -X POST -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/$R/releases --data-binary @rel.json
 # anexos: POST https://uploads.github.com/repos/$R/releases/<id>/assets?name=<arquivo>  (application/octet-stream)
