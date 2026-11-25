@@ -14,7 +14,7 @@ caminho para as três plataformas (macOS via MoltenVK).
 
 - **Jogável:** boot, vídeos, menus, criação do Digimon, save/load, lobby, tutorial e primeira fase,
   a 60 fps (CachyOS, NVIDIA). Fases seguintes, chefes e multijogador **não foram testados**.
-- **Publicado:** release v0.3.1 (2026-11-24; AppImage + tar.gz; antes v0.3.0, v0.2.0 e v0.1.0) em
+- **Publicado:** release v0.3.2 (2026-11-24; AppImage + tar.gz; antes v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
   `github.com/lorransouzaaguiar/Digimon-World-4-Recomp` (preparado para ficar público: licença
   MIT, histórico com e-mail noreply; a visibilidade quem muda é o usuário).
 - **Vulkan (branch `DW4R-1`):** `src/hooks/nv2a_vk_backend.c` passa nos mesmos frames de
@@ -28,6 +28,9 @@ caminho para as três plataformas (macOS via MoltenVK).
 - **Widescreen (DW4R-2):** só 16:9 e 21:9 (16:10 retirada). Fade, HUD e minimapa tratados em
   `src/hooks/render_opts.h` (`ro_squeeze`, chamada no flush do lote); recorte do guest (scissor)
   nos dois renderizadores. Detalhes e casos em `PORT_NOTES.md` §7.6.
+- **Interface em widescreen (DW4R-4, v0.3.2):** além da caixa de diálogo abaixo, o rodapé do menu
+  do START é cortado na coluna 4:3 e a linha do "Loading..." do boot e a faixa do título vão de
+  ponta a ponta; `DW4_WS_DIALOG=0` desliga tudo isso.
 - **Caixa de diálogo (DW4R-4, 2026-11-24):** em 16:9 e 21:9 o fundo e as linhas vão de ponta a ponta;
   retrato, nome e texto ficam na coluna 4:3 do meio — o usuário viu ancorado à esquerda e
   preferiu centralizado (`ro_squeeze`; `DW4_WS_DIALOG=0` desliga). 16:9: conferido sem
@@ -47,7 +50,7 @@ caminho para as três plataformas (macOS via MoltenVK).
 |---|---|
 | `STATUS.md` | o que funciona, o que falta, bugs abertos |
 | `PORT_NOTES.md` | mapa do guest e endereços, hooks, patches no toolkit (§4), renderização (§7), depuração e testes (§8), como cada bug foi achado |
-| `docs/WIDESCREEN_DIALOGO.md` | caixa de diálogo de ponta a ponta em widescreen (branch `DW4R-4`, feito e conferido pelo usuário em 16:9 e 21:9): mapa das peças, regra, o que falta ver |
+| `docs/WIDESCREEN_DIALOGO.md` | caixa de diálogo de ponta a ponta em widescreen (feito na `DW4R-4`, publicado na v0.3.2): mapa das peças, regra, o que falta ver |
 | `docs/REFERENCIAS.md` | estudo de outros ports com o mesmo toolkit (o que reaproveitar, licenças, como publicam) |
 | `README.md` / `README.pt-BR.md` | visão para jogador e contribuidor (en e pt-BR) |
 
