@@ -40,8 +40,8 @@ caminho para as três plataformas (macOS via MoltenVK).
   Compilação cruzada com MinGW-w64 (`scripts/build_win.sh` → `build-win/dw4_recomp.exe`), Vulkan e
   OpenGL dentro do `.exe`, SDL2 para janela/controle/áudio, sem launcher (`run.bat`). Passa em
   `soak.py --wine --golden` e `--wine --gamescope --opengl --golden`; o usuário jogou no Wine com
-  janela em Vulkan (até 1440p 16:9). **Windows real, OpenGL com janela, teclado e Proton não foram
-  testados.** Veja `STATUS.md` (Port para Windows).
+  janela em Vulkan (até 1440p 16:9) e, por pouco tempo, em OpenGL. **Windows real, teclado e Proton
+  não foram testados.** Veja `STATUS.md` (Port para Windows).
 - **Aberto:** crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
   assinatura no `STATUS.md`); texgen não implementado; o chão que escurece por alguns quadros;
   HUD em widescreen só conferido com 1 jogador.

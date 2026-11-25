@@ -503,8 +503,11 @@ jogar e para desenvolver, correções de runtime candidatas a portar e a discuss
   libepoxy 1.5.10 é compilada do código-fonte pelo `build_win.sh` (meson do `.venv`, SHA-256 fixo) e
   vai no pacote como `libepoxy-0.dll`. `soak.py --wine --gamescope --opengl --golden` passa (Wine
   dentro de um gamescope sem tela: sem tela nenhuma o Wine não cria janela, o WGL falha e o jogo cai
-  no Vulkan — o soak agora acusa isso como INCOMPLETO). **Com janela, o OpenGL do build de Windows
-  não foi jogado** (o usuário ficou de testar). Causa de um crash achado no caminho: PORT_NOTES §7.11.
+  no Vulkan — o soak agora acusa isso como INCOMPLETO). **Com janela (usuário, 2026-11-25, pelo
+  `./launcher.sh --wine`, 1440p 16:9 a 60 fps): "rodou normal".** No log
+  (`logs/run-20261125-153730.log`): contexto WGL na RTX 5070, imagem 2560x1440, controle de PS4 e
+  áudio WASAPI, nenhum crash, saída limpa; sessão curta (~65 s, 13 medições de fps, mediana 59,3,
+  mínima 44,9), então desempenho em área pesada não foi medido. Causa de um crash achado no caminho: PORT_NOTES §7.11.
 - **Pacote (2026-11-25):** `scripts/package_win.sh vX` gera `dist/…-windows-x86_64.zip` (`.exe` sem
   símbolos, `SDL2.dll`, `libepoxy-0.dll`, `run.bat` com as opções no começo, README bilíngue,
   licenças) e guarda o `.exe` com símbolos em `dist/…debug.exe` (não publicar). Barreiras: arquivo
