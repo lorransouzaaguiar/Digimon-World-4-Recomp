@@ -41,7 +41,7 @@ bugs.
 | Terminal Area (lobby), tutorial, Central Area, Death Valley e Humid Cave jogáveis | ✅ |
 | Todas as áreas depois dessas, chefes, o resto do jogo | ⬜ nunca executado |
 | Multijogador (2 a 4 jogadores) | ⬜ ainda não testado |
-| Resolução interna até 4K e widescreen (16:9, 21:9): cenário mais largo, painel do jogador e minimapa nos cantos da tela, menus e diálogos em 4:3 | ✅ jogado nas primeiras fases |
+| Resolução interna até 4K e widescreen (16:9, 21:9): cenário mais largo, painel do jogador e minimapa nos cantos da tela, caixa de diálogo de ponta a ponta, menus em 4:3 | ✅ jogado nas primeiras fases |
 | Launcher com visual inspirado nos menus do jogo; limite de quadros (30 por padrão, a velocidade do console; em 60 fica mais fluido, mas o jogo roda no dobro da velocidade) | ✅ novo |
 | Remapear teclas | ⬜ não implementado |
 | Linux | ✅ o único sistema suportado hoje |

@@ -1,0 +1,51 @@
+# Boot -> cria o Digimon -> lobby -> percorre os dialogos do Digi-Elf, com uma
+# captura por fala. Usado para mapear a caixa de dialogo (docs/WIDESCREEN_DIALOGO.md).
+#   scripts/soak.py --scenario tests/scenarios/dialogo.txt --timeout 300 -e DW4_RES=720 -e DW4_ASPECT=16:9
+# Marcas d00..d21 no log dao o flip de cada fala. Em 2026-11-24:
+#   d00..d08  fala de NPC com retrato (tipo A)      flips 3945..4737
+#   d09       sem caixa (transicao)
+#   d10, d11  mensagem do sistema, sem retrato (B)  flips 4935, 5034
+#   d12..d14  fala de NPC de novo (A)
+#   d15       sem caixa;  d16..d21  jogo livre com o HUD
+f1060:enter              # pula o FMV de abertura (os logos antes nao sao pulaveis). 1060 e nao
+                         # 1000: o video as vezes comeca ~1,5 s mais tarde e ignora o START cedo demais
+f1600:enter              # "Press START" -> Game Start / Option
+wait_flips:100  z        # Game Start -> carrega o menu Entry
+wait_flips:260  z        # Controller 1: Join -> Player 1
+wait_flips:100  enter    # Confirm -> "Player selection complete, go to game? OK?"
+wait_flips:100  z        # -> Yes / No
+wait_flips:100  z        # Yes -> paineis dos 4 jogadores
+wait_flips:150  mark:paineis
+z                        # Create Digimon -> "Select a Digimon" (Dorumon)
+wait_flips:120  shot:01_select_digimon
+z                        # escolhe Dorumon -> teclado do nome
+wait_flips:120  z        # letra "a"
+wait_flips:120  enter    # nome pronto -> "Do you want to assign this name?"
+wait_flips:120  z        # -> Yes, assign / No, change
+wait_flips:120  z        # Yes -> "To log into the Digital World press START"
+wait_flips:150  mark:login  shot:02_login
+enter                    # entra no lobby
+wait_flips:600
+z wait_flips:60 mark:d00 shot:X00 wait_flips:30
+z wait_flips:60 mark:d01 shot:X01 wait_flips:30
+z wait_flips:60 mark:d02 shot:X02 wait_flips:30
+z wait_flips:60 mark:d03 shot:X03 wait_flips:30
+z wait_flips:60 mark:d04 shot:X04 wait_flips:30
+z wait_flips:60 mark:d05 shot:X05 wait_flips:30
+z wait_flips:60 mark:d06 shot:X06 wait_flips:30
+z wait_flips:60 mark:d07 shot:X07 wait_flips:30
+z wait_flips:60 mark:d08 shot:X08 wait_flips:30
+z wait_flips:60 mark:d09 shot:X09 wait_flips:30
+z wait_flips:60 mark:d10 shot:X10 wait_flips:30
+z wait_flips:60 mark:d11 shot:X11 wait_flips:30
+z wait_flips:60 mark:d12 shot:X12 wait_flips:30
+z wait_flips:60 mark:d13 shot:X13 wait_flips:30
+z wait_flips:60 mark:d14 shot:X14 wait_flips:30
+z wait_flips:60 mark:d15 shot:X15 wait_flips:30
+z wait_flips:60 mark:d16 shot:X16 wait_flips:30
+z wait_flips:60 mark:d17 shot:X17 wait_flips:30
+z wait_flips:60 mark:d18 shot:X18 wait_flips:30
+z wait_flips:60 mark:d19 shot:X19 wait_flips:30
+z wait_flips:60 mark:d20 shot:X20 wait_flips:30
+z wait_flips:60 mark:d21 shot:X21 wait_flips:30
+quit

@@ -28,6 +28,11 @@ caminho para as três plataformas (macOS via MoltenVK).
 - **Widescreen (DW4R-2):** só 16:9 e 21:9 (16:10 retirada). Fade, HUD e minimapa tratados em
   `src/hooks/render_opts.h` (`ro_squeeze`, chamada no flush do lote); recorte do guest (scissor)
   nos dois renderizadores. Detalhes e casos em `PORT_NOTES.md` §7.6.
+- **Caixa de diálogo (DW4R-4, 2026-11-24):** em 16:9 e 21:9 o fundo e as linhas vão de ponta a ponta;
+  retrato, nome e texto ficam na coluna 4:3 do meio — o usuário viu ancorado à esquerda e
+  preferiu centralizado (`ro_squeeze`; `DW4_WS_DIALOG=0` desliga). 16:9: conferido sem
+  janela no lobby e pelo usuário jogando. 21:9: só pelo usuário jogando ("tá legal"), nenhum teste
+  sem janela. Lojas, escolhas e 2–4 jogadores não foram vistos.
 - **Aberto:** crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
   assinatura no `STATUS.md`); texgen não implementado; o chão que escurece por alguns quadros;
   HUD em widescreen só conferido com 1 jogador.
@@ -42,6 +47,7 @@ caminho para as três plataformas (macOS via MoltenVK).
 |---|---|
 | `STATUS.md` | o que funciona, o que falta, bugs abertos |
 | `PORT_NOTES.md` | mapa do guest e endereços, hooks, patches no toolkit (§4), renderização (§7), depuração e testes (§8), como cada bug foi achado |
+| `docs/WIDESCREEN_DIALOGO.md` | caixa de diálogo de ponta a ponta em widescreen (branch `DW4R-4`, feito e conferido pelo usuário em 16:9 e 21:9): mapa das peças, regra, o que falta ver |
 | `docs/REFERENCIAS.md` | estudo de outros ports com o mesmo toolkit (o que reaproveitar, licenças, como publicam) |
 | `README.md` / `README.pt-BR.md` | visão para jogador e contribuidor (en e pt-BR) |
 

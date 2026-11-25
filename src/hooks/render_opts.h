@@ -20,8 +20,9 @@
  *              mais largas e todo vertice desenhado nelas tem o x comprimido
  *              em torno do centro por 1/wide. O que o jogo desenhava alem das
  *              bordas de 640 aparece nas laterais (Hor+: mais cenario, sem
- *              esticar; o executor so recorta no near plane). HUD, menus e
- *              videos sao 2D e ficam em 4:3 no meio. Excecao: um triangulo 2D
+ *              esticar; o executor so recorta no near plane). Menus e
+ *              videos sao 2D e ficam em 4:3 no meio; o HUD e a caixa de
+ *              dialogo tem regras proprias em ro_squeeze. Excecao: um triangulo 2D
  *              que cobre a tela inteira (fade, clarao, pos-processamento)
  *              continua cobrindo a tela inteira.
  *
@@ -190,6 +191,25 @@ static inline int ro_scissor(const uint32_t clip[4], int wide, uint32_t gw, uint
     return 1;
 }
 
+/* Largura minima (pixels do guest) de um triangulo das tiras do painel
+ * (fundo e linhas, 694/695 de largura); a maior peca que nao e tira e o
+ * contorno da aba do nome, com 256. */
+#define RO_DIALOG_STRIP_W 300.0f
+#define RO_DIALOG_MAX_TRIS 256      /* o painel tem 82 (fala) ou 64 (mensagem) */
+
+/* DW4_WS_DIALOG=0 desliga a regra (caixa em 4:3 no meio, como antes): serve
+ * para comparar antes/depois. */
+static inline int ro_dialog_on(void)
+{
+    static int on = -1;
+
+    if (on < 0) {
+        const char *e = getenv("DW4_WS_DIALOG");
+        on = !(e && e[0] == '0');
+    }
+    return on;
+}
+
 /* textured: o lote tem textura (so para o rastreio DW4_RO_TRACE).
  * screen_tex: o lote amostra uma superficie de tela alargada -- uma copia do
  * proprio quadro (transicoes de loading, pausa). */
@@ -276,8 +296,107 @@ static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, floa
          *   - o lote 2D seguinte que cai na altura da faixa e fica todo de um
          *     lado da tela e ancorado na borda desse lado, com o tamanho
          *     certo (escala em x em torno da borda, nao do centro).
-         * A caixa de dialogo nao encosta na borda (termina em y = 463) e
-         * continua em 4:3, inteira, no meio; menus tambem. */
+         * Menus continuam em 4:3, inteiros, no meio. A caixa de dialogo nao
+         * encosta na borda (termina em y = 463) e tem regra propria, logo
+         * abaixo. */
+        if (trace > 1 && r0 == 1.0f && r1 == 1.0f && count <= 300
+                && ro_trace_flip(dw4_frame_count()))
+            for (uint32_t i = 0; i + 2 < count; i += 3)     /* 2D: triangulo por triangulo */
+                fprintf(stderr, "[ROT]  %4u  (%.0f,%.0f) (%.0f,%.0f) (%.0f,%.0f)\n", i / 3,
+                        (double)v[i].x, (double)v[i].y, (double)v[i + 1].x, (double)v[i + 1].y,
+                        (double)v[i + 2].x, (double)v[i + 2].y);
+        /* Caixa de dialogo (fala de NPC e mensagem do sistema) em tela larga
+         * -- docs/WIDESCREEN_DIALOGO.md.
+         *
+         * Em 4:3 o fundo (1..695 x 319..462) e as duas linhas (-54..641)
+         * passam das bordas da tela: a caixa vai de ponta a ponta. Espremida
+         * com o resto do 2D ela acabava antes das bordas. O painel inteiro e
+         * UM lote (mesma textura e estado), entao e tratado por triangulo:
+         *   - tiras (fundo, linhas, tiras deslizantes): nao espreme;
+         *   - o resto (moldura do retrato, aba do nome, barrinhas, seta de
+         *     "continuar"): espremido em torno do centro, como antes.
+         * O conteudo (retrato, fala, nome -- lotes seguintes) fica na coluna
+         * 4:3 do meio, pela regra geral. Chegou a ser ancorado a esquerda
+         * (2026-11-24) e o usuario preferiu centralizado: as quebras de
+         * linha estao escritas no texto do jogo ("\r\n" em UTF-16 no
+         * area.afs), a fala nao aproveita a largura extra e ficava um vazio
+         * so do lado direito.
+         * Reconhecida pela geometria exata do fundo, nao pela caixa do lote
+         * (que muda com o conteudo; e o menu do START usa tiras iguais). */
+        if (r0 == 1.0f && r1 == 1.0f && guest_w == 640.0f && ro_dialog_on()) {
+            int dlg = 0;
+
+            /* O fundo: um quadro de 640 x 143 (y 319..462) com a sobra de
+             * 54 colada a direita. Parado fica em 1..641 + 641..695; ao
+             * abrir e fechar a caixa ele entra deslizando da esquerda
+             * (-694 -> 1) e as linhas da direita, entao a posicao em x nao
+             * entra na assinatura -- senao a caixa deslizava espremida e
+             * "pulava" para a largura cheia no ultimo quadro. */
+            if (by0 <= 321.0f && by1 >= 460.0f && bx1 - bx0 >= 690.0f) {
+                float ax1 = -1e9f, tx0 = 1e9f;      /* fim do quadro largo, inicio da sobra */
+
+                for (uint32_t i = 0; i + 2 < count; i += 3) {
+                    const Nv2aVertex *t = &v[i];
+                    float x0 = t[0].x, x1 = t[0].x, y0 = t[0].y, y1 = t[0].y;
+
+                    for (int j = 1; j < 3; j++) {
+                        if (t[j].x < x0) x0 = t[j].x;
+                        if (t[j].x > x1) x1 = t[j].x;
+                        if (t[j].y < y0) y0 = t[j].y;
+                        if (t[j].y > y1) y1 = t[j].y;
+                    }
+                    if (fabsf(y0 - 319.0f) > 1.5f || fabsf(y1 - 462.0f) > 1.5f)
+                        continue;
+                    if (fabsf(x1 - x0 - 640.0f) <= 2.0f) ax1 = x1;
+                    else if (fabsf(x1 - x0 - 54.5f) <= 2.0f) tx0 = x0;
+                }
+                dlg = fabsf(ax1 - tx0) <= 1.0f;
+            }
+            if (dlg && count <= 3 * RO_DIALOG_MAX_TRIS) {
+                uint8_t strip[RO_DIALOG_MAX_TRIS];
+                uint32_t nt = count / 3;
+
+                /* Tiras: fundo, linhas e (na mensagem do sistema) as tiras
+                 * deslizantes. Cada uma e um quadro largo (640) mais uma
+                 * sobra estreita (54) colada nele, que em 4:3 fica fora da
+                 * tela. Tira = triangulo largo, ou que divide uma aresta
+                 * com um triangulo de tira. Nenhuma e espremida: o que
+                 * cobria a tela continua cobrindo, o que estava fora
+                 * continua fora, e a entrada deslizando fica como em 4:3. */
+                for (uint32_t a = 0; a < nt; a++) {
+                    const Nv2aVertex *t = &v[a * 3];
+                    float x0 = fminf(t[0].x, fminf(t[1].x, t[2].x));
+                    float x1 = fmaxf(t[0].x, fmaxf(t[1].x, t[2].x));
+
+                    strip[a] = x1 - x0 >= RO_DIALOG_STRIP_W;
+                }
+                for (int pass = 0; pass < 2; pass++)
+                    for (uint32_t a = 0; a < nt; a++) {
+                        if (strip[a])
+                            continue;
+                        for (uint32_t b = 0; b < nt && !strip[a]; b++) {
+                            int shared = 0;
+
+                            if (!strip[b])
+                                continue;
+                            for (int i = 0; i < 3; i++)
+                                for (int j = 0; j < 3; j++)
+                                    if (fabsf(v[a * 3 + i].x - v[b * 3 + j].x) < 0.01f
+                                            && fabsf(v[a * 3 + i].y - v[b * 3 + j].y) < 0.01f) {
+                                        shared++;
+                                        break;
+                                    }
+                            if (shared >= 2)
+                                strip[a] = 1;
+                        }
+                    }
+                for (uint32_t a = 0; a < nt; a++)
+                    if (!strip[a])
+                        for (int j = 0; j < 3; j++)
+                            v[a * 3 + j].x = cx + (v[a * 3 + j].x - cx) * k;
+                return;
+            }
+        }
         if (r0 == 1.0f && r1 == 1.0f) {
             /* zona[0] = lado esquerdo, zona[1] = direito: a faixa de altura
              * em que um lote 2D daquele lado pertence ao HUD. Comeca na

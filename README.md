@@ -40,7 +40,7 @@ Cave — on the one machine it has been tested on (see
 | Terminal Area (lobby), tutorial, Central Area, Death Valley and Humid Cave playable | ✅ |
 | Every area after those, bosses, the rest of the game | ⬜ never run |
 | Multiplayer (2–4 players) | ⬜ not tested yet |
-| Internal resolution up to 4K and widescreen (16:9, 21:9): wider scenery, player panel and minimap in the screen corners, menus and dialogue stay 4:3 | ✅ played in the first stages |
+| Internal resolution up to 4K and widescreen (16:9, 21:9): wider scenery, player panel and minimap in the screen corners, dialogue box edge to edge, menus stay 4:3 | ✅ played in the first stages |
 | Launcher restyled after the game's menus; frame-rate limit (30 by default, the console's speed; 60 is smoother but the game runs twice as fast) | ✅ new |
 | Key remapping | ⬜ not implemented |
 | Linux | ✅ the only system supported today |

@@ -300,6 +300,26 @@ goldens iguais em Vulkan e OpenGL; cenário de ~105 s repetido 3× sem erro.
 tempo nem quantas trocas de área teve essa sessão. Muda o endereço de toda alocação depois do primeiro free: se aparecer
 crash novo, comparar com `DW4_NO_HEAP_RECLAIM=1`.
 
+## Caixa de diálogo de ponta a ponta em widescreen (branch `DW4R-4`, 2026-11-24)
+
+Em 16:9 e 21:9 o fundo e as linhas da caixa de diálogo (fala de NPC e mensagem do sistema) vão de uma
+borda à outra, como em 4:3; retrato, nome, texto e seta ▼ ficam na coluna 4:3 do meio. O conteúdo
+chegou a ser ancorado à esquerda (primeira escolha do usuário); jogando, ele viu que o texto não
+aproveita a largura extra e pediu centralizado. Motivo: as quebras de linha estão escritas no
+texto do jogo (`\r\n` em UTF-16 no `area.afs`, uma string por página), não são calculadas.
+Regra em `ro_squeeze` (`src/hooks/render_opts.h`), comum aos dois renderizadores; detalhes em
+`docs/WIDESCREEN_DIALOGO.md` e `PORT_NOTES.md` §7.6. `DW4_WS_DIALOG=0` volta ao comportamento antigo.
+
+- **21:9: a mesma regra, conferida só pelo usuário jogando** ("conferi aqui também 21:9 e tá
+  legal", 2026-11-24). Primeiro ele pediu para não mexer em 21:9; aprovado o 16:9, pediu o mesmo
+  lá e dispensou o teste sem janela. Nenhuma execução do `soak.py` em 21:9 com essa regra.
+- **Verificado sem janela** (Vulkan e OpenGL, 720p 16:9, lobby, `tests/scenarios/dialogo.txt`):
+  os dois tipos de caixa parados, a entrada deslizando, o menu do START e o HUD iguais a antes;
+  goldens 4:3 iguais nos dois renderizadores.
+- **Confirmado pelo usuário jogando (2026-11-24):** testou em alguns personagens, "tá bom assim".
+- **Não verificado:** lojas, perguntas com escolha, menu do portal, falas nas fases, retrato do
+  lado direito (se existir), 2–4 jogadores.
+
 ## Release v0.3.1 (2026-11-24)
 
 Só a correção da tela branca (memória do guest devolvida). Notas em `docs/releases/v0.3.1.md`.
@@ -367,6 +387,12 @@ camada de entrada). É candidato a ser também a "corrida que corrompe o heap" n
   `HalReturnToFirmware routine=2` (o próprio jogo desiste) e um SIGSEGV em `glBindFramebuffer` na
   saída. É o mesmo caso visto antes e não reproduzido (`ret guest 0x00277037`). Reproduzir:
   roteiro `f1000:enter` + `wait_flips:500`, várias vezes. Causa não investigada.
+- **2026-11-24 (DW4R-4): travamento, não crash, no mesmo ponto.** 1 de ~14 execuções sem janela do
+  roteiro `dialogo.txt` (Vulkan, 720p 16:9, com o jogo do usuário aberto ao mesmo tempo): START
+  em `f1060` pulou o vídeo, o jogo parou de dar flips no 1171 (~1,9 s depois) e ficou assim até
+  o tempo estourar. **Sem** `[ICALL] alvo 0x00000000`. Despejo: thread principal em `003BEA20 ←
+  0024D2E5 ← 00257F47 …`, worker de leitura em `sub_00012E72 → sub_0029E4C1`. Log:
+  `build/soak/20261124-230844/01/run.log`. Não investigado; a repetição seguinte passou.
 - **2026-11-24 (DW4R-2):** o usuário, jogando com janela, relata que pula o vídeo sempre e nunca
   mais viu o crash. Sem janela ele **continua**: `soak.py --scenario tests/scenarios/title.txt
   --runs 16` → 2 CRASH + 1 execução com o mesmo `[ICALL] alvo 0x00000000` que sobreviveu
