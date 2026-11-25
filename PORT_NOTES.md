@@ -622,6 +622,75 @@ comum). Desenho tirado do Amped 2 e dos dois SSX 3 (`docs/REFERENCIAS.md`), cód
   abre): aguardando o usuário.
   **Não verificado:** 2–4 jogadores (um lote que junte elementos dos dois lados fica no meio),
   HUD de chefe / outros elementos de borda, fases.
+- **Caixa de diálogo de ponta a ponta em widescreen (2026-11-24, DW4R-4):** em tela larga a caixa caía
+  na regra geral (2D espremido em torno do centro) e acabava antes das bordas (~39..601 de 640).
+  Mapa completo das peças em `docs/WIDESCREEN_DIALOGO.md`.
+  - *Geometria (rastreio `DW4_RO_TRACE`, que agora lista também os triângulos dos lotes 2D
+    pequenos, linhas `[ROT]`):* o painel é **um lote** (atlas de interface, blend 302/303). Cada
+    tira vem em dois quadros colados: o que cobre a tela e a sobra que em 4:3 fica fora dela —
+    fundo 1..641 + 641..695 (y 319..462), linhas −54..1 + 1..641 (y 326..329 e 451..454); a
+    mensagem do sistema tem ainda tiras estacionadas fora da tela (−694..1 e 641..1335). Ao
+    abrir, o fundo **entra deslizando** da esquerda (−694 → 1, ~43 px por quadro, 17 quadros) e
+    as linhas da direita; nesses quadros o lote só tem tiras, sem conteúdo.
+  - *Regra (`ro_squeeze`, antes da do HUD; só 2D, superfície de 640):* o lote é o painel se contém o fundo — um triângulo de 640 de largura
+    e y 319..462 com outro de 54 colado à direita, **em qualquer posição x**. Dentro do lote:
+    *tira* (triângulo com ≥ 300 de largura, ou que divide uma aresta com um triângulo de tira)
+    não é espremida; todo o resto do painel (moldura do retrato, aba do nome, barrinhas, seta ▼)
+    é espremido em torno do centro, e os lotes seguintes (retrato, fala, nome) seguem a regra
+    geral: o conteúdo fica na coluna 4:3 do meio.
+  - *Conteúdo à esquerda, tentado e desfeito:* a primeira versão ancorava o conteúdo à esquerda
+    (`x / wide` nas peças à esquerda do centro e nos lotes seguintes com x0 ≤ 140 em y 290..468,
+    guardando "há caixa neste quadro" como o HUD faz). Funcionava, mas o usuário, jogando, notou
+    que o texto continua quebrando no mesmo lugar e sobra um vazio só à direita. As quebras são
+    do texto do jogo: `\r\n` em UTF-16 no `area.afs`, uma string por página — não há largura de
+    quebra para alargar. Ficou centralizado.
+  - *Erros pelo caminho:* (1) classificar tira só pela largura deixava a sobra de 54 px do fundo
+    ser espremida para dentro da tela — faixa mais escura à direita (alfa dobrado); (2)
+    reconhecer o fundo pelos quatro cantos em 1..695 não valia durante a entrada: a caixa
+    deslizava espremida e "pulava" para a largura cheia no último quadro.
+  - *21:9:* a mesma regra, ligada depois do 16:9; conferida **só pelo usuário jogando** ("tá
+    legal"), sem execução sem janela. `DW4_WS_DIALOG=0` desliga a regra (comparar antes/depois).
+  - *Verificado sem janela:* Vulkan e OpenGL, 720p 16:9, lobby: os dois tipos parados, a entrada
+    deslizando, menu do START e HUD iguais a antes; goldens 4:3 iguais. **Confirmado pelo usuário
+    jogando** (alguns personagens, 16:9). *Não verificado:* lojas, escolhas, menu do portal,
+    fases, 2–4 jogadores.
+  - *Roteiro:* `tests/scenarios/dialogo.txt` pulava o vídeo de abertura em `f1000`; numa execução
+    o vídeo começou ~1,5 s mais tarde (16,1 s em vez de 14,6 s), ignorou o START dado 1,3 s
+    depois do início e o roteiro inteiro desalinhou (todas as marcas nos flips certos, telas
+    erradas). Passou para `f1060`. Conferir no log: `[CONTIG] ... free ... 2048 KB` (a textura do
+    vídeo) tem de sair no instante do `f1060`, não no do `f1600`. `lobby.txt` (goldens) usa
+    `f1000` e tem o mesmo risco.
+- **Rodapé do menu do START cortado em 4:3 (2026-11-24, DW4R-4):** em tela larga as duas
+  "caixas" do rodapé passavam da coluna 4:3 em que o resto do menu fica (pedido do usuário).
+  - *Geometria (captura `f9-015` do usuário, draws 669–674, atlas de interface, blend 302/303):*
+    são as mesmas tiras de 694 da caixa de diálogo — painel 239..933 × 366..509 com duas linhas
+    (239..933), e faixa 1..695 × 427..455 com as linhas −54..641. Em 4:3 a tela corta o que passa
+    de 0..640; espremidas, as pontas escondidas apareciam (o painel ia até a borda direita da
+    tela larga e as linhas começavam antes da coluna).
+  - *Regra (`ro_squeeze`, antes do laço geral):* em lote 2D pequeno (≤ 256 triângulos), tira =
+    triângulo de 640 de largura e até 150 de altura, mais os que dividem aresta com ele
+    (`ro_strip_close`). Cada triângulo de tira é cortado em x = 0..640 movendo os vértices e
+    levando o uv pelo gradiente do triângulo (`ro_clamp_tri_x`); depois é espremido como o
+    resto. A caixa de diálogo é tratada antes e não chega aqui. `DW4_WS_DIALOG=0` desliga também
+    esta regra.
+  - *Verificado sem janela:* 16:9, Vulkan e OpenGL, menu do START no lobby (rodapé termina na
+    coluna 4:3; diálogo e HUD iguais). *Não verificado:* 21:9; a animação de abrir/fechar o menu;
+    outros menus que usem as tiras (lojas, portal). **Confirmado pelo usuário jogando.**
+- **"Loading..." do boot e faixa da tela de título de ponta a ponta (2026-11-24, DW4R-4):**
+  pedido do usuário; as duas ficavam na coluna 4:3. Rastreio sem janela em 16:9
+  (`DW4_RO_TRACE` nos flips 60, 1660 e 1820):
+  - *Loading (flip ~60, antes dos logos):* fundo preto 21..621 × −9..491 (um lote) e, noutro
+    lote 2D, a linha 21..621 × 451..456 mais o texto 461..593 × 421..451. Regra de lote em
+    `ro_squeeze`: reconhecido pela caixa do lote (21..621, terminando em y 456) com um triângulo
+    de ≥ 598 de largura em y 451; a linha não é espremida (mesma margem proporcional de 4:3) e
+    o texto é ancorado na borda direita, para continuar no fim da linha.
+  - *Título:* o túnel do fundo é 3D e já ocupava a tela larga; o que ficava em 4:3 era a faixa
+    escura atrás de "Press START button" / "Game Start / Option": três quadros de −13..654 (duas
+    linhas e a faixa), com altura que muda entre os dois estados (284..344 e 261..369), no mesmo
+    lote das setas `>` `<`. Regra por triângulo: 2D de −13..654 (±1,5) e até 150 de altura não é
+    espremido; setas, texto, logotipo e copyright seguem no centro.
+  - Não executado sem janela (o usuário dispensou); **confirmado pelo usuário jogando**
+    ("ótimo, aprovado"). `DW4_WS_DIALOG=0` desliga também estas regras.
 - **Minimapa das fases enorme — recorte do guest não era aplicado (2026-11-24, DW4R-2):** o
   painel do mapa ocupava do meio da tela até além da borda direita. Não é do widescreen: vale em
   qualquer proporção.

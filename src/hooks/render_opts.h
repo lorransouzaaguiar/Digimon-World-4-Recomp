@@ -20,8 +20,9 @@
  *              mais largas e todo vertice desenhado nelas tem o x comprimido
  *              em torno do centro por 1/wide. O que o jogo desenhava alem das
  *              bordas de 640 aparece nas laterais (Hor+: mais cenario, sem
- *              esticar; o executor so recorta no near plane). HUD, menus e
- *              videos sao 2D e ficam em 4:3 no meio. Excecao: um triangulo 2D
+ *              esticar; o executor so recorta no near plane). Menus e
+ *              videos sao 2D e ficam em 4:3 no meio; o HUD e a caixa de
+ *              dialogo tem regras proprias em ro_squeeze. Excecao: um triangulo 2D
  *              que cobre a tela inteira (fade, clarao, pos-processamento)
  *              continua cobrindo a tela inteira.
  *
@@ -190,6 +191,77 @@ static inline int ro_scissor(const uint32_t clip[4], int wide, uint32_t gw, uint
     return 1;
 }
 
+/* Largura minima (pixels do guest) de um triangulo das tiras do painel
+ * (fundo e linhas, 694/695 de largura); a maior peca que nao e tira e o
+ * contorno da aba do nome, com 256. */
+#define RO_DIALOG_STRIP_W 300.0f
+#define RO_DIALOG_MAX_TRIS 256      /* o painel tem 82 (fala) ou 64 (mensagem) */
+
+/* Tiras da interface: fecha `strip` (um byte por triangulo, sementes ja
+ * marcadas) com todo triangulo que divide uma aresta com um de tira. Cada
+ * tira do jogo e um quadro de 640 mais uma sobra de 54 colada nele. */
+static inline void ro_strip_close(const Nv2aVertex *v, uint32_t nt, uint8_t *strip)
+{
+    for (int pass = 0; pass < 2; pass++)
+        for (uint32_t a = 0; a < nt; a++) {
+            if (strip[a])
+                continue;
+            for (uint32_t b = 0; b < nt && !strip[a]; b++) {
+                int shared = 0;
+
+                if (!strip[b])
+                    continue;
+                for (int i = 0; i < 3; i++)
+                    for (int j = 0; j < 3; j++)
+                        if (fabsf(v[a * 3 + i].x - v[b * 3 + j].x) < 0.01f
+                                && fabsf(v[a * 3 + i].y - v[b * 3 + j].y) < 0.01f) {
+                            shared++;
+                            break;
+                        }
+                if (shared >= 2)
+                    strip[a] = 1;
+            }
+        }
+}
+
+/* Corta um triangulo 2D em x = lo..hi movendo os vertices que passam do
+ * limite e levando o uv junto (o mapa de textura do triangulo e afim). Vale
+ * para os quadros retos das tiras: os dois triangulos de um quadro, cortados
+ * assim, somam exatamente o quadro cortado. */
+static inline void ro_clamp_tri_x(Nv2aVertex *t, float lo, float hi)
+{
+    float ax = t[1].x - t[0].x, ay = t[1].y - t[0].y;
+    float bx = t[2].x - t[0].x, by = t[2].y - t[0].y;
+    float det = ax * by - bx * ay, gu = 0.0f, gv = 0.0f;
+
+    if (fabsf(det) > 1e-6f) {           /* d(u)/dx e d(v)/dx no triangulo */
+        gu = ((t[1].u - t[0].u) * by - (t[2].u - t[0].u) * ay) / det;
+        gv = ((t[1].v - t[0].v) * by - (t[2].v - t[0].v) * ay) / det;
+    }
+    for (int j = 0; j < 3; j++) {
+        float c = t[j].x < lo ? lo : t[j].x > hi ? hi : t[j].x;
+
+        t[j].u += gu * (c - t[j].x);
+        t[j].v += gv * (c - t[j].x);
+        t[j].x = c;
+    }
+}
+
+/* DW4_WS_DIALOG=0 desliga as regras de interface em tela larga (caixa de
+ * dialogo de ponta a ponta, rodape do menu do START cortado em 4:3, linha do
+ * "Loading..." e faixa da tela de titulo de ponta a ponta): volta ao
+ * comportamento antigo, para comparar antes/depois. */
+static inline int ro_dialog_on(void)
+{
+    static int on = -1;
+
+    if (on < 0) {
+        const char *e = getenv("DW4_WS_DIALOG");
+        on = !(e && e[0] == '0');
+    }
+    return on;
+}
+
 /* textured: o lote tem textura (so para o rastreio DW4_RO_TRACE).
  * screen_tex: o lote amostra uma superficie de tela alargada -- uma copia do
  * proprio quadro (transicoes de loading, pausa). */
@@ -276,8 +348,124 @@ static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, floa
          *   - o lote 2D seguinte que cai na altura da faixa e fica todo de um
          *     lado da tela e ancorado na borda desse lado, com o tamanho
          *     certo (escala em x em torno da borda, nao do centro).
-         * A caixa de dialogo nao encosta na borda (termina em y = 463) e
-         * continua em 4:3, inteira, no meio; menus tambem. */
+         * Menus continuam em 4:3, inteiros, no meio. A caixa de dialogo nao
+         * encosta na borda (termina em y = 463) e tem regra propria, logo
+         * abaixo. */
+        if (trace > 1 && r0 == 1.0f && r1 == 1.0f && count <= 3 * RO_DIALOG_MAX_TRIS
+                && ro_trace_flip(dw4_frame_count()))
+            for (uint32_t i = 0; i + 2 < count; i += 3)     /* 2D: triangulo por triangulo */
+                fprintf(stderr, "[ROT]  %4u  (%.0f,%.0f) (%.0f,%.0f) (%.0f,%.0f)\n", i / 3,
+                        (double)v[i].x, (double)v[i].y, (double)v[i + 1].x, (double)v[i + 1].y,
+                        (double)v[i + 2].x, (double)v[i + 2].y);
+        /* "Loading..." do boot (antes dos logos) em tela larga.
+         *
+         * Um lote 2D com a linha do rodape (21..621 x 451..456: em 4:3 ela
+         * vai quase de ponta a ponta, com a margem de overscan) e o texto
+         * "Loading..." encostado no fim dela (461..593 x 421..451). Espremida,
+         * a linha ficava na coluna 4:3 do meio (pedido do usuario,
+         * 2026-11-24). A linha nao e espremida -- mesma margem proporcional
+         * de 4:3 -- e o texto e ancorado na borda direita, com o tamanho
+         * certo, para continuar no fim da linha. */
+        if (r0 == 1.0f && r1 == 1.0f && guest_w == 640.0f && count <= 60 && ro_dialog_on()
+                && fabsf(bx0 - 21.0f) <= 1.5f && fabsf(bx1 - 621.0f) <= 1.5f
+                && by0 >= 400.0f && fabsf(by1 - 456.0f) <= 1.5f) {
+            int line = 0;
+
+            for (uint32_t i = 0; i + 2 < count && !line; i += 3) {
+                const Nv2aVertex *t = &v[i];
+                float x0 = fminf(t[0].x, fminf(t[1].x, t[2].x));
+                float x1 = fmaxf(t[0].x, fmaxf(t[1].x, t[2].x));
+                float y0 = fminf(t[0].y, fminf(t[1].y, t[2].y));
+
+                line = x1 - x0 >= 598.0f && fabsf(y0 - 451.0f) <= 1.5f;
+            }
+            if (line) {
+                for (uint32_t i = 0; i + 2 < count; i += 3) {
+                    Nv2aVertex *t = &v[i];
+                    float x0 = fminf(t[0].x, fminf(t[1].x, t[2].x));
+                    float x1 = fmaxf(t[0].x, fmaxf(t[1].x, t[2].x));
+
+                    if (x1 - x0 >= 598.0f)
+                        continue;                       /* a linha */
+                    for (int j = 0; j < 3; j++)         /* o texto */
+                        t[j].x = guest_w - (guest_w - t[j].x) * k;
+                }
+                return;
+            }
+        }
+        /* Caixa de dialogo (fala de NPC e mensagem do sistema) em tela larga
+         * -- docs/WIDESCREEN_DIALOGO.md.
+         *
+         * Em 4:3 o fundo (1..695 x 319..462) e as duas linhas (-54..641)
+         * passam das bordas da tela: a caixa vai de ponta a ponta. Espremida
+         * com o resto do 2D ela acabava antes das bordas. O painel inteiro e
+         * UM lote (mesma textura e estado), entao e tratado por triangulo:
+         *   - tiras (fundo, linhas, tiras deslizantes): nao espreme;
+         *   - o resto (moldura do retrato, aba do nome, barrinhas, seta de
+         *     "continuar"): espremido em torno do centro, como antes.
+         * O conteudo (retrato, fala, nome -- lotes seguintes) fica na coluna
+         * 4:3 do meio, pela regra geral. Chegou a ser ancorado a esquerda
+         * (2026-11-24) e o usuario preferiu centralizado: as quebras de
+         * linha estao escritas no texto do jogo ("\r\n" em UTF-16 no
+         * area.afs), a fala nao aproveita a largura extra e ficava um vazio
+         * so do lado direito.
+         * Reconhecida pela geometria exata do fundo, nao pela caixa do lote
+         * (que muda com o conteudo; e o menu do START usa tiras iguais). */
+        if (r0 == 1.0f && r1 == 1.0f && guest_w == 640.0f && ro_dialog_on()) {
+            int dlg = 0;
+
+            /* O fundo: um quadro de 640 x 143 (y 319..462) com a sobra de
+             * 54 colada a direita. Parado fica em 1..641 + 641..695; ao
+             * abrir e fechar a caixa ele entra deslizando da esquerda
+             * (-694 -> 1) e as linhas da direita, entao a posicao em x nao
+             * entra na assinatura -- senao a caixa deslizava espremida e
+             * "pulava" para a largura cheia no ultimo quadro. */
+            if (by0 <= 321.0f && by1 >= 460.0f && bx1 - bx0 >= 690.0f) {
+                float ax1 = -1e9f, tx0 = 1e9f;      /* fim do quadro largo, inicio da sobra */
+
+                for (uint32_t i = 0; i + 2 < count; i += 3) {
+                    const Nv2aVertex *t = &v[i];
+                    float x0 = t[0].x, x1 = t[0].x, y0 = t[0].y, y1 = t[0].y;
+
+                    for (int j = 1; j < 3; j++) {
+                        if (t[j].x < x0) x0 = t[j].x;
+                        if (t[j].x > x1) x1 = t[j].x;
+                        if (t[j].y < y0) y0 = t[j].y;
+                        if (t[j].y > y1) y1 = t[j].y;
+                    }
+                    if (fabsf(y0 - 319.0f) > 1.5f || fabsf(y1 - 462.0f) > 1.5f)
+                        continue;
+                    if (fabsf(x1 - x0 - 640.0f) <= 2.0f) ax1 = x1;
+                    else if (fabsf(x1 - x0 - 54.5f) <= 2.0f) tx0 = x0;
+                }
+                dlg = fabsf(ax1 - tx0) <= 1.0f;
+            }
+            if (dlg && count <= 3 * RO_DIALOG_MAX_TRIS) {
+                uint8_t strip[RO_DIALOG_MAX_TRIS];
+                uint32_t nt = count / 3;
+
+                /* Tiras: fundo, linhas e (na mensagem do sistema) as tiras
+                 * deslizantes. Cada uma e um quadro largo (640) mais uma
+                 * sobra estreita (54) colada nele, que em 4:3 fica fora da
+                 * tela. Tira = triangulo largo, ou que divide uma aresta
+                 * com um triangulo de tira. Nenhuma e espremida: o que
+                 * cobria a tela continua cobrindo, o que estava fora
+                 * continua fora, e a entrada deslizando fica como em 4:3. */
+                for (uint32_t a = 0; a < nt; a++) {
+                    const Nv2aVertex *t = &v[a * 3];
+                    float x0 = fminf(t[0].x, fminf(t[1].x, t[2].x));
+                    float x1 = fmaxf(t[0].x, fmaxf(t[1].x, t[2].x));
+
+                    strip[a] = x1 - x0 >= RO_DIALOG_STRIP_W;
+                }
+                ro_strip_close(v, nt, strip);
+                for (uint32_t a = 0; a < nt; a++)
+                    if (!strip[a])
+                        for (int j = 0; j < 3; j++)
+                            v[a * 3 + j].x = cx + (v[a * 3 + j].x - cx) * k;
+                return;
+            }
+        }
         if (r0 == 1.0f && r1 == 1.0f) {
             /* zona[0] = lado esquerdo, zona[1] = direito: a faixa de altura
              * em que um lote 2D daquele lado pertence ao HUD. Comeca na
@@ -324,6 +512,41 @@ static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, floa
             }
         }
     }
+    /* Rodape do menu do START (e qualquer outro uso das tiras da interface
+     * fora da caixa de dialogo, tratada acima).
+     *
+     * As duas "caixas" do rodape sao tiras de 694 de largura que em 4:3
+     * passam das bordas da tela e sao cortadas por ela: o painel 239..933 x
+     * 366..509 com duas linhas, e a faixa 1..695 x 427..455 com as linhas
+     * -54..641 (captura f9-015 do usuario). Espremidas com o resto do menu,
+     * as pontas que a tela escondia apareciam fora da coluna 4:3 (pedido do
+     * usuario, 2026-11-24). Aqui cada tira e cortada em 0..640 antes de ser
+     * espremida, entao acaba na borda da coluna 4:3, como em 4:3 acabava na
+     * borda da tela.
+     * Semente: triangulo 2D com 640 de largura e baixo (um quadro de tela
+     * inteira ou uma imagem deslizando nao entram). */
+    if (count >= 6 && count <= 3 * RO_DIALOG_MAX_TRIS && guest_w == 640.0f && ro_dialog_on()) {
+        uint8_t strip[RO_DIALOG_MAX_TRIS];
+        uint32_t nt = count / 3, seeds = 0;
+
+        for (uint32_t a = 0; a < nt; a++) {
+            const Nv2aVertex *t = &v[a * 3];
+            float x0 = fminf(t[0].x, fminf(t[1].x, t[2].x));
+            float x1 = fmaxf(t[0].x, fmaxf(t[1].x, t[2].x));
+            float y0 = fminf(t[0].y, fminf(t[1].y, t[2].y));
+            float y1 = fmaxf(t[0].y, fmaxf(t[1].y, t[2].y));
+
+            strip[a] = t[0].rhw == 1.0f && t[1].rhw == 1.0f && t[2].rhw == 1.0f
+                       && fabsf(x1 - x0 - 640.0f) <= 2.0f && y1 - y0 <= 150.0f;
+            seeds += strip[a];
+        }
+        if (seeds) {
+            ro_strip_close(v, nt, strip);
+            for (uint32_t a = 0; a < nt; a++)
+                if (strip[a])
+                    ro_clamp_tri_x(&v[a * 3], 0.0f, guest_w);
+        }
+    }
     for (uint32_t i = 0; i + 2 < count; i += 3) {
         Nv2aVertex *t = &v[i];
 
@@ -338,6 +561,17 @@ static inline void ro_squeeze(Nv2aVertex *v, uint32_t count, float guest_w, floa
             }
             /* 2D que cobre a tela inteira: fica como esta (estica junto) */
             if (x0 <= e && x1 >= guest_w - e && y0 <= e && y1 >= guest_h - e)
+                continue;
+            /* Tela de titulo: a faixa escura atras de "Press START button" /
+             * "Game Start / Option" e as duas linhas dela. Sao quadros de
+             * -13..654 (em 4:3 passam das bordas: a faixa vai de ponta a
+             * ponta) cuja altura muda entre os dois estados (284..344 e
+             * 261..369). Espremida, a faixa acabava na coluna 4:3 enquanto o
+             * tunel do fundo, que e 3D, ja ocupava a tela larga (pedido do
+             * usuario, 2026-11-24). Nao espreme; as setas e o texto seguem
+             * no centro. O HUD usa uma faixa parecida, mas de -18..659. */
+            if (guest_w == 640.0f && fabsf(x0 + 13.0f) <= 1.5f && fabsf(x1 - 654.0f) <= 1.5f
+                    && y1 - y0 <= 150.0f && ro_dialog_on())
                 continue;
             /* A foto do proprio quadro (o jogo a desenha, com zoom, ao trocar
              * de cenario): a textura JA e a imagem larga. Espremido em x o
