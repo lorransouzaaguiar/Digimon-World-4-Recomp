@@ -514,7 +514,7 @@ jogar e para desenvolver, correções de runtime candidatas a portar e a discuss
   do jogo, caminho da máquina de build, DLL fora da lista. O `.exe` do pacote passou no
   `soak.py --wine --golden` fora do projeto. O `run.bat` em si **não foi executado** (o Wine não
   tem PowerShell de verdade para o carimbo de hora do log; há reserva com número aleatório).
-- **Pré-lançamento `v0.4.0-win1`** (só o `.zip` de Windows; notas em `docs/releases/`): feito para o
+- **Pré-lançamento `v0.4.0`** (só o `.zip` de Windows; notas em `docs/releases/`): feito para o
   usuário testar em Windows 11 real por dual boot e voltar com os logs.
 - **Ajustes pensados para Windows real, nunca exercitados:** sono do limitador de quadros pelo
   temporizador de alta resolução do toolkit (`fps_limit.c`); `SDL_WINDOWS_DPI_AWARENESS` para
