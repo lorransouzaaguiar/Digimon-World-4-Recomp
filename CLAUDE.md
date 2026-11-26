@@ -14,6 +14,9 @@ caminho para as três plataformas (macOS via MoltenVK).
 
 - **Jogável:** boot, vídeos, menus, criação do Digimon, save/load, lobby, tutorial e primeira fase,
   a 60 fps (CachyOS, NVIDIA). Fases seguintes, chefes e multijogador **não foram testados**.
+  Em 2026-11-26 o usuário relatou Linux e Windows 11 jogáveis, fluidos e no mesmo patamar de
+  desempenho (excelente, mas só na máquina dele), e que acredita que já dá para zerar
+  (expectativa dele; ninguém jogou até o fim).
 - **Publicado:** release v0.5.2 (2026-11-25, o quarto do dia; AppImage + tar.gz + `.zip` de Windows com launcher;
   todo release leva Linux e Windows, e o Windows não é mais apresentado como "experimental" — pedido
   do usuário; antes v0.5.1, v0.5.0, v0.4.1, v0.4.0, v0.3.2, v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
@@ -53,15 +56,16 @@ caminho para as três plataformas (macOS via MoltenVK).
   código-fonte abrem a página) e escolha do monitor (Gráficos → Janela; confirmada pelo usuário
   no Linux e no Wine). A v0.5.0 é a primeira que se atualiza sozinha. Tudo configurável no launcher. Testado sem janela, no Wine e com
   um servidor local no lugar do GitHub; o usuário jogou no Linux em 2026-11-25 e relatou tudo
-  funcionando. **Não testado: mais de um controle, Windows real e uma atualização entre dois
-  releases de verdade.** Veja `STATUS.md`.
+  funcionando. **Não testado: mais de um controle.** (Windows real e a atualização entre dois
+  releases foram confirmados depois pelo usuário, veja abaixo e o `STATUS.md`.)
 - **Áudio repetindo (relato na v0.5.0, só Linux):** corrigido na v0.5.1 (`DW4R-7`; evento de
   vblank perdido na camada POSIX do toolkit, `PORT_NOTES.md` §4.20); medido sem janela e
   confirmado pelo usuário jogando com o AppImage. `DW4_CRI_TRACE=1` diagnostica.
 - **Atualização no Windows (relato na v0.5.0 → v0.5.1, Windows 11 real):** falhou por caminho acima
   de 260 caracteres na pasta de preparo; corrigido na `DW4R-8` (pacote sem os arquivos longos +
   caminhos `\\?\` no `updater.py`) junto com o ícone da janela no Windows, na **v0.5.2**. O ícone
-  foi visto pelo usuário no Windows 11; **a atualização v0.5.1 → v0.5.2 só rodou no Wine.** `package_win.sh` recusa caminho acima de 125 caracteres.
+  foi visto pelo usuário no Windows 11; **a atualização v0.5.1 → v0.5.2 foi feita por ele em Windows 11 real e funcionou**
+  (a do AppImage no Linux só rodou contra o servidor de teste). `package_win.sh` recusa caminho acima de 125 caracteres.
 - **Aberto:** fechar pela janela caiu na saída dentro do gamescope (`PORT_NOTES.md` §8); crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
   assinatura no `STATUS.md`); texgen não implementado; o chão que escurece por alguns quadros;
   HUD em widescreen só conferido com 1 jogador.
