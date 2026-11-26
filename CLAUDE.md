@@ -18,7 +18,8 @@ caminho para as três plataformas (macOS via MoltenVK).
   desempenho (excelente, mas só na máquina dele; no Windows real, 60 fps em 4K com Vulkan e
   quedas para ~40 fps com OpenGL nas áreas pesadas), e que acredita que já dá para zerar
   (expectativa dele; ninguém jogou até o fim).
-- **Publicado:** release v0.5.2 (2026-11-25, o quarto do dia; AppImage + tar.gz + `.zip` de Windows com launcher;
+- **Publicado:** release v1.0.0 (2026-11-26; número escolhido pelo usuário por não haver mais bug conhecido de
+  imagem e som, mesmo sem o jogo ter sido zerado; antes v0.5.2, de 2026-11-25; AppImage + tar.gz + `.zip` de Windows com launcher;
   todo release leva Linux e Windows, e o Windows não é mais apresentado como "experimental" — pedido
   do usuário; antes v0.5.1, v0.5.0, v0.4.1, v0.4.0, v0.3.2, v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
   `github.com/lorransouzaaguiar/Digimon-World-4-Recomp` (preparado para ficar público: licença
@@ -67,9 +68,19 @@ caminho para as três plataformas (macOS via MoltenVK).
   caminhos `\\?\` no `updater.py`) junto com o ícone da janela no Windows, na **v0.5.2**. O ícone
   foi visto pelo usuário no Windows 11; **a atualização v0.5.1 → v0.5.2 foi feita por ele em Windows 11 real e funcionou**
   (a do AppImage no Linux só rodou contra o servidor de teste). `package_win.sh` recusa caminho acima de 125 caracteres.
-- **Aberto:** fechar pela janela caiu na saída dentro do gamescope (`PORT_NOTES.md` §8); crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
-  assinatura no `STATUS.md`); texgen não implementado; o chão que escurece por alguns quadros;
+- **Aberto:** fechar pela janela caiu na saída dentro do gamescope (`PORT_NOTES.md` §8); texgen só nos modos lineares (sphere/reflection/normal map faltam);
   HUD em widescreen só conferido com 1 jogador.
+- **Chão que escurecia / sombras (2026-11-26, `DW4R-12`, na v1.0.0):** a causa era o texgen
+  ignorado no passe de sombra projetada; corrigido em `ffp_vertex()` no toolkit (`PORT_NOTES.md`
+  §4.8 e §7.8). O usuário jogou no Linux com Vulkan e com OpenGL (1440p 16:9; Central Area e
+  cavernas): o chão não escurece mais e os Digimon têm sombra correta ("tá 100%"). Sem janela:
+  goldens passam nos dois renderizadores e no Wine (referências atualizadas, com sombra).
+  Em Windows 11 real o usuário jogou o pacote de teste da `DW4R-12` em 2026-11-26 ("tá perfeito"; Vulkan, 1440p).
+- **Crash ao pular a abertura (2026-11-26, `DW4R-12`, na v1.0.0):** corrida entre a thread
+  principal e a mwidle do CRI (no console a prioridade impede); a passada da mwidle agora respeita
+  a seção crítica do CRI (`sub_00257FB0` embrulhada em `recomp_manual.c`, `PORT_NOTES.md` §4.21;
+  `DW4_CRI_IDLE_GATE=0` desliga). Sem janela: 128 de 128 limpas (antes ~5%), Wine 16 de 16. O usuário
+  rodou em Windows 11 real em 2026-11-26 sem crash (2 execuções; não dá para saber pelo log se pulou a abertura).
 - **Memória do guest:** `RECOMP_HEAP_RECLAIM=1` é default desde a v0.3.1 (sem ela a memória
   contígua enche e a tela fica branca após alguns minutos); `DW4_NO_HEAP_RECLAIM=1` desliga.
 - **Licença: MIT** (`LICENSE`, escolhida em 2026-11-24). Testado só no começo do jogo: Terminal

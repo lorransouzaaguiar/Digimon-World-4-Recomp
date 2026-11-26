@@ -107,6 +107,17 @@ atualizador do launcher é testado contra um servidor local fazendo as vezes do 
 threads de som do jogo perdiam atualizações de tela). Corrigido na v0.5.1: 4 de 5 execuções por
 roteiro tinham repetição antes, 0 de 5 depois, e foi confirmado de ouvido com o AppImage.
 
+Sombras e chão (v1.0.0): os personagens não tinham sombra e o chão escurecia por um instante de
+vez em quando, porque o passe que projeta as sombras era desenhado com as coordenadas de textura
+erradas. Corrigido nos dois renderizadores; jogado no Linux com Vulkan e com OpenGL e no Windows
+11 com Vulkan (Central Area e cavernas, onde mais aparecia), e os quadros de referência foram
+atualizados.
+
+Pular o vídeo de abertura (v1.0.0): o jogo podia fechar quando o vídeo era pulado com START
+(cerca de 1 execução por roteiro em 20), uma corrida entre duas threads do próprio jogo que o
+processador único do console impede. Corrigido: 128 de 128 execuções por roteiro limpas no Linux
+e 16 de 16 no Wine. O autor sempre pula o vídeo e nunca teve esse crash, nem antes nem depois.
+
 ### Build de Windows: o que foi testado
 
 O build de Windows é compilado no Linux por compilação cruzada (MinGW-w64) e é o mesmo código:
@@ -133,12 +144,6 @@ mesmos renderizadores, mesmos shaders, mesmas regras de widescreen.
 
 ### Problemas conhecidos
 
-- Pular o vídeo de abertura com START pode fechar o jogo. Nos testes automáticos sem janela
-  aconteceu em 2 de 16 execuções; jogando com janela não foi visto. Abra o jogo de novo.
-- A geração automática de coordenadas de textura (reflexos, brilhos) não está implementada; alguns
-  objetos podem aparecer chapados.
-- O chão às vezes escurece por uma fração de segundo em algumas áreas (Central Area, cavernas),
-  nos dois renderizadores, menos com OpenGL. É cosmético; a causa ainda não foi encontrada.
 - A 60 fps o jogo roda duas vezes mais rápido que no console, porque a lógica dele avança por
   quadro. O padrão é 30.
 - Em widescreen a tela de loading fica esticada na largura toda, e o painel do jogador só foi
@@ -217,7 +222,7 @@ mantê-los.
 | Gráficos | API gráfica (Vulkan ou OpenGL); resolução interna (480p a 4K), proporção (4:3, 16:9, 21:9) e limite de quadros (30 ou 60); monitor em que o jogo abre, tela cheia e sincronização vertical; o modo paralelo experimental |
 | Controles | teclado como controle 1 ligado/desligado; atalhos para fechar o jogo e para o mostrador de FPS/CPU/GPU (teclado e controle); tabela de teclas |
 | Saves e dados | pasta dos saves, lista de saves, backup, exportar e importar `.zip` (os saves atuais são guardados antes) |
-| Suporte | problemas conhecidos, o que tentar se o jogo estiver lento, pasta de logs, relatório de problema (sistema, processador, placa de vídeo, opções, resumo dos quadros por segundo) sem o nome da sua pasta pessoal |
+| Suporte | o que tentar se o jogo estiver lento, pasta de logs, relatório de problema (sistema, processador, placa de vídeo, opções, resumo dos quadros por segundo) sem o nome da sua pasta pessoal |
 
 A interface é em português (Brasil) ou inglês, conforme o idioma do sistema; dá para trocar na
 barra lateral. Toda execução pelo launcher é gravada em `logs/` (ficam as 10 últimas). As opções

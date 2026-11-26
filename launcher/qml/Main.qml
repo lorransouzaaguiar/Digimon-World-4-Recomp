@@ -409,7 +409,7 @@ ApplicationWindow {
                 Card {
                     Info { k: t.gpu; v: app.gpu }
                     Info { k: t.version; v: app.version }
-                    Info { k: t.renderer; v: app.opt("renderer") === "vulkan" ? t.r_vk : t.r_gl; property var dep: app.gameDir }
+                    Info { k: t.renderer; v: (app.rev, app.opt("renderer")) === "vulkan" ? t.r_vk : t.r_gl }
                 }
                 Card {
                     RowLayout {
@@ -686,14 +686,6 @@ ApplicationWindow {
 
             // ── Suporte ──────────────────────────────────────────────────────
             Page {
-                Card {
-                    heading: t.known
-                    Repeater {
-                        model: [t.known_1, t.known_2, t.known_3, t.known_4]
-                        Label { required property string modelData
-                                text: "•  " + modelData; color: win.ink; font.pixelSize: 14; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                    }
-                }
                 Card {
                     heading: t.slow
                     Repeater {

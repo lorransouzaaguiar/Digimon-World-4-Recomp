@@ -106,6 +106,17 @@ Audio: streamed music and voices used to repeat a third of a second now and then
 game's audio threads were missing display refreshes). Fixed in v0.5.1: 4 of 5 scripted runs had
 repeats before, 0 of 5 after, and it was confirmed by ear with the AppImage.
 
+Shadows and the floor (v1.0.0): characters had no shadow and the floor went dark for a moment now
+and then, because the pass that projects the shadows was drawn with the wrong texture
+coordinates. Fixed in both renderers; played on Linux with Vulkan and with OpenGL and on Windows
+11 with Vulkan (Central Area and the caves, where it showed the most), and the reference frames
+were updated.
+
+Skipping the intro movie (v1.0.0): the game could close when the movie was skipped with START
+(about 1 scripted run in 20), a race between two of the game's own threads that the console's
+single processor rules out. Fixed: 128 of 128 scripted runs clean on Linux and 16 of 16 under
+Wine. The author always skips the movie and has never had this crash, before or after.
+
 ### Windows build: what was tested
 
 The Windows build is cross-compiled on Linux (MinGW-w64) and is the same code: same renderers,
@@ -132,12 +143,6 @@ same shaders, same widescreen rules.
 
 ### Known issues
 
-- Skipping the intro movie with START can make the game quit. In automated runs without a window
-  it happened in 2 of 16; it has not been seen when playing in a window. Start the game again.
-- Automatic texture-coordinate generation (reflections, shine effects) is not implemented; some
-  objects may look flat.
-- The floor sometimes darkens for a fraction of a second in some areas (Central Area, caves), on
-  both renderers, less often with OpenGL. Cosmetic; the cause has not been found yet.
 - At 60 fps the game runs twice as fast as on the console, because its logic advances per frame.
   The default is 30.
 - In widescreen the loading screen is stretched to the full width, and the player panel has only
@@ -216,7 +221,7 @@ checkout:
 | Graphics | graphics API (Vulkan or OpenGL); internal resolution (480p to 4K), aspect ratio (4:3, 16:9, 21:9) and frame-rate limit (30 or 60); the display the game opens on, fullscreen and vertical sync; the experimental parallel mode |
 | Controls | keyboard as controller 1 on/off; shortcuts that quit the game and toggle the FPS/CPU/GPU overlay (keyboard and controller); the key table |
 | Saves & data | save folder, list of saves, backup, `.zip` export and import (the current saves are backed up first) |
-| Support | known issues, what to try if the game is slow, log folder, a problem report (system, processor, graphics card, options, frame-rate summary) without your home folder's name |
+| Support | what to try if the game is slow, log folder, a problem report (system, processor, graphics card, options, frame-rate summary) without your home folder's name |
 
 The interface is in Portuguese (Brazil) or English, chosen from the system language; it can be
 changed in the sidebar. Every run through the launcher is logged to `logs/` (the last 10 are kept).

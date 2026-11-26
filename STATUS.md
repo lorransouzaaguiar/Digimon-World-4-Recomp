@@ -1,6 +1,6 @@
 # STATUS — Digimon World 4 (Xbox NTSC-U) → Linux nativo
 
-Última atualização: 2026-11-23
+Última atualização: 2026-11-26 (release v1.0.0)
 
 | Marco | Estado |
 |---|---|
@@ -245,7 +245,17 @@ ficam em 4:3 no meio. Detalhes e limites em `PORT_NOTES.md` §7.6.
   pista nova para o defeito abaixo (os dois renderizadores diferem na apresentação — o Vulkan não
   espera a GPU e não traz o quadro de volta — e não no desenho). O launcher passou a dizer isso
   na descrição do OpenGL e em Suporte.
-- **Aberto: o chão escurece por alguns quadros** (Central Area, caverna; Vulkan e OpenGL).
+- **Corrigido em 2026-11-26 (falta rodar os testes sem janela): o chão que escurecia.** Causa: o
+  passe de sombra projetada usa texgen (EYE_LINEAR), que o executor ignorava; o piso inteiro
+  amostrava um ponto só do alvo de sombra e, de quebra, nenhum personagem tinha sombra.
+  Implementado em `ffp_vertex()` no toolkit (`PORT_NOTES.md` §4.8, §7.8). **Confirmado pelo
+  usuário jogando** (Linux, Vulkan, 1440p 16:9; Central Area e cavernas, onde acontecia com
+  muita frequência): o chão não escurece mais, os Digimon têm sombra e ela está correta.
+  **Sem janela (2026-11-26):** `soak.py --golden`, `--opengl --golden` e `--wine --golden`
+  passam; as capturas do lobby mostram a sombra sob os personagens no Vulkan e no OpenGL
+  (ausente nas referências antigas, que foram atualizadas). Depois o usuário repetiu os mesmos cenários com **OpenGL** e também
+  funcionou ("tá 100%"). **Não verificado:** Windows real. O texto abaixo é o histórico do defeito.
+- **(histórico) o chão escurece por alguns quadros** (Central Area, caverna; Vulkan e OpenGL).
   Acontece também em 480p 4:3 (não é do widescreen). Causa não determinada; tudo o que foi medido
   e descartado está em `PORT_NOTES.md` §7.8. **Defeito conhecido, não resolvido** (decisão do
   usuário); cosmético.
@@ -403,7 +413,23 @@ verdade.** Não tem relação com o Vulkan (aconteceu numa sessão em Vulkan, ma
 camada de entrada). É candidato a ser também a "corrida que corrompe o heap" nunca localizada
 (mesma mensagem) — **não confirmado**.
 
-## Crash intermitente conhecido (aberto)
+## Crash ao pular o vídeo de abertura — CORRIGIDO (2026-11-26, `DW4R-12`, v1.0.0)
+
+Causa: corrida entre a thread principal (destrói o filme) e a thread mwidle do CRI, que no
+console não roda enquanto a principal trabalha (prioridade, uma CPU). Correção: a passada da
+mwidle respeita a seção crítica do CRI e cede a vez (`recomp_manual.c`, `sub_00257FB0`;
+`PORT_NOTES.md` §4.21; `DW4_CRI_IDLE_GATE=0` desliga). **Medido sem janela:** 128 de 128
+execuções limpas no Linux (antes 3 em 64 no mesmo dia; histórico 11 em 231) e 16 de 16 no Wine;
+goldens conferem nos dois renderizadores e no Wine. **Com janela:** o usuário, que sempre pula
+o vídeo, rodou o pacote de teste em Windows 11 real em 2026-11-26 (2 execuções, Vulkan 1440p) sem
+crash; como ele nunca viu o crash, isso não é um antes/depois. Na primeira dessas execuções houve
+uma pausa de 16,6 s sem flip na tela de carregar o save (a abertura de `SaveMeta.xbx` em
+`%APPDATA%` demorou; a leitura em fluxo do CRI seguiu durante a pausa); não se repetiu na segunda
+nem aparece nos 8 logs da v0.5.2. Causa não determinada (o despejo de threads não existe no Windows). O travamento único
+de 2026-11-24 no mesmo ponto (abaixo) não reapareceu, mas era 1 em ~14 e pode ter outra causa.
+O histórico da investigação segue abaixo.
+
+## Crash intermitente conhecido (histórico)
 
 - **Pular a abertura com START durante o vídeo às vezes encerra o jogo** (2 de 8 execuções sem
   janela em 2026-11-24, tanto no build de desenvolvimento quanto no de release). Assinatura no log:

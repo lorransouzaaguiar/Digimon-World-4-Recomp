@@ -201,12 +201,10 @@ STR = {
         "api_vk": "Vulkan (padrão) — o mais rápido: o quadro pronto vai direto da placa de vídeo para a janela. "
                   "Em 1440p e 4K é o que segura os 60 fps. Precisa de um driver com Vulkan.",
         "api_gl": "OpenGL 3.3 — a mais antiga e compatível; funciona em praticamente qualquer placa e driver. "
-                  "Mais lenta em resolução alta. Jogando, o defeito conhecido do chão que escurece apareceu menos com ela, "
-                  "e a imagem ficou mais estável: vale trocar se isso incomodar ou se o Vulkan der problema.",
+                  "Mais lenta em resolução alta. Vale trocar se o Vulkan der problema.",
         "api_note": "Com Vulkan o jogo usa pouco processador (bem menos de um núcleo em cenas leves) e deixa o "
                     "trabalho pesado para a placa de vídeo; medido numa RTX 5070, onde 4K roda a 60 fps. "
-                    "O OpenGL traz cada quadro de volta pela memória, o que custa quadros de 1440p para cima; "
-                    "em compensação, o defeito conhecido do chão que escurece aparece menos com ele. "
+                    "O OpenGL traz cada quadro de volta pela memória, o que custa quadros de 1440p para cima. "
                     "Se a API escolhida não estiver disponível, o jogo abre com a outra.",
         "vk_missing": "Vulkan não foi encontrado neste sistema: o jogo vai abrir com OpenGL.",
         "keyboard": "Teclado como controle 1", "keyboard_d": "Um controle conectado continua funcionando junto.",
@@ -261,13 +259,6 @@ STR = {
         "export_done": "Saves exportados para: ", "import_done": "Saves importados. O backup dos anteriores está em: ",
         "import_bad": "Este .zip não parece um backup de saves deste launcher.",
         "not_while_running": "Feche o jogo antes de mexer nos saves.",
-        "known": "Problemas conhecidos",
-        "known_1": "Pular o vídeo de abertura com START pode, raramente, fechar o jogo. Se acontecer, abra de novo.",
-        "known_2": "Reflexos e brilhos gerados automaticamente não estão implementados; alguns objetos podem parecer chapados.",
-        "known_3": "Em algumas áreas o chão escurece por alguns quadros e volta. É só visual; a causa ainda não foi achada. "
-                   "Acontece menos com a API gráfica OpenGL (Gráficos).",
-        "known_4": "Testado em uma única máquina (CachyOS, NVIDIA RTX 5070), onde roda a 60 fps em 4K. Outras placas "
-                   "(AMD, Intel), processadores mais fracos e outros sistemas ainda não foram testados.",
         "slow": "Se o jogo estiver lento",
         "slow_1": "Use a API gráfica Vulkan (Gráficos). Com OpenGL cada quadro passa pela memória, o que pesa de 1440p para cima.",
         "slow_2": "Baixe a resolução interna (Gráficos → Imagem). É o que mais alivia a placa de vídeo.",
@@ -335,12 +326,10 @@ STR = {
         "api_vk": "Vulkan (default) — the faster one: the finished frame goes straight from the graphics card to "
                   "the window. At 1440p and 4K this is what holds 60 fps. Needs a driver with Vulkan.",
         "api_gl": "OpenGL 3.3 — the older, most compatible one; works on practically any card and driver. "
-                  "Slower at high resolutions. In play, the known floor-darkening glitch showed up less with it and the "
-                  "picture was steadier: worth switching if that bothers you or if Vulkan gives you trouble.",
+                  "Slower at high resolutions. Worth switching if Vulkan gives you trouble.",
         "api_note": "With Vulkan the game uses little processor (well under one core in light scenes) and leaves "
                     "the heavy work to the graphics card; measured on an RTX 5070, where 4K runs at 60 fps. "
-                    "OpenGL copies every frame back through memory, which costs frames at 1440p and above; "
-                    "on the other hand, the known floor-darkening glitch shows up less with it. "
+                    "OpenGL copies every frame back through memory, which costs frames at 1440p and above. "
                     "If the chosen API is unavailable, the game starts with the other.",
         "vk_missing": "Vulkan was not found on this system: the game will start with OpenGL.",
         "keyboard": "Keyboard as controller 1", "keyboard_d": "A connected controller keeps working alongside it.",
@@ -396,13 +385,6 @@ STR = {
         "export_done": "Saves exported to: ", "import_done": "Saves imported. The previous ones were backed up to: ",
         "import_bad": "This .zip does not look like a save backup from this launcher.",
         "not_while_running": "Close the game before touching the saves.",
-        "known": "Known issues",
-        "known_1": "Skipping the intro movie with START can, rarely, make the game quit. If it happens, start it again.",
-        "known_2": "Automatically generated reflections and shine are not implemented; some objects may look flat.",
-        "known_3": "In some areas the floor darkens for a few frames and comes back. It is only visual; the cause has not been found yet. "
-                   "It happens less with the OpenGL graphics API (Graphics).",
-        "known_4": "Tested on one machine (CachyOS, NVIDIA RTX 5070), where it runs at 60 fps in 4K. Other cards "
-                   "(AMD, Intel), slower processors and other systems are untested.",
         "slow": "If the game is slow",
         "slow_1": "Use the Vulkan graphics API (Graphics). With OpenGL every frame goes through memory, which is heavy from 1440p up.",
         "slow_2": "Lower the internal resolution (Graphics → Picture). It is what relieves the graphics card the most.",

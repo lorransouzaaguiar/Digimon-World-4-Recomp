@@ -47,7 +47,7 @@ Compare com o rasterizador em CPU do toolkit: `scripts/soak.py --sw --scenario <
   textura (ponte invisível, transição cinza) e do giro das tiras de triângulos.
 
 Antes de inventar, veja `PORT_NOTES.md` §7 (casos resolvidos e o método) e a tabela de correções
-dos outros ports em `docs/REFERENCIAS.md` §3. Ainda não implementado: texgen.
+dos outros ports em `docs/REFERENCIAS.md` §3. Texgen: só EYE_LINEAR e OBJECT_LINEAR (`PORT_NOTES.md` §4.8); sphere, reflection e normal map não.
 
 ## 4. Corrigir e entregar
 
