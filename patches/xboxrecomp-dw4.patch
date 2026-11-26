@@ -488,7 +488,7 @@ index 87788ed..b503dd6 100644
 +
  #endif /* NV2A_BACKEND_H */
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index 57e8f8e..ca5ef2c 100644
+index 57e8f8e..8c054ee 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
 @@ -372,6 +372,9 @@ static struct {
@@ -546,7 +546,7 @@ index 57e8f8e..ca5ef2c 100644
      s_gpu.texs[0].levels = 1;
      s_gpu.texs[0].filter = 0;
      s_gpu.texs[0].cube   = 0;
-@@ -2057,6 +2075,93 @@ static int ffp_vertex(uint32_t index, Nv2aVshOutput *out)
+@@ -2057,6 +2075,136 @@ static int ffp_vertex(uint32_t index, Nv2aVshOutput *out)
      fetch_attr(texcoord_attr(), index, out->tex[0]);
      for (st = 1; st < 4; st++)
          fetch_attr(&s_gpu.attr[9 + st], index, out->tex[st]);
@@ -611,6 +611,49 @@ index 57e8f8e..ca5ef2c 100644
 +        }
 +    }
 +
++    /* DW4 port: the fixed-function fog distance.
++     *
++     * A vertex program writes oFog.x; the fixed-function unit derives it from
++     * SET_FOG_GEN_MODE (0x02A0), as xemu's vsh-ff does: RADIAL (1) is the
++     * eye-space distance, PLANAR (2) is fog plane . eye-space position with
++     * the plane in c[57] (SET_FOG_PLANE; D3D sends 0,0,1,0: eye z), ABS_PLANAR
++     * (3) its absolute value, FOG_X (6) the vertex's own fog coordinate.
++     * Nothing was written here, so every fixed-function vertex had distance 0
++     * and fog_factor() clamped it to "no fog". Digimon World 4 (Alchemy) keeps
++     * fog on for its 3D scenes -- LINEAR, PLANAR, black -- and one boss arena
++     * leans on it: range 100..1800 fades the rainbow backdrop and the
++     * far helices almost to black. Unfogged, the backdrop came out at full
++     * colour. SPEC_ALPHA (0) and unknown modes keep distance 0, as before.
++     * RECOMP_NO_FFP_FOG=1 for A/B. */
++    {
++        static int off_sw = -1;
++        uint32_t gen = s_reg[0x02A0 / 4];
++
++        if (off_sw < 0)
++            off_sw = getenv("RECOMP_NO_FFP_FOG") != NULL;
++        if (!off_sw && s_gpu.fog_enable && (gen == 1 || gen == 2 || gen == 3)) {
++            const float *mv = (const float *)&s_reg[0x0480 / 4];
++            const float *pl = nv2a_vsh_constant(57);
++            float eye[3], d;
++
++            for (i = 0; i < 3; i++)
++                eye[i] = mv[4 * i] * in[0] + mv[4 * i + 1] * in[1]
++                       + mv[4 * i + 2] * in[2] + mv[4 * i + 3] * in[3];
++            if (gen == 1) {
++                d = sqrtf(eye[0] * eye[0] + eye[1] * eye[1] + eye[2] * eye[2]);
++            } else {
++                d = pl[0] * eye[0] + pl[1] * eye[1] + pl[2] * eye[2] + pl[3];
++                if (gen == 3)
++                    d = fabsf(d);
++            }
++            out->fog[0] = d;
++        } else if (!off_sw && s_gpu.fog_enable && gen == 6) {
++            float fc[4];
++            if (fetch_attr(&s_gpu.attr[5], index, fc))
++                out->fog[0] = fc[0];
++        }
++    }
++
 +    /* DW4 port: the fixed-function texture matrix.
 +     *
 +     * SET_TEXTURE_MATRIX_ENABLE (0x0420 + 4*stage) and SET_TEXTURE_MATRIX
@@ -640,7 +683,7 @@ index 57e8f8e..ca5ef2c 100644
      return 1;
  }
  
-@@ -2162,12 +2267,19 @@ static int s_xf_no_tex;
+@@ -2162,12 +2310,19 @@ static int s_xf_no_tex;
  #define NV_BACKEND_MAX_VERTS (NV_MAX_INDICES * 3)
  static Nv2aVertex *s_bverts;     /* about 5.5 MB: allocated by the first vertex */
  static uint32_t   s_bcount;
@@ -660,7 +703,7 @@ index 57e8f8e..ca5ef2c 100644
      if (s_bcount + 3 > NV_BACKEND_MAX_VERTS)
          return NULL;
      return &s_bverts[s_bcount];
-@@ -2188,6 +2300,13 @@ static void backend_from_xf(const Nv2aVshOutput *v, Nv2aVertex *o)
+@@ -2188,6 +2343,13 @@ static void backend_from_xf(const Nv2aVshOutput *v, Nv2aVertex *o)
      o->diffuse = pack_color(v->d0);
      o->u = v->tex[0][0] * su;
      o->v = v->tex[0][1] * sv;
@@ -674,7 +717,7 @@ index 57e8f8e..ca5ef2c 100644
  }
  
  /* `textured`: the batch carried texture coordinates, so the bound texture is
-@@ -2207,6 +2326,38 @@ static void backend_flush(int textured)
+@@ -2207,6 +2369,38 @@ static void backend_flush(int textured)
      batch.count = s_bcount;
      batch.texture = NULL;
      batch.state = &rs;
@@ -713,7 +756,7 @@ index 57e8f8e..ca5ef2c 100644
      if (textured && s_gpu.texs[0].valid) {
          tex.offset = s_gpu.texs[0].offset;
          tex.width  = s_gpu.texs[0].width;
-@@ -2217,6 +2368,7 @@ static void backend_flush(int textured)
+@@ -2217,6 +2411,7 @@ static void backend_flush(int textured)
          tex.addr_v = s_gpu.texs[0].addr_v;
          tex.levels = s_gpu.texs[0].pitch ? 1 : s_gpu.texs[0].levels;
          tex.filter = s_gpu.texs[0].filter;
@@ -721,7 +764,7 @@ index 57e8f8e..ca5ef2c 100644
          batch.texture = &tex;
      }
      s_backend->draw(&surf, &batch);
-@@ -3239,15 +3391,23 @@ static void raster_xf_clipped(const Nv2aVshOutput *a, const Nv2aVshOutput *b,
+@@ -3239,15 +3434,23 @@ static void raster_xf_clipped(const Nv2aVshOutput *a, const Nv2aVshOutput *b,
      }
      planes = near_z ? 2 : 1;
      in[0] = a; in[1] = b; in[2] = c;
@@ -753,7 +796,7 @@ index 57e8f8e..ca5ef2c 100644
                  inside = 0;
          }
      }
-@@ -3255,6 +3415,12 @@ static void raster_xf_clipped(const Nv2aVshOutput *a, const Nv2aVshOutput *b,
+@@ -3255,6 +3458,12 @@ static void raster_xf_clipped(const Nv2aVshOutput *a, const Nv2aVshOutput *b,
          raster_xf_triangle(a, b, c);
          return;
      }
@@ -766,7 +809,7 @@ index 57e8f8e..ca5ef2c 100644
      n = xf_clip_poly(p0, n, 0, p1);
      if (planes > 1 && n)
          n = xf_clip_poly(p1, n, 1, p0);
-@@ -3629,8 +3795,16 @@ static void draw_primitive(void)
+@@ -3629,8 +3838,16 @@ static void draw_primitive(void)
      if (!s_gpu.prim || !s_gpu.idx_count)
          return;
      s_gpu.draws++;
@@ -785,7 +828,7 @@ index 57e8f8e..ca5ef2c 100644
      s_gpu.verts += s_gpu.idx_count;
  
      /* How many batches carry coordinates at all, and what range they span.
-@@ -3701,7 +3875,12 @@ static void draw_primitive(void)
+@@ -3701,7 +3918,12 @@ static void draw_primitive(void)
          }
      }
  
@@ -799,7 +842,7 @@ index 57e8f8e..ca5ef2c 100644
          static int shown;
          if (shown++ < 6) {
              fprintf(stderr, "  [GPU] prim %u, %u indices, pos attr:"
-@@ -4145,6 +4324,13 @@ int nv2a_pb_exec_flip_poll(void)
+@@ -4145,6 +4367,13 @@ int nv2a_pb_exec_flip_poll(void)
      return xbox_FlipHoldPoll(&s_flip_hold, c, now, ok);
  }
  
@@ -813,7 +856,7 @@ index 57e8f8e..ca5ef2c 100644
  /* The hold's line in the periodic [GPU] report, then reset. */
  static void flip_hold_report(void)
  {
-@@ -4195,6 +4381,17 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -4195,6 +4424,17 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      if (subch == 0 && method == 0x1D70 && s_sem_va) {
          uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
          *(volatile uint32_t *)(mem + s_sem_va) = param;
@@ -831,7 +874,7 @@ index 57e8f8e..ca5ef2c 100644
          return;
      }
      if (!s_exec_inited) {
-@@ -4401,7 +4598,10 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -4401,7 +4641,10 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
                      param, s_gpu.color_offset, s_gpu.clip_w, s_gpu.clip_h,
                      s_gpu.clear_color, 10);
          clear_surface(param);
@@ -843,7 +886,7 @@ index 57e8f8e..ca5ef2c 100644
              zbuf_clear();
          break;
  
-@@ -4467,6 +4667,8 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -4467,6 +4710,8 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
              s_gpu.idx[s_gpu.idx_count++] = param;
          break;
      case NV097_NO_OPERATION:

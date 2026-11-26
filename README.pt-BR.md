@@ -113,6 +113,12 @@ erradas. Corrigido nos dois renderizadores; jogado no Linux com Vulkan e com Ope
 11 com Vulkan (Central Area e cavernas, onde mais aparecia), e os quadros de referência foram
 atualizados.
 
+Névoa de distância (v1.0.1): o jogo mantém uma névoa ligada nas cenas 3D e o port não a
+aplicava; na arena de um chefe, onde ela é preta, o fundo saía como um arco-íris forte em vez de
+quase preto. Corrigido nos dois renderizadores (a correção é comum a eles); jogado no Linux com
+OpenGL nessa arena, onde o fundo ainda fica um pouco mais claro que no console. As outras áreas
+com a névoa ligada só foram vistas no lobby.
+
 Pular o vídeo de abertura (v1.0.0): o jogo podia fechar quando o vídeo era pulado com START
 (cerca de 1 execução por roteiro em 20), uma corrida entre duas threads do próprio jogo que o
 processador único do console impede. Corrigido: 128 de 128 execuções por roteiro limpas no Linux

@@ -69,6 +69,8 @@ static int s_stats;
 
 static GLuint s_prog, s_vao, s_vbo, s_vbo_ext, s_white;
 static GLint u_surf, u_texsize, u_alpha, u_rc, u_tscale, u_fogc;
+extern const uint32_t *nv2a_pb_exec_reg_mirror(void);
+extern const float *nv2a_vsh_constant(uint32_t index);
 static GLint u_cicw, u_aicw, u_cocw, u_aocw, u_f0, u_f1;
 static GLint u_final, u_fc0, u_fc1, u_ctl;
 
@@ -1100,6 +1102,18 @@ static void be_draw(const Nv2aSurface *s, const Nv2aBatch *b)
                     b->ext->vertices[0].specular[0], b->ext->vertices[0].specular[1],
                     b->ext->vertices[0].specular[2], b->ext->vertices[0].specular[3],
                     b->ext->vertices[0].fog);
+            {
+                /* Estado de nevoa do executor no momento do draw: ligada, modo,
+                 * origem da distancia (FOG_GEN_MODE), parametros e plano c[57]. */
+                const uint32_t *reg = nv2a_pb_exec_reg_mirror();
+                const float *fp = nv2a_vsh_constant(57);
+                float p[3];
+                memcpy(p, &reg[0x09C0 / 4], sizeof p);
+                fprintf(TRACE_FP, " fogst=en%u/mode%X/gen%X/col%08X p=(%g,%g,%g)"
+                        " plane=(%g,%g,%g,%g) light=%u", reg[0x02A4 / 4], reg[0x029C / 4],
+                        reg[0x02A0 / 4], reg[0x02A8 / 4], p[0], p[1], p[2],
+                        fp[0], fp[1], fp[2], fp[3], reg[0x0314 / 4]);
+            }
             for (int i = 0; i < 4; i++)
                 if ((b->ext->rc.stage_program >> (i * 5)) & 0x1F)
                     fprintf(TRACE_FP, " t%d[%08X %ux%u f%02X v%u %s]", i,

@@ -18,7 +18,7 @@ caminho para as três plataformas (macOS via MoltenVK).
   desempenho (excelente, mas só na máquina dele; no Windows real, 60 fps em 4K com Vulkan e
   quedas para ~40 fps com OpenGL nas áreas pesadas), e que acredita que já dá para zerar
   (expectativa dele; ninguém jogou até o fim).
-- **Publicado:** release v1.0.0 (2026-11-26; número escolhido pelo usuário por não haver mais bug conhecido de
+- **Publicado:** release v1.0.1 (2026-11-26, névoa de distância; antes v1.0.0, do mesmo dia, número escolhido pelo usuário por não haver mais bug conhecido de
   imagem e som, mesmo sem o jogo ter sido zerado; antes v0.5.2, de 2026-11-25; AppImage + tar.gz + `.zip` de Windows com launcher;
   todo release leva Linux e Windows, e o Windows não é mais apresentado como "experimental" — pedido
   do usuário; antes v0.5.1, v0.5.0, v0.4.1, v0.4.0, v0.3.2, v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
@@ -81,6 +81,15 @@ caminho para as três plataformas (macOS via MoltenVK).
   a seção crítica do CRI (`sub_00257FB0` embrulhada em `recomp_manual.c`, `PORT_NOTES.md` §4.21;
   `DW4_CRI_IDLE_GATE=0` desliga). Sem janela: 128 de 128 limpas (antes ~5%), Wine 16 de 16. O usuário
   rodou em Windows 11 real em 2026-11-26 sem crash (2 execuções; não dá para saber pelo log se pulou a abertura).
+- **Névoa de distância (2026-11-26, `DW4R-13`, na v1.0.1):** o executor não calculava a distância
+  de névoa da função fixa (`ffp_vertex()`, `PORT_NOTES.md` §4.22 e §7.12; `RECOMP_NO_FFP_FOG=1`
+  desliga). Achado na arena de um chefe (fundo em arco-íris; no Xbox é quase preto), com um save do
+  GameFAQs reassinado à mão. O usuário jogou a arena no Linux com OpenGL: melhorou, o original ainda
+  é um pouco mais escuro e ele decidiu deixar assim. Não visto: Vulkan e Windows nessa arena, e as
+  outras áreas com a névoa (só o lobby sem janela).
+- **Saves de Xbox (GameFAQs etc.):** o jogo os recusa ("corrupted") porque o port assina com chave
+  zerada: `SaveData.dat` = 2 blocos de 32772 bytes + HMAC-SHA1 de 20 bytes cada. O "Importar .zip"
+  do launcher ainda não reassina nem aceita o formato `UDATA/`; foi feito à mão uma vez.
 - **Memória do guest:** `RECOMP_HEAP_RECLAIM=1` é default desde a v0.3.1 (sem ela a memória
   contígua enche e a tela fica branca após alguns minutos); `DW4_NO_HEAP_RECLAIM=1` desliga.
 - **Licença: MIT** (`LICENSE`, escolhida em 2026-11-24). Testado só no começo do jogo: Terminal
