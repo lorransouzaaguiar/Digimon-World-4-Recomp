@@ -413,15 +413,19 @@ verdade.** Não tem relação com o Vulkan (aconteceu numa sessão em Vulkan, ma
 camada de entrada). É candidato a ser também a "corrida que corrompe o heap" nunca localizada
 (mesma mensagem) — **não confirmado**.
 
-## Crash ao pular o vídeo de abertura — CORRIGIDO (2026-11-26, `DW4R-12`; falta release)
+## Crash ao pular o vídeo de abertura — CORRIGIDO (2026-11-26, `DW4R-12`, v1.0.0)
 
 Causa: corrida entre a thread principal (destrói o filme) e a thread mwidle do CRI, que no
 console não roda enquanto a principal trabalha (prioridade, uma CPU). Correção: a passada da
 mwidle respeita a seção crítica do CRI e cede a vez (`recomp_manual.c`, `sub_00257FB0`;
 `PORT_NOTES.md` §4.21; `DW4_CRI_IDLE_GATE=0` desliga). **Medido sem janela:** 128 de 128
 execuções limpas no Linux (antes 3 em 64 no mesmo dia; histórico 11 em 231) e 16 de 16 no Wine;
-goldens conferem nos dois renderizadores e no Wine. **Não verificado:** jogando com janela (o
-usuário nunca viu o crash, então não há antes/depois para ele) e Windows real. O travamento único
+goldens conferem nos dois renderizadores e no Wine. **Com janela:** o usuário, que sempre pula
+o vídeo, rodou o pacote de teste em Windows 11 real em 2026-11-26 (2 execuções, Vulkan 1440p) sem
+crash; como ele nunca viu o crash, isso não é um antes/depois. Na primeira dessas execuções houve
+uma pausa de 16,6 s sem flip na tela de carregar o save (a abertura de `SaveMeta.xbx` em
+`%APPDATA%` demorou; a leitura em fluxo do CRI seguiu durante a pausa); não se repetiu na segunda
+nem aparece nos 8 logs da v0.5.2. Causa não determinada (o despejo de threads não existe no Windows). O travamento único
 de 2026-11-24 no mesmo ponto (abaixo) não reapareceu, mas era 1 em ~14 e pode ter outra causa.
 O histórico da investigação segue abaixo.
 

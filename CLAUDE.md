@@ -74,12 +74,12 @@ caminho para as três plataformas (macOS via MoltenVK).
   §4.8 e §7.8). O usuário jogou no Linux com Vulkan e com OpenGL (1440p 16:9; Central Area e
   cavernas): o chão não escurece mais e os Digimon têm sombra correta ("tá 100%"). Sem janela:
   goldens passam nos dois renderizadores e no Wine (referências atualizadas, com sombra).
-  Não visto em Windows real.
+  Em Windows 11 real o usuário jogou o pacote de teste da `DW4R-12` em 2026-11-26 ("tá perfeito"; Vulkan, 1440p).
 - **Crash ao pular a abertura (2026-11-26, `DW4R-12`, sem release ainda):** corrida entre a thread
   principal e a mwidle do CRI (no console a prioridade impede); a passada da mwidle agora respeita
   a seção crítica do CRI (`sub_00257FB0` embrulhada em `recomp_manual.c`, `PORT_NOTES.md` §4.21;
-  `DW4_CRI_IDLE_GATE=0` desliga). Sem janela: 128 de 128 limpas (antes ~5%), Wine 16 de 16. Não
-  visto com janela nem em Windows real.
+  `DW4_CRI_IDLE_GATE=0` desliga). Sem janela: 128 de 128 limpas (antes ~5%), Wine 16 de 16. O usuário
+  rodou em Windows 11 real em 2026-11-26 sem crash (2 execuções; não dá para saber pelo log se pulou a abertura).
 - **Memória do guest:** `RECOMP_HEAP_RECLAIM=1` é default desde a v0.3.1 (sem ela a memória
   contígua enche e a tela fica branca após alguns minutos); `DW4_NO_HEAP_RECLAIM=1` desliga.
 - **Licença: MIT** (`LICENSE`, escolhida em 2026-11-24). Testado só no começo do jogo: Terminal

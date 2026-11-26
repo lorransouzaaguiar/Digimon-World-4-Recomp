@@ -106,6 +106,17 @@ Audio: streamed music and voices used to repeat a third of a second now and then
 game's audio threads were missing display refreshes). Fixed in v0.5.1: 4 of 5 scripted runs had
 repeats before, 0 of 5 after, and it was confirmed by ear with the AppImage.
 
+Shadows and the floor (v1.0.0): characters had no shadow and the floor went dark for a moment now
+and then, because the pass that projects the shadows was drawn with the wrong texture
+coordinates. Fixed in both renderers; played on Linux with Vulkan and with OpenGL and on Windows
+11 with Vulkan (Central Area and the caves, where it showed the most), and the reference frames
+were updated.
+
+Skipping the intro movie (v1.0.0): the game could close when the movie was skipped with START
+(about 1 scripted run in 20), a race between two of the game's own threads that the console's
+single processor rules out. Fixed: 128 of 128 scripted runs clean on Linux and 16 of 16 under
+Wine. The author always skips the movie and has never had this crash, before or after.
+
 ### Windows build: what was tested
 
 The Windows build is cross-compiled on Linux (MinGW-w64) and is the same code: same renderers,

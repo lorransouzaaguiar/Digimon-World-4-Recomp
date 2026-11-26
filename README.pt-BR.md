@@ -107,6 +107,17 @@ atualizador do launcher é testado contra um servidor local fazendo as vezes do 
 threads de som do jogo perdiam atualizações de tela). Corrigido na v0.5.1: 4 de 5 execuções por
 roteiro tinham repetição antes, 0 de 5 depois, e foi confirmado de ouvido com o AppImage.
 
+Sombras e chão (v1.0.0): os personagens não tinham sombra e o chão escurecia por um instante de
+vez em quando, porque o passe que projeta as sombras era desenhado com as coordenadas de textura
+erradas. Corrigido nos dois renderizadores; jogado no Linux com Vulkan e com OpenGL e no Windows
+11 com Vulkan (Central Area e cavernas, onde mais aparecia), e os quadros de referência foram
+atualizados.
+
+Pular o vídeo de abertura (v1.0.0): o jogo podia fechar quando o vídeo era pulado com START
+(cerca de 1 execução por roteiro em 20), uma corrida entre duas threads do próprio jogo que o
+processador único do console impede. Corrigido: 128 de 128 execuções por roteiro limpas no Linux
+e 16 de 16 no Wine. O autor sempre pula o vídeo e nunca teve esse crash, nem antes nem depois.
+
 ### Build de Windows: o que foi testado
 
 O build de Windows é compilado no Linux por compilação cruzada (MinGW-w64) e é o mesmo código:
