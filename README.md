@@ -210,7 +210,7 @@ checkout:
 | Graphics | graphics API (Vulkan or OpenGL); internal resolution (480p to 4K), aspect ratio (4:3, 16:9, 21:9) and frame-rate limit (30 or 60); the display the game opens on, fullscreen and vertical sync; the experimental parallel mode |
 | Controls | keyboard as controller 1 on/off; shortcuts that quit the game and toggle the FPS/CPU/GPU overlay (keyboard and controller); the key table |
 | Saves & data | save folder, list of saves, backup, `.zip` export and import (the current saves are backed up first) |
-| Support | known issues, what to try if the game is slow, log folder, a problem report (system, processor, graphics card, options, frame-rate summary) without your home folder's name |
+| Support | what to try if the game is slow, log folder, a problem report (system, processor, graphics card, options, frame-rate summary) without your home folder's name |
 
 The interface is in Portuguese (Brazil) or English, chosen from the system language; it can be
 changed in the sidebar. Every run through the launcher is logged to `logs/` (the last 10 are kept).

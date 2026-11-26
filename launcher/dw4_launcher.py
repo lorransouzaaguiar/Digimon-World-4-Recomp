@@ -259,9 +259,6 @@ STR = {
         "export_done": "Saves exportados para: ", "import_done": "Saves importados. O backup dos anteriores está em: ",
         "import_bad": "Este .zip não parece um backup de saves deste launcher.",
         "not_while_running": "Feche o jogo antes de mexer nos saves.",
-        "known": "Problemas conhecidos",
-        "known_1": "Testado em uma única máquina (CachyOS, NVIDIA RTX 5070), onde roda a 60 fps em 4K. Outras placas "
-                   "(AMD, Intel), processadores mais fracos e outros sistemas ainda não foram testados.",
         "slow": "Se o jogo estiver lento",
         "slow_1": "Use a API gráfica Vulkan (Gráficos). Com OpenGL cada quadro passa pela memória, o que pesa de 1440p para cima.",
         "slow_2": "Baixe a resolução interna (Gráficos → Imagem). É o que mais alivia a placa de vídeo.",
@@ -388,9 +385,6 @@ STR = {
         "export_done": "Saves exported to: ", "import_done": "Saves imported. The previous ones were backed up to: ",
         "import_bad": "This .zip does not look like a save backup from this launcher.",
         "not_while_running": "Close the game before touching the saves.",
-        "known": "Known issues",
-        "known_1": "Tested on one machine (CachyOS, NVIDIA RTX 5070), where it runs at 60 fps in 4K. Other cards "
-                   "(AMD, Intel), slower processors and other systems are untested.",
         "slow": "If the game is slow",
         "slow_1": "Use the Vulkan graphics API (Graphics). With OpenGL every frame goes through memory, which is heavy from 1440p up.",
         "slow_2": "Lower the internal resolution (Graphics → Picture). It is what relieves the graphics card the most.",

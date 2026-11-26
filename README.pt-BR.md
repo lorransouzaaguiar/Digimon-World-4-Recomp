@@ -211,7 +211,7 @@ mantê-los.
 | Gráficos | API gráfica (Vulkan ou OpenGL); resolução interna (480p a 4K), proporção (4:3, 16:9, 21:9) e limite de quadros (30 ou 60); monitor em que o jogo abre, tela cheia e sincronização vertical; o modo paralelo experimental |
 | Controles | teclado como controle 1 ligado/desligado; atalhos para fechar o jogo e para o mostrador de FPS/CPU/GPU (teclado e controle); tabela de teclas |
 | Saves e dados | pasta dos saves, lista de saves, backup, exportar e importar `.zip` (os saves atuais são guardados antes) |
-| Suporte | problemas conhecidos, o que tentar se o jogo estiver lento, pasta de logs, relatório de problema (sistema, processador, placa de vídeo, opções, resumo dos quadros por segundo) sem o nome da sua pasta pessoal |
+| Suporte | o que tentar se o jogo estiver lento, pasta de logs, relatório de problema (sistema, processador, placa de vídeo, opções, resumo dos quadros por segundo) sem o nome da sua pasta pessoal |
 
 A interface é em português (Brasil) ou inglês, conforme o idioma do sistema; dá para trocar na
 barra lateral. Toda execução pelo launcher é gravada em `logs/` (ficam as 10 últimas). As opções

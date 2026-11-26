@@ -687,14 +687,6 @@ ApplicationWindow {
             // ── Suporte ──────────────────────────────────────────────────────
             Page {
                 Card {
-                    heading: t.known
-                    Repeater {
-                        model: [t.known_1]
-                        Label { required property string modelData
-                                text: "•  " + modelData; color: win.ink; font.pixelSize: 14; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                    }
-                }
-                Card {
                     heading: t.slow
                     Repeater {
                         model: [t.slow_1, t.slow_2, t.slow_3, t.slow_4, t.slow_5]
