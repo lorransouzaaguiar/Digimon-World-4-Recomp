@@ -49,8 +49,8 @@
  *                       mesmo sem janela (teste); padrao: direto se houver janela
  *   DW4_VSYNC=          auto (padrao: mailbox, senao fifo) | on (fifo) |
  *                       off (immediate, senao mailbox)
- *   F5..F8, F10, F11    os mesmos alternadores do OpenGL (a captura F9 e a
- *                       sonda de pixel existem so no OpenGL)
+ *   F5..F8, F10, F11    os mesmos alternadores do OpenGL; F9 grava so a imagem
+ *                       (rastreio de draws e sonda de pixel: so no OpenGL)
  */
 
 #include <math.h>

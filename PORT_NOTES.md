@@ -459,6 +459,16 @@ lições dos outros ports (`docs/REFERENCIAS.md` §5). **Limite do que foi prova
 forte, não prova formal; outros pontos em que a principal mexe no CRI fora da trava continuariam
 expostos (nenhum visto).
 
+### 4.22 `src/kernel/nv2a_pb_exec.c` — distância de névoa da função fixa (2026-11-26)
+
+`ffp_vertex()` não escrevia `out->fog`: todo vértice da função fixa ficava com distância 0 e
+`fog_factor()` devolvia 1 (sem névoa), com a névoa ligada ou não. Agora, com `SET_FOG_ENABLE`
+(0x02A4) ligado, a distância sai de `SET_FOG_GEN_MODE` (0x02A0) como no vsh-ff do xemu: RADIAL (1)
+= distância no espaço do olho; PLANAR (2) = plano `c[57]` (`SET_FOG_PLANE`) · posição no espaço do
+olho; ABS_PLANAR (3) = o valor absoluto; FOG_X (6) = a coordenada de névoa do vértice (atributo 5).
+SPEC_ALPHA (0) e modos desconhecidos seguem com distância 0. `RECOMP_NO_FFP_FOG=1` desliga (A/B).
+Caso e método em §7.12.
+
 ## 5. Hooks (`src/hooks/`)
 
 | Arquivo | Função |
@@ -633,8 +643,9 @@ Segunda API gráfica, ao lado do OpenGL (que continua o padrão). O jogador esco
 - **Shader:** `shaders/nv2a_vk.frag` é o mesmo porte de `nv2a_rc_eval` do OpenGL. **Correção num
   tem de ser repetida no outro.**
 - **Opções:** `DW4_VK_DEVICE=<n>`, `DW4_VK_ALLOW_SW=1` (lavapipe), `DW4_VK_CULL=0|inv`,
-  `DW4_VK_STATS=1`, `DW4_VK_DBG=<bits>` (os mesmos do `DW4_GL_DBG`); F5–F8, F10, F11. A captura F9
-  e a sonda de pixel existem só no OpenGL — para investigar bug de imagem, use o OpenGL.
+  `DW4_VK_STATS=1`, `DW4_VK_DBG=<bits>` (os mesmos do `DW4_GL_DBG`); F5–F8, F10, F11. No Vulkan o F9
+  grava só a imagem (`f9-NNN.bmp`); o rastreio de draws e a sonda de pixel existem só no OpenGL —
+  para investigar bug de imagem, use o OpenGL.
 - **Validado sem janela** (RTX 5070, driver 620.73): `scripts/soak.py --vulkan --golden` — os 4
   frames de referência (gerados com OpenGL) conferem, lobby a 60 fps com ~4.000 draws → ~20 lotes;
   fallback Vulkan → OpenGL (`DW4_VK_DEVICE=99`); recarga a quente.
@@ -971,6 +982,39 @@ rasterizador em CPU (`--sw`) num cenário que chegue à Central Area.
 
 Achado lateral corrigido: texturas não paletizadas eram chaveadas no cache pela paleta "ligada"
 no momento (campo `palette` velho) e ganhavam cópias novas quando ela mudava; agora só P8.
+
+### 7.12 Fundo colorido na arena de um chefe: névoa da função fixa (2026-11-26, v1.0.1)
+
+**Sintoma (usuário, save importado no nível 956; captura do original em mãos):** numa arena de
+chefe (plataforma roxa, circuito verde, hélices de DNA; o nome da área não foi informado) o fundo
+saía em arco-íris saturado e em blocos e as hélices nítidas; no Xbox o fundo é quase preto, com
+riscos verdes fracos.
+
+**Causa:** o jogo deixa a névoa ligada nas cenas 3D (combiner final `130C0300`: névoa.a × R0 +
+(1 − névoa.a) × cor da névoa) e nessa arena ela é preta, LINEAR (0x2601), PLANAR (gen 2), plano
+(0,0,1,0), parâmetros (2,05882; −0,000588235) = de 100 a 1800 unidades. O executor nunca calculava
+a distância de névoa na função fixa (patch §4.22), então o fator era sempre 1.
+
+**Como foi achado:** F9 no OpenGL (`f9-019.txt`): os 93 draws do fundo (textura 128×128 DXT1,
+`cicw=08010000` = textura × fator constante, fator branco, sem blend) estavam coerentes, e
+`fog=1.00` em todos os 10.357 draws do quadro. O rastreio não dizia se a névoa estava ligada (as
+outras áreas usam o mesmo combiner final e cor preta), e `ptrace` é bloqueado nesta máquina; o
+`[GLT]` passou a gravar `fogst=en/mode/gen/col p=(..) plane=(..) light=` (espelho de registradores,
+`nv2a_gl_backend.c`), entrou por recarga a quente no jogo aberto e um segundo F9 (`f9-020.txt`)
+mostrou `en1/mode2601/gen2/colFF000000` em 27.774 de 28.377 draws.
+
+**Descartado:** textura lida errada (formato e texels coerentes), fator de textura perdido (o
+executor repassa `FACTOR0`; outros draws do quadro têm `FF666666`).
+
+**Verificado:** goldens sem janela no Vulkan, no OpenGL e no `.exe` pelo Wine; no lobby a imagem com
+e sem a correção (`RECOMP_NO_FFP_FOG=1`) é praticamente a mesma (MAE 0,2–0,3%). **Usuário, jogando a arena no Linux com
+OpenGL depois da correção (`f9-021`):** fundo escuro, "melhor que antes", mas o original (vídeo)
+ainda é mais escuro; ele decidiu deixar assim. No rastreio o fundo fica com fator de névoa entre
+0,07 e 1,00 por vértice (o domo está dentro da faixa 100..1800). Hipótese não testada para o que
+falta: `fog_factor()` satura o fator por vértice, e o xemu satura por pixel, depois de interpolar;
+em triângulos grandes com um vértice além do fim da névoa isso clareia o interior. Pode também ser
+só o nível de preto do vídeo. **Não verificado:** a arena no Vulkan e no Windows; as outras áreas 3D
+com a névoa ligada (a correção vale para todas).
 
 ### 7.9 Limitador de quadros (2026-11-24) — `src/hooks/fps_limit.c`
 

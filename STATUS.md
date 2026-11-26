@@ -1,6 +1,6 @@
 # STATUS — Digimon World 4 (Xbox NTSC-U) → Linux nativo
 
-Última atualização: 2026-11-26 (release v1.0.0)
+Última atualização: 2026-11-26 (release v1.0.1)
 
 | Marco | Estado |
 |---|---|
@@ -217,6 +217,13 @@ em `PORT_NOTES.md` §7.0. Validado sem janela (2 reloads durante o cenário do l
   o executor não aplicava a matriz de textura da função fixa (patch 4.8 no toolkit). Transição do
   título validada sem janela; **ambas confirmadas pelo usuário jogando em 2026-11-24**
   (`PORT_NOTES.md` §7.3). Progresso verificado no jogo: tutorial completo até a ponte para o portão.
+
+- **Fundo colorido na arena de um chefe (2026-11-26, `DW4R-13`, v1.0.1) — corrigido:** o executor
+  não calculava a distância de névoa da função fixa, então a névoa preta da arena não agia (patch
+  4.22, `PORT_NOTES.md` §7.12). Goldens passam no Vulkan, no OpenGL e no Wine. **O usuário jogou a
+  arena no Linux com OpenGL depois da correção:** "melhor que antes", o original ainda é um pouco
+  mais escuro, e ele decidiu deixar assim. Não visto: a arena no Vulkan e no Windows; as outras
+  áreas com a névoa ligada (só o lobby, sem janela).
 
 - **Modelos 3D salpicados de preto na seleção de Digimon**: giro das tiras de triângulos + sentido
   de face no renderizador (`PORT_NOTES.md` §7.4). Validado sem janela e confirmado pelo usuário.

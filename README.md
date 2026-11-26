@@ -112,6 +112,12 @@ coordinates. Fixed in both renderers; played on Linux with Vulkan and with OpenG
 11 with Vulkan (Central Area and the caves, where it showed the most), and the reference frames
 were updated.
 
+Distance fog (v1.0.1): the game keeps a fog on in its 3D scenes and the port did not apply it;
+in one boss arena, where it is black, the backdrop came out as a bright rainbow instead of nearly
+black. Fixed in both renderers (the fix is shared by them); played on Linux with OpenGL in that
+arena, where the backdrop is still somewhat brighter than on the console. The other areas with
+the fog on were only seen in the lobby.
+
 Skipping the intro movie (v1.0.0): the game could close when the movie was skipped with START
 (about 1 scripted run in 20), a race between two of the game's own threads that the console's
 single processor rules out. Fixed: 128 of 128 scripted runs clean on Linux and 16 of 16 under
