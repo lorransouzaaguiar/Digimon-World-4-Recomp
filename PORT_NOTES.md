@@ -370,6 +370,40 @@ Limites: dois monitores espelhados na mesma posição não se distinguem; no Way
 pode ignorar a posição de uma janela comum. Com dois monitores o usuário confirmou esta versão no Linux (Wayland) e
 no `.exe` pelo Wine (2026-11-25). Windows real: não testado.
 
+### 4.20 `src/platform/win32_compat.c` — evento de vblank perdido: áudio em fluxo repetindo (2026-11-25, só POSIX)
+
+**Sintoma (usuário, AppImage v0.5.0):** "áudio repetindo às vezes". Não era do pacote: no build do
+código-fonte também acontece.
+
+**Como foi achado:**
+1. `RECOMP_AUDIO_WAV` (a mixagem que o APU entrega) comparada com a captura de uma saída de áudio
+   virtual: o dispositivo toca exatamente a mixagem; a repetição já está **na mixagem**, sempre
+   com atraso de 16384 amostras (341 ms, o buffer circular do som em fluxo do CRI ADX).
+2. Só acontece com o jogo **sozinho** na máquina (≈80% das execuções); com 6–8 instâncias em
+   paralelo, 0 de 34. Carga artificial de CPU dá silêncios (`[AUDIO-HOST] starve`), não repetição.
+3. `DW4_CRI_TRACE=1` (gancho novo em `sub_0024D660_enter`, a espera de vblank das threads CRI):
+   as threads de som ficavam 67–200 ms sem voltar à espera, sempre em múltiplos de 16,7 ms; a
+   thread `mwidle` (`0x0024D590`, lê os AFS), que se suspende e é retomada pela thread de vsync a
+   cada vblank, ficava parada até 517 ms nos instantes exatos das repetições.
+
+**Causa:** o vblank é um KEVENT de notificação montado pelo jogo (`RECOMP_TITLE_KEVENTS`), com três
+threads esperando: a principal (swap do D3D) e as duas do CRI. Cada uma zera o `SignalState` e
+espera de novo. No NT, `KeSetEvent` num evento de notificação satisfaz na hora a espera de
+**todas** as threads que estavam esperando. O `wait_single` do toolkit só olhava a flag
+`signaled` depois de acordar: a thread que acordava primeiro e voltava a esperar zerava a flag
+(`ResetEvent` em `ke_guest_event_prepare`) antes de as outras olharem, e elas dormiam por cima do
+vblank. Com a máquina ociosa a thread principal ganha quase sempre; sob carga a ordem se mistura.
+
+**Correção:** contador `set_seq` no objeto, incrementado por `SetEvent`/`PulseEvent` de evento
+manual; a espera guarda o valor ao entrar e termina se a flag está ligada **ou** se o contador
+mudou. De quebra, `PulseEvent` deixava de acordar qualquer thread (ligava e desligava a flag
+sob o mesmo lock). No Windows os eventos são os do sistema, com a semântica certa: o defeito era
+só do Linux. Candidato a PR upstream.
+
+**Medido** (lobby sem janela, uma execução por vez): antes 4 de 5 e 1 de 1 com repetição e 41–148
+esperas de mais de 60 ms; depois 0 de 5 e nenhuma espera longa. Goldens conferem (Vulkan, OpenGL,
+Wine). O usuário jogou com o build do código-fonte e com o AppImage v0.5.1 e não ouviu mais a repetição (2026-11-25).
+
 **Quatro controles (sem patch):** o toolkit já tinha `RECOMP_USB_PADS=1..4` (`src/usb/ohci.c`): pluga
 um controle por porta do hub raiz emulado, um após o outro, nas portas 3, 4, 1, 2 (= jogadores 1 a
 4 para o XAPI), e o controle `n` do barramento lê o controle SDL `n`. O padrão dele é 1; o port
@@ -390,6 +424,7 @@ portas vazias.**
 | `nv2a_vk_backend.c`, `shaders/` | renderizador Vulkan, compilado como `libdw4_vk.so` (§7.5) |
 | `gl_host.c`, `gl_module.h` | escolha da API (`DW4_RENDERER=opengl\|vulkan\|cpu`), contexto EGL, carga/recarga do renderizador, `DW4_SW_RENDER=1` |
 | `stall_watch.c` | amostrador de travamento (`DW4_STALL_MS`) |
+| `recomp_manual.c`: `sub_0024D660_enter` | `DW4_CRI_TRACE=1`: registra quando uma thread de som do CRI fica mais de 60 ms sem voltar à espera de vblank (diagnóstico do áudio em fluxo, §4.20) |
 | `quit_hotkey.c` | atalho que fecha o jogo: `DW4_QUIT_KEYS` (padrão `ctrl+q`, na hora) e `DW4_QUIT_PAD` (padrão `back+start`, segurados `DW4_QUIT_HOLD_MS`=1000); `off` desliga. Thread própria a cada 20 ms, então vale com o jogo travado. Sai por `fflush` + `_exit(0)`, como o `quit` dos roteiros: pedir o fechamento pela janela (`SDL_QUIT` → `exit()`) derrubou o processo dentro da camada de swapchain do gamescope, com o renderizador Vulkan ainda apresentando (§8) |
 | `osd.c` | mostrador de FPS / CPU / GPU: `DW4_OSD=1` (já visível), `DW4_OSD_KEYS` (padrão `f2`), `DW4_OSD_PAD` (padrão `l3+r3`), lidos pela thread de `quit_hotkey.c`. Não tem renderizador de texto: monta um lote 2D sem textura (fonte 5x7, um retângulo por trecho aceso) que `gl_host.c` entrega ao renderizador em uso antes do `present_sync`/`flip`, na última superfície de tela em que o jogo desenhou, com o estado do último lote dela (blend ligado, sem teste de profundidade). Em tela larga o x sai deslocado de `-320·(wide−1)` para o aperto de `ro_squeeze` devolvê-lo ao canto da tela. CPU e GPU vêm de `host_os.h` (`dw4_os_cpu_times` — a CPU é a média de todos os núcleos do sistema, de `/proc/stat` ou `GetSystemTimes` —, `dw4_os_gpu_percent`: NVML, sysfs da AMD, contadores "GPU Engine" no Windows por `pdh.dll` carregada em tempo de execução) |
 | `dw4_hooks.h` | `LOG_ONCE`, protótipos |

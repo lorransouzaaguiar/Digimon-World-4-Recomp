@@ -544,6 +544,20 @@ jogar e para desenvolver, correções de runtime candidatas a portar e a discuss
   launcher não abre terminal. A janela do OpenGL usa o renderizador padrão da SDL, que
   no Windows é Direct3D por dentro da SDL — o nosso código não usa DirectX.
 
+## Áudio repetindo — RESOLVIDO, release v0.5.1 (2026-11-25)
+
+Relato do usuário com o AppImage da v0.5.0: "áudio repetindo às vezes". Causa: na camada Linux
+do toolkit, uma thread que voltava a esperar o vblank zerava o evento antes de as outras
+acordarem; as threads de som do CRI perdiam vblanks seguidos e o buffer de 341 ms do som em
+fluxo tocava de novo (`PORT_NOTES.md` §4.20). Existe desde sempre no Linux; o Windows não tem.
+Corrigido em `win32_compat.c`. Medido sem janela: 4 de 5 execuções com repetição antes, 0 de 5
+depois; goldens conferem. O usuário jogou com o build do código-fonte e com o AppImage v0.5.1
+("funcionando perfeito") e a correção saiu na **v0.5.1** (a v0.5.0 tem o defeito). O `.zip` de
+Windows da v0.5.1 só muda de versão: lá o defeito não existia. Diagnóstico novo: `DW4_CRI_TRACE=1`.
+
+No caminho: o crash de pular o vídeo de abertura apareceu 3 vezes em ~55 execuções (2 SIGSEGV, 1
+SIGFPE, todos logo após o START em `f1000`); segue aberto.
+
 ## Release v0.5.0 (2026-11-25)
 
 Gerado da `main` depois do merge da `DW4R-6`: tudo da seção abaixo. Conferido fora do projeto: o

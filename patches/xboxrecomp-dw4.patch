@@ -1485,6 +1485,74 @@ index 1f9836e..1a39f42 100644
          goto undecoded;
      }
  
+diff --git a/src/platform/win32_compat.c b/src/platform/win32_compat.c
+index deeb2c2..045bdb2 100644
+--- a/src/platform/win32_compat.c
++++ b/src/platform/win32_compat.c
+@@ -271,6 +271,10 @@ typedef struct w32_object {
+     /* event */
+     int             signaled;
+     int             manual_reset;
++    /* DW4 port: bumped by every SetEvent/PulseEvent of a manual-reset event.
++     * A waiter that sees it move was waiting when the event was set, and is
++     * released even if another thread has reset the event since (wait_single). */
++    unsigned        set_seq;
+ 
+     /* semaphore */
+     long            sem_count;
+@@ -737,11 +741,21 @@ static DWORD wait_single(w32_object *o, DWORD ms)
+ 
+     pthread_mutex_lock(&o->lock);
+     DWORD result = WAIT_OBJECT_0;
++    /* DW4 port: setting a manual-reset (notification) event releases every
++     * thread waiting on it at that moment -- on NT the waits are satisfied by
++     * the set itself. Testing only `signaled` after the wakeup loses that: a
++     * waiter that is quick to come back and reset the event (XDK code resets
++     * a KEVENT and waits again in one go) clears the flag before the slower
++     * waiters have looked, and they sleep through the set. With three threads
++     * on the vblank event (the title's main thread and CRI's two audio
++     * threads) the audio threads missed runs of vblanks, the streamed audio
++     * ran dry and its 341 ms buffer played again. */
++    unsigned seq0 = o->set_seq;
+ 
+     for (;;) {
+         int ready = 0;
+         switch (o->kind) {
+-        case K_EVENT:  ready = o->signaled; break;
++        case K_EVENT:  ready = o->signaled || (o->manual_reset && o->set_seq != seq0); break;
+         case K_THREAD: ready = o->exited;   break;
+         case K_SEM:    ready = (o->sem_count > 0); break;
+         case K_MUTEX:
+@@ -906,6 +920,7 @@ BOOL SetEvent(HANDLE h)
+     if (!o || o->kind != K_EVENT) return FALSE;
+     pthread_mutex_lock(&o->lock);
+     o->signaled = 1;
++    o->set_seq++;
+     pthread_cond_broadcast(&o->cond);
+     pthread_mutex_unlock(&o->lock);
+     return TRUE;
+@@ -926,9 +941,18 @@ BOOL PulseEvent(HANDLE h)
+     w32_object *o = obj_from_handle(h);
+     if (!o || o->kind != K_EVENT) return FALSE;
+     pthread_mutex_lock(&o->lock);
+-    o->signaled = 1;
+-    pthread_cond_broadcast(&o->cond);
+-    o->signaled = 0;
++    /* DW4 port: with the flag set and cleared under the lock no waiter ever
++     * saw it; a manual-reset pulse releases the current waiters through
++     * set_seq, an auto-reset one releases one if any is waiting. */
++    if (o->manual_reset) {
++        o->set_seq++;
++        pthread_cond_broadcast(&o->cond);
++    } else {
++        o->signaled = 1;
++        pthread_cond_signal(&o->cond);
++    }
++    if (o->manual_reset)
++        o->signaled = 0;
+     pthread_mutex_unlock(&o->lock);
+     return TRUE;
+ }
 diff --git a/src/video/CMakeLists.txt b/src/video/CMakeLists.txt
 index 3fafbe7..cc10be1 100644
 --- a/src/video/CMakeLists.txt
