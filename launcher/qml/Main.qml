@@ -689,7 +689,7 @@ ApplicationWindow {
                 Card {
                     heading: t.known
                     Repeater {
-                        model: [t.known_1, t.known_2, t.known_3, t.known_4]
+                        model: [t.known_1]
                         Label { required property string modelData
                                 text: "•  " + modelData; color: win.ink; font.pixelSize: 14; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     }

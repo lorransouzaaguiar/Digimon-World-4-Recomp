@@ -183,6 +183,17 @@ void recomp_icall_not_code_log(uint32_t va)
                     "(ponteiro nulo/selvagem, chamada #%llu, ret guest 0x%08X)\n",
             va, (unsigned long long)hits[i],
             (unsigned long long)g_icall_count, MEM32(g_esp));
+    if (hits[i] == 1)
+        fprintf(stderr, "  [CRI] trava do CRI (0x3BDD34) = %u no momento\n", MEM32(0x3BDD34));
+    /* Na primeira vez de cada alvo, a cadeia de chamadas do guest desta
+     * thread: diz qual thread (principal, vsync do CRI, mwidle) tropeçou. */
+    if (hits[i] == 1) {
+        static int budget = 6;
+        if (budget > 0) {
+            budget--;
+            dw4_crash_report_guest_stack();
+        }
+    }
 }
 
 /* ── Instrucoes nao traduzidas ─────────────────────────────────────────────── */
@@ -277,4 +288,52 @@ void sub_002B1320(void)
     xbox_Nv2aKickGate();
     sub_002B1320_gen();
     xbox_Nv2aKickDone();
+}
+
+/* 0x00257FB0: a passada dos servidores "idle" do CRI (SVM tipo 6), chamada so
+ * pela thread mwidle (0x0024D590), que le os AFS e alimenta os fluxos de
+ * video e som.
+ *
+ * No console a mwidle tem a prioridade mais baixa do jogo e ha uma CPU so:
+ * ela so roda quando a thread principal esta bloqueada, entao tudo o que a
+ * principal faz na biblioteca (parar e destruir um filme, por exemplo) e
+ * atomico em relacao a ela. Aqui as duas rodam ao mesmo tempo. Ao pular o
+ * video de abertura com START, a principal destruia os objetos de fluxo (SJ)
+ * com a mwidle no meio de uma passada, ou o contrario: chamada virtual por
+ * uma vtable ja zerada (`[ICALL] alvo 0x00000000`, ret guest 0x0026A1BE /
+ * 0x0026A1E0 / 0x0026A8B0 / 0x00277028..0x002773A6) e o jogo desistia
+ * (HalReturnToFirmware). 11 em 231 execucoes sem janela antes; PORT_NOTES §3.
+ *
+ * A passada passa a rodar dentro da secao critica do proprio CRI
+ * (0x003FEA60, a de 0x0024D4C0/0x0024D4E0), que a principal segura nas
+ * chamadas da biblioteca. Se ela esta ocupada, a passada e pulada (eax = 0,
+ * "nada a fazer"): a mwidle se suspende e volta no vblank seguinte, que e o
+ * que a prioridade fazia. Nunca espera pela trava: a principal, de dentro
+ * dela, gira esperando a mwidle terminar (0x0024D520).
+ * DW4_CRI_IDLE_GATE=0 volta ao comportamento antigo. */
+#define CRI_LOCK_VA 0x003FEA60u
+extern void sub_00257FB0_gen(void);
+extern int  xbox_RtlTryEnterCriticalSectionHost(void *cs);
+extern void xbox_RtlLeaveCriticalSection(void *cs);
+
+void sub_00257FB0(void)
+{
+    static int on = -1;
+    void *cs = (void *)((uintptr_t)g_xbox_mem_offset + CRI_LOCK_VA);
+
+    if (on < 0) {
+        const char *e = getenv("DW4_CRI_IDLE_GATE");
+        on = !(e && e[0] == '0');
+    }
+    if (!on) {
+        sub_00257FB0_gen();
+        return;
+    }
+    if (!xbox_RtlTryEnterCriticalSectionHost(cs)) {
+        g_eax = 0;
+        g_esp += 4;                         /* o `ret` da funcao */
+        return;
+    }
+    sub_00257FB0_gen();
+    xbox_RtlLeaveCriticalSection(cs);
 }

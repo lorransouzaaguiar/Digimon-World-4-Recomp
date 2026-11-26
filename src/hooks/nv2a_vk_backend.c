@@ -1337,6 +1337,10 @@ static uint32_t s_pcount, s_pcap;
 extern const uint32_t *nv2a_pb_exec_reg_mirror(void);
 static uint32_t s_tm_hash, s_tm_n;
 static float s_tm_min[2], s_tm_max[2];
+/* Texgen do estagio 0 (SET_TEXGEN_S/T/R/Q, 0x03C0..0x03CC): quantos draws do
+ * lote vieram com algum canal ligado e os modos do ultimo deles. O executor
+ * ainda nao aplica texgen (PORT_NOTES 7.8); isto so mostra se o jogo pede. */
+static uint32_t s_tg_n, s_tg_mode[4];
 
 static void tm_note(void)
 {
@@ -1344,6 +1348,11 @@ static void tm_note(void)
     float m[16];
     uint32_t h = 0;
 
+    if (reg[0x03C0 / 4] | reg[0x03C4 / 4] | reg[0x03C8 / 4] | reg[0x03CC / 4]) {
+        for (int i = 0; i < 4; i++)
+            s_tg_mode[i] = reg[0x03C0 / 4 + i];
+        s_tg_n++;
+    }
     if (!reg[0x0420 / 4])
         return;
     memcpy(m, &reg[0x06C0 / 4], sizeof m);
@@ -1632,7 +1641,7 @@ static void flush_pending(void)
     }
     if (dw4_frame_ring_on()) {
         /* Caixa-preta: o que este lote e, para comparar quadro a quadro. */
-        char line[480];
+        char line[560];
         uint32_t rch = 0;
 
         for (size_t i = 0; i < sizeof k->rc / 4; i++)
@@ -1668,7 +1677,8 @@ static void flush_pending(void)
         snprintf(line, sizeof line, "s%d v=%u ext=%d bl=%u(%X,%X) at=%u(%X,%u) z=%u/%u cm=%08X "
                  "t=%08X,%08X f%02X pal=%08X:%08X ts=%d rc=%05X f0=%08X fin=%X,%X fogc=%.2f,%.2f,%.2f "
                  "fog=%.3f[%.2f..%.2f] spec=%08X uv=%08X col=%08X bb=%.0f,%.0f-%.0f,%.0f "
-                 "rch=%08X f1=%08X fc=%08X,%08X bc=%08X tm=%u:%08X[%.3f..%.3f,%.3f..%.3f]",
+                 "rch=%08X f1=%08X fc=%08X,%08X bc=%08X tm=%u:%08X[%.3f..%.3f,%.3f..%.3f] "
+                 "tg=%u:%X,%X,%X,%X",
                  (int)(k->surf - s_surf), s_pcount, k->has_ext, rs->blend_enable, rs->blend_src,
                  rs->blend_dst, rs->alpha_test_enable, rs->alpha_func, rs->alpha_ref,
                  rs->depth_test_enable, rs->depth_write, rs->color_mask, k->tva[0], k->tva[1],
@@ -1680,8 +1690,10 @@ static void flush_pending(void)
                  (double)x0, (double)y0, (double)x1, (double)y1,
                  rch, k->rc.factor1[0], k->rc.final_c0, k->rc.final_c1, rs->blend_color,
                  s_tm_n, s_tm_hash, (double)s_tm_min[0], (double)s_tm_max[0],
-                 (double)s_tm_min[1], (double)s_tm_max[1]);
+                 (double)s_tm_min[1], (double)s_tm_max[1],
+                 s_tg_n, s_tg_mode[0], s_tg_mode[1], s_tg_mode[2], s_tg_mode[3]);
         s_tm_hash = 0; s_tm_n = 0;
+        s_tg_n = 0; memset(s_tg_mode, 0, sizeof s_tg_mode);
         dw4_frame_detail(line);
     }
     vkCmdDraw(s_cmd, s_pcount, 1, s_vtx_used, 0);

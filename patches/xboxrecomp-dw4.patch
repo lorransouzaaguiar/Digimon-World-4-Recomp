@@ -345,6 +345,53 @@ index b6e73e0..3612472 100644
      if (!qf.QuadPart)
          QueryPerformanceFrequency(&qf);
      QueryPerformanceCounter(&q);
+diff --git a/src/kernel/kernel_rtl.c b/src/kernel/kernel_rtl.c
+index a9853dd..e214495 100644
+--- a/src/kernel/kernel_rtl.c
++++ b/src/kernel/kernel_rtl.c
+@@ -697,6 +697,42 @@ VOID __stdcall xbox_RtlEnterCriticalSection(PRTL_CRITICAL_SECTION CriticalSectio
+     }
+ }
+ 
++/* DW4 port: RtlTryEnterCriticalSection, for host code that must not wait on
++ * a guest lock (a project hook that yields to the holder instead). Same two
++ * representations as Enter; nonzero when the lock was taken (or recursed). */
++int xbox_RtlTryEnterCriticalSectionHost(PRTL_CRITICAL_SECTION CriticalSection)
++{
++    CRITICAL_SECTION* cs;
++
++    if (g_cs_single_mode == 2 && cs_guest_is_cs((const uint8_t*)CriticalSection)) {
++        uint8_t* g = (uint8_t*)CriticalSection;
++        volatile LONG* lock = (volatile LONG*)(g + 0x10);
++        uint32_t* rec  = (uint32_t*)(g + 0x14);
++        volatile uint32_t* owner = (volatile uint32_t*)(g + 0x18);
++        uint32_t me = xbox_cs_guest_tid();
++
++        if (InterlockedCompareExchange(lock, 0, -1) == -1) {
++            *owner = me;
++            *rec = 1;
++            return 1;
++        }
++        if (*owner == me) {
++            InterlockedIncrement(lock);
++            (*rec)++;
++            return 1;
++        }
++        return 0;
++    }
++    cs = xbox_cs_shadow(CriticalSection);
++    if (!cs)
++        return 1;                           /* as Enter: nothing to hold */
++    if (!TryEnterCriticalSection(cs))
++        return 0;
++    InterlockedIncrement(&g_cs_enters);
++    xbox_cs_note_owner(cs);
++    return 1;
++}
++
+ VOID __stdcall xbox_RtlLeaveCriticalSection(PRTL_CRITICAL_SECTION CriticalSection)
+ {
+     if (g_cs_single_mode == 2 && cs_guest_is_cs((const uint8_t*)CriticalSection)) {
 diff --git a/src/kernel/nv2a_backend.h b/src/kernel/nv2a_backend.h
 index 87788ed..b503dd6 100644
 --- a/src/kernel/nv2a_backend.h
@@ -441,7 +488,7 @@ index 87788ed..b503dd6 100644
 +
  #endif /* NV2A_BACKEND_H */
 diff --git a/src/kernel/nv2a_pb_exec.c b/src/kernel/nv2a_pb_exec.c
-index 57e8f8e..b4c1c7b 100644
+index 57e8f8e..ca5ef2c 100644
 --- a/src/kernel/nv2a_pb_exec.c
 +++ b/src/kernel/nv2a_pb_exec.c
 @@ -372,6 +372,9 @@ static struct {
@@ -499,10 +546,70 @@ index 57e8f8e..b4c1c7b 100644
      s_gpu.texs[0].levels = 1;
      s_gpu.texs[0].filter = 0;
      s_gpu.texs[0].cube   = 0;
-@@ -2057,6 +2075,33 @@ static int ffp_vertex(uint32_t index, Nv2aVshOutput *out)
+@@ -2057,6 +2075,93 @@ static int ffp_vertex(uint32_t index, Nv2aVshOutput *out)
      fetch_attr(texcoord_attr(), index, out->tex[0]);
      for (st = 1; st < 4; st++)
          fetch_attr(&s_gpu.attr[9 + st], index, out->tex[st]);
++
++    /* DW4 port: fixed-function texture coordinate generation.
++     *
++     * SET_TEXGEN_S/T/R/Q (0x03C0 + 0x10*stage + 4*channel) replaces a channel
++     * of the stage's coordinate, before the texture matrix: EYE_LINEAR
++     * (0x2400) is plane . eye-space position, OBJECT_LINEAR (0x2401) is
++     * plane . object-space position, with the planes in SET_TEXGEN_PLANE_*
++     * (0x0840 + 0x40*stage + 0x10*channel). Digimon World 4 projects its
++     * shadow map onto the floor this way (D3D's TCI_CAMERASPACEPOSITION:
++     * EYE_LINEAR on s, t, r; the stream carries no texture coordinate).
++     * Ignored, every floor vertex read (0,0,0,1), the whole floor sampled the
++     * one texel the matrix's translation points at, and it went dark whenever
++     * a caster's silhouette crossed that texel. Sphere, reflection and normal
++     * maps are not implemented and leave the channel as fetched.
++     * RECOMP_NO_TEXGEN=1 for A/B. */
++    {
++        static int off_sw = -1;
++        const float *mv = (const float *)&s_reg[0x0480 / 4];
++        float eye[4];
++        int have_eye = 0;
++
++        if (off_sw < 0)
++            off_sw = getenv("RECOMP_NO_TEXGEN") != NULL;
++        for (st = 0; st < 4 && !off_sw; st++) {
++            const uint32_t *mode = &s_reg[(0x03C0 + st * 0x10) / 4];
++            const uint32_t *pl = &s_reg[(0x0840 + st * 0x40) / 4];
++            int ch, planes_set = 0;
++
++            if (!(mode[0] | mode[1] | mode[2] | mode[3]))
++                continue;
++            for (i = 0; i < 16; i++)
++                planes_set |= pl[i] != 0;
++            for (ch = 0; ch < 4; ch++) {
++                const float *src;
++                float p[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
++
++                if (mode[ch] == 0x2400) {
++                    if (!have_eye) {
++                        for (i = 0; i < 4; i++)
++                            eye[i] = mv[4 * i] * in[0] + mv[4 * i + 1] * in[1]
++                                   + mv[4 * i + 2] * in[2] + mv[4 * i + 3] * in[3];
++                        have_eye = 1;
++                    }
++                    src = eye;
++                } else if (mode[ch] == 0x2401) {
++                    src = in;
++                } else {
++                    continue;
++                }
++                /* Planes never programmed: the identity ones, which is what
++                 * "the position itself" means. */
++                if (planes_set)
++                    memcpy(p, &pl[4 * ch], sizeof p);
++                else
++                    p[ch] = 1.0f;
++                out->tex[st][ch] = p[0] * src[0] + p[1] * src[1]
++                                 + p[2] * src[2] + p[3] * src[3];
++            }
++        }
++    }
 +
 +    /* DW4 port: the fixed-function texture matrix.
 +     *
@@ -533,7 +640,7 @@ index 57e8f8e..b4c1c7b 100644
      return 1;
  }
  
-@@ -2162,12 +2207,19 @@ static int s_xf_no_tex;
+@@ -2162,12 +2267,19 @@ static int s_xf_no_tex;
  #define NV_BACKEND_MAX_VERTS (NV_MAX_INDICES * 3)
  static Nv2aVertex *s_bverts;     /* about 5.5 MB: allocated by the first vertex */
  static uint32_t   s_bcount;
@@ -553,7 +660,7 @@ index 57e8f8e..b4c1c7b 100644
      if (s_bcount + 3 > NV_BACKEND_MAX_VERTS)
          return NULL;
      return &s_bverts[s_bcount];
-@@ -2188,6 +2240,13 @@ static void backend_from_xf(const Nv2aVshOutput *v, Nv2aVertex *o)
+@@ -2188,6 +2300,13 @@ static void backend_from_xf(const Nv2aVshOutput *v, Nv2aVertex *o)
      o->diffuse = pack_color(v->d0);
      o->u = v->tex[0][0] * su;
      o->v = v->tex[0][1] * sv;
@@ -567,7 +674,7 @@ index 57e8f8e..b4c1c7b 100644
  }
  
  /* `textured`: the batch carried texture coordinates, so the bound texture is
-@@ -2207,6 +2266,38 @@ static void backend_flush(int textured)
+@@ -2207,6 +2326,38 @@ static void backend_flush(int textured)
      batch.count = s_bcount;
      batch.texture = NULL;
      batch.state = &rs;
@@ -606,7 +713,7 @@ index 57e8f8e..b4c1c7b 100644
      if (textured && s_gpu.texs[0].valid) {
          tex.offset = s_gpu.texs[0].offset;
          tex.width  = s_gpu.texs[0].width;
-@@ -2217,6 +2308,7 @@ static void backend_flush(int textured)
+@@ -2217,6 +2368,7 @@ static void backend_flush(int textured)
          tex.addr_v = s_gpu.texs[0].addr_v;
          tex.levels = s_gpu.texs[0].pitch ? 1 : s_gpu.texs[0].levels;
          tex.filter = s_gpu.texs[0].filter;
@@ -614,7 +721,7 @@ index 57e8f8e..b4c1c7b 100644
          batch.texture = &tex;
      }
      s_backend->draw(&surf, &batch);
-@@ -3239,15 +3331,23 @@ static void raster_xf_clipped(const Nv2aVshOutput *a, const Nv2aVshOutput *b,
+@@ -3239,15 +3391,23 @@ static void raster_xf_clipped(const Nv2aVshOutput *a, const Nv2aVshOutput *b,
      }
      planes = near_z ? 2 : 1;
      in[0] = a; in[1] = b; in[2] = c;
@@ -646,7 +753,7 @@ index 57e8f8e..b4c1c7b 100644
                  inside = 0;
          }
      }
-@@ -3255,6 +3355,12 @@ static void raster_xf_clipped(const Nv2aVshOutput *a, const Nv2aVshOutput *b,
+@@ -3255,6 +3415,12 @@ static void raster_xf_clipped(const Nv2aVshOutput *a, const Nv2aVshOutput *b,
          raster_xf_triangle(a, b, c);
          return;
      }
@@ -659,7 +766,7 @@ index 57e8f8e..b4c1c7b 100644
      n = xf_clip_poly(p0, n, 0, p1);
      if (planes > 1 && n)
          n = xf_clip_poly(p1, n, 1, p0);
-@@ -3629,8 +3735,16 @@ static void draw_primitive(void)
+@@ -3629,8 +3795,16 @@ static void draw_primitive(void)
      if (!s_gpu.prim || !s_gpu.idx_count)
          return;
      s_gpu.draws++;
@@ -678,7 +785,7 @@ index 57e8f8e..b4c1c7b 100644
      s_gpu.verts += s_gpu.idx_count;
  
      /* How many batches carry coordinates at all, and what range they span.
-@@ -3701,7 +3815,12 @@ static void draw_primitive(void)
+@@ -3701,7 +3875,12 @@ static void draw_primitive(void)
          }
      }
  
@@ -692,7 +799,7 @@ index 57e8f8e..b4c1c7b 100644
          static int shown;
          if (shown++ < 6) {
              fprintf(stderr, "  [GPU] prim %u, %u indices, pos attr:"
-@@ -4145,6 +4264,13 @@ int nv2a_pb_exec_flip_poll(void)
+@@ -4145,6 +4324,13 @@ int nv2a_pb_exec_flip_poll(void)
      return xbox_FlipHoldPoll(&s_flip_hold, c, now, ok);
  }
  
@@ -706,7 +813,7 @@ index 57e8f8e..b4c1c7b 100644
  /* The hold's line in the periodic [GPU] report, then reset. */
  static void flip_hold_report(void)
  {
-@@ -4195,6 +4321,17 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -4195,6 +4381,17 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      if (subch == 0 && method == 0x1D70 && s_sem_va) {
          uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
          *(volatile uint32_t *)(mem + s_sem_va) = param;
@@ -724,7 +831,7 @@ index 57e8f8e..b4c1c7b 100644
          return;
      }
      if (!s_exec_inited) {
-@@ -4401,7 +4538,10 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -4401,7 +4598,10 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
                      param, s_gpu.color_offset, s_gpu.clip_w, s_gpu.clip_h,
                      s_gpu.clear_color, 10);
          clear_surface(param);
@@ -736,7 +843,7 @@ index 57e8f8e..b4c1c7b 100644
              zbuf_clear();
          break;
  
-@@ -4467,6 +4607,8 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
+@@ -4467,6 +4667,8 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
              s_gpu.idx[s_gpu.idx_count++] = param;
          break;
      case NV097_NO_OPERATION:

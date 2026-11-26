@@ -117,7 +117,14 @@ EFLAGS** no `ucontext` (a instrução seguinte é o `jcc`).
 `ffp_vertex()` aplica `SET_TEXTURE_MATRIX` (`0x06C0 + 0x40·estágio`) quando
 `SET_TEXTURE_MATRIX_ENABLE` (`0x0420 + 4·estágio`) está ligado, na convenção da matriz composta
 (`out[i] = Σ M[4i+j]·in[j]`, q = 1 por omissão). `RECOMP_NO_TEXMATRIX=1` desliga para comparar.
-Texgen (`0x03C0…`) continua não implementado.
+**Texgen (2026-11-26):** `ffp_vertex()` aplica `SET_TEXGEN_S/T/R/Q` (`0x03C0 + 0x10·estágio +
+4·canal`) antes da matriz de textura: EYE_LINEAR (`0x2400`) = plano · posição no espaço do olho
+(modelview em `0x0480`), OBJECT_LINEAR (`0x2401`) = plano · posição do objeto; planos em
+`0x0840 + 0x40·estágio + 0x10·canal` (se nunca foram programados, os de identidade). Sphere,
+reflection e normal map continuam sem implementação. `RECOMP_NO_TEXGEN=1` desliga para comparar.
+Motivo e evidência em §7.8. Confirmado pelo usuário jogando (2026-11-26, Linux, Vulkan, Central
+Area): sombras dos Digimon no chão e o piso não escurece mais. Sem janela: `soak.py --golden`, `--opengl --golden`
+e `--wine --golden` passam, sombra visível no lobby nos dois renderizadores; referências atualizadas.
 
 ### 4.7 `nv2a_backend.h` / `nv2a_pb_exec.c` — z-bias (polygon offset)
 `Nv2aRenderState` ganhou `poly_offset_enable/factor/bias`, lidos do espelho de registradores
@@ -412,6 +419,46 @@ controle de verdade fica "conectada, nada apertado". Com 4, o boot até o lobby 
 frames de referência. **Não testado com mais de um controle nem visto o que o jogo faz com as
 portas vazias.**
 
+### 4.21 `src/kernel/kernel_rtl.c` + `recomp_manual.c` — pular o vídeo de abertura fechava o jogo (2026-11-26, `DW4R-12`)
+
+**Sintoma:** em ~5% das execuções sem janela (11 de 231 no histórico; 3 de 64 no dia da
+correção), apertar START durante o vídeo de abertura dava `[ICALL] alvo 0x00000000` com
+`ret guest 0x0026A1BE` / `0x0026A1E0` / `0x0026A8B0` / `0x00277028`…`0x002773A6`, e em seguida o
+jogo saía sozinho (`HalReturnToFirmware routine=2`, com um laço de ponteiros-lixo em
+`ret guest 0x00257F47` e SIGSEGV na saída) ou ficava vivo com o laço girando. O usuário nunca viu
+jogando com janela.
+
+**Como foi achado:** `recomp_icall_not_code_log` passou a despejar a cadeia de chamadas do guest
+na primeira chamada nula. Em 2 de 3 falhas a thread era a **mwidle** do CRI (`0x0024D590` →
+`0x00257FB0` → `0x00257F10`, o laço de servidores do SVM: 6 pares {função, objeto} por tipo em
+`0x003BE930 + 48·tipo`, tipo 6 = "idle") dentro de um servidor do Sofdec (`0x002708xx` →
+`0x0026A8xx`) chamando um método de um objeto de fluxo (SJ) por uma vtable zerada; na outra era a
+thread principal, no caminho de parar/destruir o filme (`0x00096FE7` → `0x0026FC82` → …).
+
+**Causa:** os servidores do CRI não se excluem por trava e sim por **prioridade**. No console a
+mwidle é a thread de menor prioridade numa CPU só: só roda com a principal bloqueada, então tudo
+o que a principal faz na biblioteca é atômico em relação a ela (e `0x0024D520` sobe a prioridade
+da mwidle e gira até ela terminar a passada, quando quer esperá-la). Aqui as duas rodam ao mesmo
+tempo e a principal destruía os SJ com a mwidle no meio de uma passada. Descartado antes, medindo:
+a correção do vblank da §4.20 (1 falha em 32 com ela desligada, 2 em 32 com ela ligada).
+
+**Correção:** `sub_00257FB0` (a passada "idle", só a mwidle chama) virou função embrulhada em
+`recomp_manual.c`: roda dentro da seção crítica do próprio CRI (`0x003FEA60`, a de
+`0x0024D4C0`/`0x0024D4E0`, que a principal segura nas chamadas da biblioteca) e, se ela está
+ocupada, a passada é pulada (`eax = 0`: a mwidle se suspende até o vblank seguinte). Nunca espera
+pela trava, porque a principal gira esperando a mwidle de dentro dela. No toolkit entrou
+`xbox_RtlTryEnterCriticalSectionHost()` (os dois modos de seção crítica). `DW4_CRI_IDLE_GATE=0`
+desliga. Não é `RECOMP_GUEST_LOCK=1` (uma thread do guest por vez): ele não dá prioridade, e
+16 execuções com ele não mostraram nada (0 falhas, como as 16 sem ele naquela hora).
+
+**Medido (sem janela, roteiro `f1000:enter` + `wait_flips:500`):** 128 de 128 execuções sem
+nenhuma chamada nula e sem `[STALL]` (duas séries de 64; antes, 3 em 64 no mesmo dia); no Wine,
+16 de 16. Goldens conferem (Vulkan, OpenGL, Wine). O xemu não serviu de base aqui: ele emula a
+CPU única, a corrida é própria de rodar o guest em threads reais; a ideia de exclusão vem das
+lições dos outros ports (`docs/REFERENCIAS.md` §5). **Limite do que foi provado:** estatística
+forte, não prova formal; outros pontos em que a principal mexe no CRI fora da trava continuariam
+expostos (nenhum visto).
+
 ## 5. Hooks (`src/hooks/`)
 
 | Arquivo | Função |
@@ -424,6 +471,7 @@ portas vazias.**
 | `nv2a_vk_backend.c`, `shaders/` | renderizador Vulkan, compilado como `libdw4_vk.so` (§7.5) |
 | `gl_host.c`, `gl_module.h` | escolha da API (`DW4_RENDERER=opengl\|vulkan\|cpu`), contexto EGL, carga/recarga do renderizador, `DW4_SW_RENDER=1` |
 | `stall_watch.c` | amostrador de travamento (`DW4_STALL_MS`) |
+| `recomp_manual.c`: `sub_00257FB0` (embrulhada) | a passada "idle" do CRI roda dentro da seção crítica do CRI e cede a vez se ela está ocupada: corrige o crash de pular o vídeo de abertura (§4.21); `DW4_CRI_IDLE_GATE=0` desliga |
 | `recomp_manual.c`: `sub_0024D660_enter` | `DW4_CRI_TRACE=1`: registra quando uma thread de som do CRI fica mais de 60 ms sem voltar à espera de vblank (diagnóstico do áudio em fluxo, §4.20) |
 | `quit_hotkey.c` | atalho que fecha o jogo: `DW4_QUIT_KEYS` (padrão `ctrl+q`, na hora) e `DW4_QUIT_PAD` (padrão `back+start`, segurados `DW4_QUIT_HOLD_MS`=1000); `off` desliga. Thread própria a cada 20 ms, então vale com o jogo travado. Sai por `fflush` + `_exit(0)`, como o `quit` dos roteiros: pedir o fechamento pela janela (`SDL_QUIT` → `exit()`) derrubou o processo dentro da camada de swapchain do gamescope, com o renderizador Vulkan ainda apresentando (§8) |
 | `osd.c` | mostrador de FPS / CPU / GPU: `DW4_OSD=1` (já visível), `DW4_OSD_KEYS` (padrão `f2`), `DW4_OSD_PAD` (padrão `l3+r3`), lidos pela thread de `quit_hotkey.c`. Não tem renderizador de texto: monta um lote 2D sem textura (fonte 5x7, um retângulo por trecho aceso) que `gl_host.c` entrega ao renderizador em uso antes do `present_sync`/`flip`, na última superfície de tela em que o jogo desenhou, com o estado do último lote dela (blend ligado, sem teste de profundidade). Em tela larga o x sai deslocado de `-320·(wide−1)` para o aperto de `ro_squeeze` devolvê-lo ao canto da tela. CPU e GPU vêm de `host_os.h` (`dw4_os_cpu_times` — a CPU é a média de todos os núcleos do sistema, de `/proc/stat` ou `GetSystemTimes` —, `dw4_os_gpu_percent`: NVML, sysfs da AMD, contadores "GPU Engine" no Windows por `pdh.dll` carregada em tempo de execução) |
@@ -859,7 +907,7 @@ superfície, não pelo recorte do último draw (um alvo 512×512 podia "ganhar" 
 **Primeiro uso (2026-11-24):** 6 capturas automáticas numa sessão do usuário; levaram à causa da
 piscada (patch 4.11: a volta do anel do pushbuffer perdia comandos).
 
-### 7.8 ABERTO: o chão escurece por alguns quadros (2026-11-24)
+### 7.8 O chão escurece por alguns quadros (2026-11-24; causa achada e corrigida em 2026-11-26: texgen)
 
 Sintoma: na Central Area (e na caverna), o piso de ladrilhos escurece em padrão listrado por 1–7
 quadros e volta; Vulkan e OpenGL; às vezes com o personagem andando. Capturas com detalhe por
@@ -892,6 +940,30 @@ quadros escuros, sem valor fora da sequência.
 entre passes coplanares com `LEQUAL`) e o conteúdo real das texturas/alvos (só endereços e
 hashes). **Padrão que se repete em todas as capturas:** o escurecimento vem 1–4 quadros antes
 de um grupo novo de objetos entrar (+300 draws) — troca de setor do mapa.
+
+**Hipótese nova (2026-11-26, só releitura das capturas, nenhum teste rodado): texgen.** O passe
+que multiplica o chão pela sombra (`bl=1(0,300)`, amostra o alvo 512×512) usa a **mesma**
+coordenada de textura em todos os ladrilhos: nos traces F9, `uv0` dos ~285 draws do passe fica em
+(0,681; 0,496) ± 0,002 (`f9-014.txt`; idem `f9-016.txt`), que é a coluna de translação da matriz
+de textura (`tm=…[0.752..,0.465..]` nos `lotes.txt`). Ou seja, o vértice não traz coordenada
+(`fetch_attr` devolve 0,0,0,1) e a real deveria vir do texgen, que `ffp_vertex()` ignora (§4.8).
+O piso inteiro amostra um ponto só do alvo de sombra; quando a silhueta de um objeto cai nesse
+ponto, tudo o que recebe o passe é multiplicado por 0x66. Medido em `flash-022`: nos quadros
+019–027 o painel passa de (65,24,230) para (26,10,92), exatamente ×0,40; nos quadros de
+transição cada ladrilho escurece por inteiro num valor próprio (um ponto de amostra por draw); e
+o número de draws no alvo de sombra sobe de 328 para 371 três quadros antes. Explica por que
+lotes, estado e matrizes são idênticos nos quadros escuros. Consequência esperada: hoje nenhuma
+sombra projetada de personagem aparece no chão. **Confirmado em 2026-11-26** (capturas F12 do
+usuário na Central Area, `flash-024` e `flash-025`, campo novo `tg=` do `lotes.txt`): o passe de
+sombra, e só ele, vem com `tg=2400,2400,2400,0` (EYE_LINEAR em s, t, r) em todos os draws.
+Correção: texgen em `ffp_vertex()` (§4.8); o usuário jogou e confirmou sombras e piso estável;
+goldens passam nos dois renderizadores e no Wine (referências atualizadas, agora com sombra);
+faltam OpenGL com janela e Windows real. Referência de
+semântica: o gerador de função fixa do xemu (`hw/xbox/nv2a/pgraph/glsl/vsh-ff.c`, LGPL: só a
+ideia): por canal, EYE_LINEAR = plano · posição no espaço do olho, OBJECT_LINEAR = plano ·
+posição do objeto, e só depois a matriz de textura. No xemu o jogo ("Digimon World X",
+`xemu.app/titles/42410002`) está como Playable sem defeito gráfico relatado; no Cxbx-Reloaded
+(`game-compatibility` #413) idem, sem detalhes.
 
 **Decisão do usuário (2026-11-24): fica como defeito conhecido não resolvido.** Para retomar:
 registrar z mínimo/máximo por lote e o valor do clear de depth na caixa-preta; comparar com o

@@ -132,12 +132,6 @@ same shaders, same widescreen rules.
 
 ### Known issues
 
-- Skipping the intro movie with START can make the game quit. In automated runs without a window
-  it happened in 2 of 16; it has not been seen when playing in a window. Start the game again.
-- Automatic texture-coordinate generation (reflections, shine effects) is not implemented; some
-  objects may look flat.
-- The floor sometimes darkens for a fraction of a second in some areas (Central Area, caves), on
-  both renderers, less often with OpenGL. Cosmetic; the cause has not been found yet.
 - At 60 fps the game runs twice as fast as on the console, because its logic advances per frame.
   The default is 30.
 - In widescreen the loading screen is stretched to the full width, and the player panel has only

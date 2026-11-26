@@ -133,12 +133,6 @@ mesmos renderizadores, mesmos shaders, mesmas regras de widescreen.
 
 ### Problemas conhecidos
 
-- Pular o vídeo de abertura com START pode fechar o jogo. Nos testes automáticos sem janela
-  aconteceu em 2 de 16 execuções; jogando com janela não foi visto. Abra o jogo de novo.
-- A geração automática de coordenadas de textura (reflexos, brilhos) não está implementada; alguns
-  objetos podem aparecer chapados.
-- O chão às vezes escurece por uma fração de segundo em algumas áreas (Central Area, cavernas),
-  nos dois renderizadores, menos com OpenGL. É cosmético; a causa ainda não foi encontrada.
 - A 60 fps o jogo roda duas vezes mais rápido que no console, porque a lógica dele avança por
   quadro. O padrão é 30.
 - Em widescreen a tela de loading fica esticada na largura toda, e o painel do jogador só foi
