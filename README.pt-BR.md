@@ -116,8 +116,8 @@ atualizados.
 Névoa de distância (v1.0.1): o jogo mantém uma névoa ligada nas cenas 3D e o port não a
 aplicava; na arena de um chefe, onde ela é preta, o fundo saía como um arco-íris forte em vez de
 quase preto. Corrigido nos dois renderizadores (a correção é comum a eles); jogado no Linux com
-OpenGL nessa arena, onde o fundo ainda fica um pouco mais claro que no console. As outras áreas
-com a névoa ligada só foram vistas no lobby.
+OpenGL nessa arena, onde o fundo ainda fica um pouco mais claro que no console, e em várias outras
+áreas, onde a névoa ficou normal.
 
 Pular o vídeo de abertura (v1.0.0): o jogo podia fechar quando o vídeo era pulado com START
 (cerca de 1 execução por roteiro em 20), uma corrida entre duas threads do próprio jogo que o
@@ -227,7 +227,7 @@ mantê-los.
 | Jogar | arquivos do jogo: escolha a imagem do disco (`.iso`) ou uma pasta; placa de vídeo detectada, versão, botão Jogar; atualizações (veja abaixo) |
 | Gráficos | API gráfica (Vulkan ou OpenGL); resolução interna (480p a 4K), proporção (4:3, 16:9, 21:9) e limite de quadros (30 ou 60); monitor em que o jogo abre, tela cheia e sincronização vertical; o modo paralelo experimental |
 | Controles | teclado como controle 1 ligado/desligado; atalhos para fechar o jogo e para o mostrador de FPS/CPU/GPU (teclado e controle); tabela de teclas |
-| Saves e dados | pasta dos saves, lista de saves, backup, exportar e importar `.zip` (os saves atuais são guardados antes) |
+| Saves e dados | pasta dos saves, lista de saves, backup, exportar e importar `.zip` (os saves atuais são guardados antes). O importar aceita também um save de Xbox do jogo (`.zip` com a pasta `UDATA/42410002/`, de um console, emulador ou site de saves) e o assina de novo para o port |
 | Suporte | o que tentar se o jogo estiver lento, pasta de logs, relatório de problema (sistema, processador, placa de vídeo, opções, resumo dos quadros por segundo) sem o nome da sua pasta pessoal |
 
 A interface é em português (Brasil) ou inglês, conforme o idioma do sistema; dá para trocar na
@@ -422,6 +422,7 @@ Vulkan.
   (nada aparece no monitor), o que exercita o swapchain do Vulkan.
 - Perfil de CPU sem `perf`: `scripts/soak.py -e DW4_PROF=/tmp/p.txt -e DW4_PROF_FROM=3900` e depois
   `scripts/prof_report.py /tmp/p.txt`.
+- `scripts/test_xsave.py` testa a importação de saves de Xbox com saves sintéticos.
 - `scripts/test_updater.py` testa o atualizador do launcher contra um servidor local (`--online`
   consulta também o GitHub); `DW4_CRI_TRACE=1` registra quando uma thread de som do jogo atrasa.
 - `scripts/soak.py --wine` roda o build de Windows no Wine do mesmo jeito, e `--wine --gamescope

@@ -1208,6 +1208,20 @@ está no executor do toolkit (cache de vértices pós-transformação, como SSX 
   faz as vezes da API do GitHub. `--online` consulta também o release de verdade. O launcher só
   aceita trocar o endereço consultado por `DW4_UPDATE_API=http://127.0.0.1:...`.
 
+### 8.y Saves de Xbox: assinatura (2026-11-26) — `launcher/xsave.py`
+
+Um save vindo de um console (GameFAQs, emulador) dá "This game is corrupted and cannot be used" em
+Call Digimon. O jogo assina com `XCalculateSignature`: HMAC-SHA1 com a `XboxSignatureKey`, que o
+kernel de verdade deriva do certificado do XBE; no toolkit ela (e a `XboxHDKey`) são 16 zeros
+(`kernel_bridge.c`), então a assinatura de um console nunca confere.
+
+Formato, medido com `gdb` nos pontos `xbox_XcSHAInit/Update/Final` carregando um save do próprio
+port: `UDATA/42410002/<12 hex>/SaveData.dat` tem 65584 bytes = 2 × (32772 de dados + 20 de
+assinatura); cada assinatura é o HMAC-SHA1 (chave: 16 zeros) do bloco que a antecede. Confere nos
+saves gravados pelo port. Reassinar os dois blocos basta: o save do GameFAQs carregou sem janela
+(Call Digimon → hard disk → lobby). O launcher faz isso em "Importar .zip…". Não foi preciso mexer
+no toolkit; pôr a chave de verdade no kernel não é opção (não é nossa para distribuir).
+
 ## 9. Pendências conhecidas
 
 - 470 instruções sem tradução (`RECOMP_UNIMPL`): quase todas são dados de `DSOUND` desmontados

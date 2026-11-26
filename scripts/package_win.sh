@@ -13,7 +13,7 @@
 #
 # Conteudo do .zip (mesma divisao do pacote de Linux):
 #   DigimonWorld4-Recomp.exe   entrada: abre o launcher (packaging/windows/launcher_stub.c)
-#   launcher/                  dw4_launcher.py, xiso.py, updater.py, qml/, VERSION
+#   launcher/                  dw4_launcher.py, xiso.py, updater.py, xsave.py, qml/, VERSION
 #   python/                    Python embutivel oficial + PySide6 (so o que o launcher usa)
 #   game/                      dw4_recomp.exe (sem simbolos), SDL2.dll, libepoxy-0.dll
 #   README.txt  LICENSE.txt  licenses/
@@ -81,7 +81,7 @@ cp "$BUILD/dw4_recomp.exe" "$DIST/$NAME.debug.exe"
 cp "$SDL2_ROOT/$TRIPLET/bin/SDL2.dll" "$BUILD/libepoxy-0.dll" "$PKG/game/"
 
 # ── 2. Launcher ──────────────────────────────────────────────────────────────
-cp launcher/dw4_launcher.py launcher/xiso.py launcher/updater.py packaging/dw4-recomp.png "$PKG/launcher/"
+cp launcher/dw4_launcher.py launcher/xiso.py launcher/updater.py launcher/xsave.py packaging/dw4-recomp.png "$PKG/launcher/"
 cp launcher/qml/*.qml "$PKG/launcher/qml/"
 echo "$VERSION" > "$PKG/launcher/VERSION"
 

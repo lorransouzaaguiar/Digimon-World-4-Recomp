@@ -80,7 +80,7 @@ WORK="$BUILD/pyinstaller"
 echo "$VERSION" > "$BUILD/VERSION"
 "$PY" -m PyInstaller --noconfirm --clean --log-level WARN --onedir --name dw4-launcher \
     --distpath "$WORK/dist" --workpath "$WORK/work" --specpath "$WORK" \
-    --paths "$ROOT/launcher" --hidden-import xiso --hidden-import updater \
+    --paths "$ROOT/launcher" --hidden-import xiso --hidden-import updater --hidden-import xsave \
     --add-data "$ROOT/launcher/qml:qml" --add-data "$BUILD/VERSION:." \
     --add-data "$ROOT/packaging/dw4-recomp.png:." \
     "$ROOT/launcher/dw4_launcher.py"

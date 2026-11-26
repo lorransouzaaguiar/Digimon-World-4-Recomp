@@ -29,6 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))    # o Python embutido do Windows nao poe a pasta do script
 import updater  # noqa: E402
+import xsave  # noqa: E402
 
 if "--install-update" in sys.argv[1:]:
     # Ajudante de instalacao do Windows (updater.py): roda do pacote novo, numa
@@ -257,7 +258,9 @@ STR = {
         "export": "Exportar .zip…", "import": "Importar .zip…", "no_saves": "Nenhum save ainda.",
         "save_list": "Saves encontrados", "backup_done": "Backup gravado em: ",
         "export_done": "Saves exportados para: ", "import_done": "Saves importados. O backup dos anteriores está em: ",
-        "import_bad": "Este .zip não parece um backup de saves deste launcher.",
+        "import_bad": "Este .zip não é um backup de saves deste launcher nem um save de Xbox do Digimon World 4.",
+        "import_xbox_done": "Save de Xbox importado e assinado para o port. O backup dos anteriores está em: ",
+        "import_xbox_bad": "O save de Xbox dentro deste .zip está incompleto ou estragado.",
         "not_while_running": "Feche o jogo antes de mexer nos saves.",
         "slow": "Se o jogo estiver lento",
         "slow_1": "Use a API gráfica Vulkan (Gráficos). Com OpenGL cada quadro passa pela memória, o que pesa de 1440p para cima.",
@@ -383,7 +386,9 @@ STR = {
         "export": "Export .zip…", "import": "Import .zip…", "no_saves": "No saves yet.",
         "save_list": "Saves found", "backup_done": "Backup written to: ",
         "export_done": "Saves exported to: ", "import_done": "Saves imported. The previous ones were backed up to: ",
-        "import_bad": "This .zip does not look like a save backup from this launcher.",
+        "import_bad": "This .zip is neither a save backup from this launcher nor an Xbox save of Digimon World 4.",
+        "import_xbox_done": "Xbox save imported and signed for the port. The previous ones were backed up to: ",
+        "import_xbox_bad": "The Xbox save inside this .zip is incomplete or damaged.",
         "not_while_running": "Close the game before touching the saves.",
         "slow": "If the game is slow",
         "slow_1": "Use the Vulkan graphics API (Graphics). With OpenGL every frame goes through memory, which is heavy from 1440p up.",
@@ -1190,6 +1195,9 @@ class Backend(QObject):
             return
         try:
             with zipfile.ZipFile(url.toLocalFile()) as z:
+                if "dw4-recomp-saves.txt" not in z.namelist():
+                    self._import_xbox_save(url.toLocalFile())
+                    return
                 names = [n for n in z.namelist() if n.startswith("save_data/") and not n.endswith("/")]
                 # so caminhos relativos dentro de save_data/: nada de "..", absolutos ou links
                 ok = "dw4-recomp-saves.txt" in z.namelist() and names and all(
@@ -1211,6 +1219,30 @@ class Backend(QObject):
             self.message.emit(t["import_bad"])
             return
         self.message.emit(t["import_done"] + (scrub(str(backup)) if had else "—"))
+        self.changed.emit()
+
+    def _import_xbox_save(self, path):
+        """Um .zip com UDATA/<title id>/ de um Xbox (console, emulador, site de
+        saves): assina de novo para o port (launcher/xsave.py) e troca so os
+        arquivos desse save; o resto de save_data/ fica como esta."""
+        t = STR[self._lang()]
+        try:
+            files = xsave.read_zip(path)
+        except xsave.XSaveError as e:
+            self.message.emit(t["import_bad"] if e.code == "notxbox" else t["import_xbox_bad"])
+            return
+        try:
+            backup = self._backup_path()
+            had = self._zip_saves(backup)
+            base = self.save_dir() / "UDATA" / TITLE_ID
+            for name, data in files.items():
+                out = base / name
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_bytes(data)
+        except OSError:
+            self.message.emit(t["import_xbox_bad"])
+            return
+        self.message.emit(t["import_xbox_done"] + (scrub(str(backup)) if had else "—"))
         self.changed.emit()
 
     # ── suporte ─────────────────────────────────────────────────────────────
