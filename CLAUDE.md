@@ -14,9 +14,9 @@ caminho para as três plataformas (macOS via MoltenVK).
 
 - **Jogável:** boot, vídeos, menus, criação do Digimon, save/load, lobby, tutorial e primeira fase,
   a 60 fps (CachyOS, NVIDIA). Fases seguintes, chefes e multijogador **não foram testados**.
-- **Publicado:** release v0.5.1 (2026-11-25, o terceiro do dia; AppImage + tar.gz + `.zip` de Windows com launcher;
+- **Publicado:** release v0.5.2 (2026-11-25, o quarto do dia; AppImage + tar.gz + `.zip` de Windows com launcher;
   todo release leva Linux e Windows, e o Windows não é mais apresentado como "experimental" — pedido
-  do usuário; antes v0.5.0, v0.4.1, v0.4.0, v0.3.2, v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
+  do usuário; antes v0.5.1, v0.5.0, v0.4.1, v0.4.0, v0.3.2, v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
   `github.com/lorransouzaaguiar/Digimon-World-4-Recomp` (preparado para ficar público: licença
   MIT, histórico com e-mail noreply; a visibilidade quem muda é o usuário).
 - **Vulkan (branch `DW4R-1`):** `src/hooks/nv2a_vk_backend.c` passa nos mesmos frames de
@@ -58,6 +58,10 @@ caminho para as três plataformas (macOS via MoltenVK).
 - **Áudio repetindo (relato na v0.5.0, só Linux):** corrigido na v0.5.1 (`DW4R-7`; evento de
   vblank perdido na camada POSIX do toolkit, `PORT_NOTES.md` §4.20); medido sem janela e
   confirmado pelo usuário jogando com o AppImage. `DW4_CRI_TRACE=1` diagnostica.
+- **Atualização no Windows (relato na v0.5.0 → v0.5.1, Windows 11 real):** falhou por caminho acima
+  de 260 caracteres na pasta de preparo; corrigido na `DW4R-8` (pacote sem os arquivos longos +
+  caminhos `\\?\` no `updater.py`) junto com o ícone da janela no Windows, na **v0.5.2**. O ícone
+  foi visto pelo usuário no Windows 11; **a atualização v0.5.1 → v0.5.2 só rodou no Wine.** `package_win.sh` recusa caminho acima de 125 caracteres.
 - **Aberto:** fechar pela janela caiu na saída dentro do gamescope (`PORT_NOTES.md` §8); crash intermitente ao pular o vídeo de abertura com START (2 em 16 sem janela;
   assinatura no `STATUS.md`); texgen não implementado; o chão que escurece por alguns quadros;
   HUD em widescreen só conferido com 1 jogador.

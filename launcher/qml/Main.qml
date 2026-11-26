@@ -443,7 +443,8 @@ ApplicationWindow {
                         Btn { visible: app.updateState === "available" && app.updateSelf; primary: true
                               text: t.upd_install; enabled: !app.running; implicitWidth: 190
                               onClicked: app.installUpdate() }
-                        Btn { visible: app.updateState === "available" && !app.updateSelf; primary: true
+                        Btn { visible: (app.updateState === "available" && !app.updateSelf) || app.updateState === "error"
+                              primary: true
                               text: t.upd_page; implicitWidth: 270; onClicked: app.openUpdatePage() }
                         Btn { visible: app.updateState === "available" && app.updateSelf
                               text: t.upd_notes; implicitWidth: 190; onClicked: app.openUpdatePage() }

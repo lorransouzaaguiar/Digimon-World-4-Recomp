@@ -82,6 +82,7 @@ echo "$VERSION" > "$BUILD/VERSION"
     --distpath "$WORK/dist" --workpath "$WORK/work" --specpath "$WORK" \
     --paths "$ROOT/launcher" --hidden-import xiso --hidden-import updater \
     --add-data "$ROOT/launcher/qml:qml" --add-data "$BUILD/VERSION:." \
+    --add-data "$ROOT/packaging/dw4-recomp.png:." \
     "$ROOT/launcher/dw4_launcher.py"
 cp -r "$WORK/dist/dw4-launcher" "$APPDIR/launcher"
 
