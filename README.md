@@ -2,6 +2,8 @@
 
 **English** · [Português (Brasil)](README.pt-BR.md)
 
+[![Listed on PlayPorted](https://playported.com/badge.svg)](https://playported.com/ports/2606-digimon-world-4/)
+
 Experimental **static recompilation of Digimon World 4 (original Xbox, 2005)** into a native
 x86-64 program, built on [xboxrecomp](https://github.com/sp00nznet/xboxrecomp).
 The game's own code is translated to C once and compiled natively; the xboxrecomp runtime and this
@@ -16,17 +18,21 @@ project's code replace the Xbox kernel, GPU, audio and input. No emulator.
 > [releases page](https://github.com/lorransouzaaguiar/Digimon-World-4-Recomp/releases). The macOS
 > port has not been started; it is planned.
 >
-> **Only the beginning of the game has been tested:** Terminal Area (the lobby), Central Area,
-> Death Valley and Humid Cave. Everything after that — later areas, bosses, the ending — has never
-> been run.
+> **Playable and smooth on both systems**, at the same level of performance: excellent on the
+> author's computer, which is **the only one it has been tested on** (other graphics cards and
+> slower machines are untested). So far it has been played through the first areas: Terminal Area
+> (the lobby), Central Area, Death Valley and Humid Cave. Nothing known stops the game from being
+> finished, but **it has not been played to the end yet**: later areas, bosses and the ending are
+> untested.
 
 ![Title screen](docs/title_screen.png)
 
 ## Status
 
-Playable from boot through the first areas — Terminal Area, Central Area, Death Valley and Humid
-Cave — on the one machine it has been tested on (see
-[Test machine and results](#test-machine-and-results)). Early and experimental: expect bugs.
+Playable and smooth on Linux and Windows, from boot through the first areas — Terminal Area,
+Central Area, Death Valley and Humid Cave — on the one machine it has been tested on (see
+[Test machine and results](#test-machine-and-results)). The rest of the game is expected to work
+but has not been played yet: expect bugs there.
 
 | Milestone | |
 |---|---|
@@ -37,15 +43,16 @@ Cave — on the one machine it has been tested on (see
 | OpenGL 3.3 renderer with texture cache: 60 fps in the lobby (CPU renderer ~3 fps, kept as the reference) | ✅ |
 | Vulkan renderer, the default: presents straight from the graphics card (swapchain), 4K at 60 fps; OpenGL stays selectable in the launcher (Graphics → Graphics API) and draws the same picture | ✅ |
 | Low processor use: about a third of one core in the lobby (it was about two cores) | ✅ |
-| Controller (XInput-style pads) and keyboard | ✅ |
+| Controller (XInput-style pads) and keyboard; the keyboard's keys can be changed in the launcher | ✅ |
 | Terminal Area (lobby), tutorial, Central Area, Death Valley and Humid Cave playable | ✅ |
-| Every area after those, bosses, the rest of the game | ⬜ never run |
-| Multiplayer (2–4 players) | ⬜ not tested yet |
+| Every area after those, bosses, the ending | ⬜ not played yet; nothing known blocks it |
+| Multiplayer (2–4 players): the game sees four controller ports since v0.5.0 | ⬜ never tried with more than one controller |
 | Internal resolution up to 4K and widescreen (16:9, 21:9): wider scenery, player panel and minimap in the screen corners, dialogue box edge to edge, menus stay 4:3 | ✅ played in the first stages |
 | Launcher styled after the game's menus, the same on Linux and Windows; frame-rate limit (30 by default, the console's speed; 60 is smoother but the game runs twice as fast) | ✅ |
-| Key remapping | ⬜ not implemented |
+| Shortcut that quits the game, FPS/CPU/GPU overlay, choice of display (all set in the launcher, since v0.5.0) | ✅ |
+| Updates from the launcher (AppImage and Windows `.zip`, since v0.5.0) | ✅ done on Windows 11 (v0.5.1 to v0.5.2); the AppImage's own update has only been run against a test server |
 | Linux (AppImage and `.tar.gz`) | ✅ where the port is developed and tested the most |
-| Windows 10/11 (`.zip`, since v0.4.0; with the launcher since v0.4.1) | ✅ Vulkan and OpenGL, no DirectX; the game was played on Windows 11; the launcher has only been tested under Wine |
+| Windows 10/11 (`.zip`, since v0.4.0; with the launcher since v0.4.1) | ✅ Vulkan and OpenGL, no DirectX; played on Windows 11, as smooth as on Linux; the automated checks run under Wine |
 | macOS | ⬜ planned, not started |
 | Steam Deck | ⬜ not tested |
 
@@ -60,7 +67,7 @@ Everything in this README was tested on **one** computer. Nothing else has been 
 | Graphics card | NVIDIA GeForce RTX 5070, 12 GB (driver 620.73.04) |
 | Processor | AMD Ryzen 7 5700X (8 cores / 16 threads) |
 | Memory | 32 GB |
-| System | CachyOS Linux (Arch-based), kernel 7.3; Windows 11 on the same computer (dual boot) |
+| System | CachyOS Linux (Arch-based), kernel 7.3, Wayland session, two displays; Windows 11 on the same computer (dual boot) |
 
 All the numbers below are from the Linux build. What was tested of the Windows build is in
 [its own section](#windows-build-what-was-tested).
@@ -94,24 +101,34 @@ been tried on one.
 Automated checks (no window, scripted input): the run from boot to the lobby matches the reference
 frames on both renderers; the same run passes with a window and the Vulkan swapchain inside a
 headless compositor; plugging a virtual controller in and out 400 times while the game reads it
-passes.
+passes. The quit shortcut and the overlay have scripted runs of their own, and the launcher's
+updater is tested against a local server standing in for GitHub.
+
+Audio: streamed music and voices used to repeat a third of a second now and then on Linux (the
+game's audio threads were missing display refreshes). Fixed in v0.5.1: 4 of 5 scripted runs had
+repeats before, 0 of 5 after, and it was confirmed by ear with the AppImage.
 
 ### Windows build: what was tested
 
 The Windows build is cross-compiled on Linux (MinGW-w64) and is the same code: same renderers,
 same shaders, same widescreen rules.
 
-- **On Windows 11** (same computer): the game was played with v0.4.0, started without the
-  launcher. It worked; no frame-rate numbers were recorded.
+- **On Windows 11** (same computer): the game is played there and runs smoothly, at the same
+  level of performance as the Linux build, as reported by the author playing both; no frame-rate
+  numbers were recorded on Windows.
 - **Under Wine 11.22 on Linux:** automated runs from boot to the lobby match the same reference
   frames as the Linux build, on Vulkan and on OpenGL. Played with a window on Vulkan (lobby,
   Central Area, unlocking Death Valley, the tutorial; up to 1440p 16:9) and briefly on OpenGL.
   Under Wine it ran a little below the Linux build in the heaviest places (about 55 fps in the
   busiest part of Central Area at 1440p, where Linux holds 60).
-- **The launcher on Windows** (v0.4.1) has only been run under Wine: it opens, its five screens
-  draw correctly and the game started from it reaches the lobby with the reference frames on both
-  renderers. It has not been tried on real Windows yet; the file pickers, reading an `.iso` and
-  the report have not been exercised at all.
+- **The launcher under Wine:** it opens, its screens draw correctly and the game started from it
+  reaches the lobby with the reference frames on both renderers. The display choice was played
+  there; the quit shortcut and the overlay passed scripted runs.
+- **The launcher on Windows 11** (v0.5.0 to v0.5.2): it opens, finds the graphics card, accepts a
+  game folder and shows the project's icon. Its updater found v0.5.1 from v0.5.0, downloaded and
+  verified it, and then failed on Windows' 260-character path limit; v0.5.2 repairs that, and
+  **the update from v0.5.1 to v0.5.2 was then done there and worked**. Reading an `.iso` and the
+  report have not been exercised there.
 
 ### Known issues
 
@@ -126,7 +143,12 @@ same shaders, same widescreen rules.
 - In widescreen the loading screen is stretched to the full width, and the player panel has only
   been checked with one player.
 - Windows: if the game hangs, the log does not yet record where each thread stopped (it does on
-  Linux); the keyboard as a controller has not been tested there.
+  Linux); the keyboard as a controller has not been tested there. If an update from the launcher fails,
+  download the `.zip` as usual: saves are kept.
+- More than one controller has never been tried, and it is unknown whether the game minds the
+  empty controller ports (they can be reduced under Controls → Controller ports).
+- Closing the game with the window's close button crashed on exit in one automated run inside a
+  headless compositor. Nothing is lost if it happens; the quit shortcut does not use that path.
 - Tested on a single machine (above). Other GPUs, drivers and distributions are untested; AMD and
   Intel graphics have never been tried.
 
@@ -207,6 +229,26 @@ Python), which `scripts/setup.sh` installs into `.venv`; `./run.sh` starts the g
 The layout follows the launcher of [hayatog/iss_pc](https://github.com/hayatog/iss_pc); the code is
 this project's own.
 
+### Updates
+
+Since v0.5.0 the launcher looks for a newer version in the GitHub releases: when it opens (at most
+one request every 6 hours; it can be turned off) or with the **Check for updates** button on the
+Play screen.
+
+- **AppImage** (in a folder you can write to) and the **Windows `.zip`**: **Update now** downloads
+  the package, checks the size and SHA-256 published in the release, and reopens the launcher on
+  the new version. Nothing is installed unless you ask; saves and options stay where they are.
+- **Linux `.tar.gz` and source checkouts**: the launcher only tells you and opens the release page.
+- **v0.4.1 and earlier** do not have this: download the new package once from the releases page.
+
+How far it has been tested: against a local server standing in for GitHub; under Wine; and on real
+Windows 11, where the first update (v0.5.0 to v0.5.1) failed while unpacking, on the 260-character
+path limit, and the next one (v0.5.1 to v0.5.2, with the long file names gone from the package)
+worked. The AppImage updating itself has only been run against the test server, not with a real
+release. If an update fails, nothing is installed and the launcher offers the download page.
+The checksum comes from the same release as the package: it guards against a corrupted download,
+not a tampered release.
+
 ## Game files
 
 You need your own Digimon World 4 Xbox disc, **NTSC-U** (title ID `42410002`). Other regions are
@@ -266,31 +308,17 @@ scripts/soak.py --wine --gamescope --opengl --golden   # OpenGL (needs a display
 ### Release packages
 
 ```bash
-scripts/package_release.sh v0.4.1     # Linux: .AppImage and .tar.gz
-scripts/package_win.sh v0.4.1         # Windows: .zip (run it after the Linux one)
+scripts/package_release.sh vX.Y.Z     # Linux: .AppImage and .tar.gz
+scripts/package_win.sh vX.Y.Z         # Windows: .zip (run it after the Linux one)
 ```
 
 Both write to `dist/`, with one `SHA256SUMS` file for the three downloads, and remove the packages
 of other versions from there. They download their packaging tools into `tools/` (appimagetool and
 a portable Python to freeze the Linux launcher; the official embeddable Python and Qt for the
 Windows one) and refuse to finish if a package contains a game file, a path from the build machine,
-a library that needs a glibc newer than 2.38 (Linux) or an unexpected DLL import (Windows).
+a library that needs a glibc newer than 2.38 (Linux), an unexpected DLL import or a path too long
+for Windows' 260-character limit (Windows).
 The packaged executables contain the recompiled game code; disc data is never included.
-
-### Updates
-
-After v0.4.1, the launcher looks for the latest version in the GitHub releases: when it opens (at most one
-request every 6 hours; it can be turned off) or with the **Check for updates** button on the Play
-screen.
-
-- **AppImage** (in a folder you can write to) and the **Windows `.zip`**: **Update now** downloads
-  the package, checks the size and SHA-256 published in the release, and reopens the launcher on
-  the new version. Nothing is installed unless you ask; saves and options stay where they are.
-- **Linux `.tar.gz` and source checkouts**: the launcher only tells you and opens the release page.
-
-v0.4.1 and earlier do not have this: to leave them, download the new package once from the
-releases page. Tested against a local server standing in for GitHub and, on Windows, only under
-Wine; it has not been used with a real release yet.
 
 ## Controls
 
@@ -381,6 +409,8 @@ presentation mode on Vulkan.
   (nothing appears on the display), which exercises the Vulkan swapchain.
 - CPU profile without `perf`: `scripts/soak.py -e DW4_PROF=/tmp/p.txt -e DW4_PROF_FROM=3900`, then
   `scripts/prof_report.py /tmp/p.txt`.
+- `scripts/test_updater.py` tests the launcher's updater against a local server (`--online` also
+  asks GitHub); `DW4_CRI_TRACE=1` logs when one of the game's audio threads falls behind.
 - `scripts/soak.py --wine` runs the Windows build under Wine the same way, and `--wine --gamescope
   --opengl` covers its OpenGL renderer.
 - The renderers (`src/hooks/nv2a_vk_backend.c`, `nv2a_gl_backend.c`) hot-reload on Linux: run

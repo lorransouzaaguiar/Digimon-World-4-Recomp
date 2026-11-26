@@ -544,11 +544,23 @@ jogar e para desenvolver, correções de runtime candidatas a portar e a discuss
   launcher não abre terminal. A janela do OpenGL usa o renderizador padrão da SDL, que
   no Windows é Direct3D por dentro da SDL — o nosso código não usa DirectX.
 
+## Relato do usuário sobre o estado geral (2026-11-26)
+
+"O jogo no Windows e no Linux está jogável, estão no mesmo patamar de desempenho. Acredito que
+como está hoje o jogo já dá para zerar, só não foi testado até o final ainda. Mas está fluido."
+E depois: "o jogo já tem o desempenho excelente na minha máquina, porém só foi testado nela."
+Ou seja: Windows 11 real jogado e fluido (sem números registrados); uma máquina só (RTX 5070,
+Ryzen 7 5700X); o alcance testado continua sendo as primeiras áreas; "dá para zerar" é
+expectativa dele, não teste. Os READMEs passaram a dizer isso no lugar de "só o começo foi
+testado / nunca foi executado".
+
 ## Atualização no Windows falhou por caminho longo; ícone genérico — corrigido na v0.5.2 (2026-11-25, `DW4R-8`)
 
 **Release v0.5.2:** o usuário abriu o `.zip` da v0.5.2 em Windows 11 real e confirmou o ícone
-("funcionou o ícone"). A atualização v0.5.1 → v0.5.2 pelo launcher **ainda não foi feita em
-Windows real**: só no Wine.
+("funcionou o ícone"). A atualização v0.5.1 → v0.5.2 pelo launcher **foi feita por ele em
+Windows 11 real em 2026-11-25 e funcionou** (informado em 2026-11-26): é a primeira atualização
+de verdade concluída. O AppImage se atualizando sozinho continua só testado contra o servidor
+local.
 
 Primeira atualização de verdade (v0.5.0 → v0.5.1), feita pelo usuário em **Windows 11 real**:
 
@@ -567,8 +579,7 @@ Primeira atualização de verdade (v0.5.0 → v0.5.1), feita pelo usuário em **
   `dw4_recomp.exe` ganhou o ícone como recurso (a SDL o usa na janela do jogo).
 - **Conferido no Wine:** a v0.5.1 publicada (atualizador antigo) preparando e instalando o pacote
   novo; o atualizador novo extraindo e copiando o pacote antigo com caminhos de 398 caracteres;
-  `--wine --golden`. **Não conferido:** a atualização em Windows real (o Wine não impõe o limite
-  de 260 do mesmo jeito).
+  `--wine --golden`. Depois o usuário confirmou a atualização em Windows real (acima).
 - Do lado bom: no Windows real a consulta, o download e a conferência do hash funcionaram, e a
   v0.5.1 instalada à mão abriu normalmente.
 
