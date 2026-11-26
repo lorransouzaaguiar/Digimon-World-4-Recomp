@@ -409,7 +409,7 @@ ApplicationWindow {
                 Card {
                     Info { k: t.gpu; v: app.gpu }
                     Info { k: t.version; v: app.version }
-                    Info { k: t.renderer; v: app.opt("renderer") === "vulkan" ? t.r_vk : t.r_gl; property var dep: app.gameDir }
+                    Info { k: t.renderer; v: (app.rev, app.opt("renderer")) === "vulkan" ? t.r_vk : t.r_gl }
                 }
                 Card {
                     RowLayout {
