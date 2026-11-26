@@ -50,7 +50,7 @@ mas ainda não foi jogado: espere bugs por lá.
 | Atalho que fecha o jogo, mostrador de FPS/CPU/GPU, escolha do monitor (tudo configurado no launcher, desde a v0.5.0) | ✅ |
 | Atualização pelo launcher (AppImage e `.zip` de Windows, desde a v0.5.0) | ✅ feita no Windows 11 (v0.5.1 para v0.5.2); a atualização do próprio AppImage só rodou contra um servidor de teste |
 | Linux (AppImage e `.tar.gz`) | ✅ onde o port é desenvolvido e mais testado |
-| Windows 10/11 (`.zip`, desde a v0.4.0; com o launcher desde a v0.4.1) | ✅ Vulkan e OpenGL, sem DirectX; jogado no Windows 11, tão fluido quanto no Linux; as verificações automáticas rodam no Wine |
+| Windows 10/11 (`.zip`, desde a v0.4.0; com o launcher desde a v0.4.1) | ✅ Vulkan e OpenGL, sem DirectX; jogado no Windows 11: 60 fps em 4K com Vulkan, como no Linux; com OpenGL cai para cerca de 40 fps nas áreas pesadas; as verificações automáticas rodam no Wine |
 | macOS | ⬜ planejado, não iniciado |
 | Steam Deck | ⬜ não testado |
 
@@ -67,8 +67,8 @@ Tudo o que está neste README foi testado em **um** computador. Nenhum outro foi
 | Memória | 32 GB |
 | Sistema | CachyOS Linux (base Arch), kernel 7.3, sessão Wayland, dois monitores; Windows 11 no mesmo computador (dual boot) |
 
-Todos os números abaixo são do build de Linux. O que foi testado do build de Windows está na
-[seção dele](#build-de-windows-o-que-foi-testado).
+As tabelas abaixo são do build de Linux. O build de Windows chega aos mesmos 60 fps em 4K com
+Vulkan; o que foi testado dele está na [seção dele](#build-de-windows-o-que-foi-testado).
 
 Quadros por segundo, com o limitador desligado (o jogo então roda a até 60 fps, o dobro da
 velocidade do console), em Vulkan:
@@ -112,9 +112,11 @@ roteiro tinham repetição antes, 0 de 5 depois, e foi confirmado de ouvido com 
 O build de Windows é compilado no Linux por compilação cruzada (MinGW-w64) e é o mesmo código:
 mesmos renderizadores, mesmos shaders, mesmas regras de widescreen.
 
-- **No Windows 11** (mesmo computador): o jogo é jogado lá e roda fluido, no mesmo patamar de
-  desempenho do build de Linux, segundo o autor jogando nos dois; nenhum número de quadros por
-  segundo foi registrado no Windows.
+- **No Windows 11** (mesmo computador, Windows de verdade, não o Wine): o jogo é jogado lá. Com
+  **Vulkan segura 60 fps em 4K** (3840×2160), igual ao build de Linux. Com **OpenGL houve quedas
+  para cerca de 40 fps nas áreas pesadas**; o OpenGL traz cada quadro de volta pela memória, e é
+  por isso que ele também é o mais lento no Linux. Use o Vulkan (o padrão), a menos que ele dê
+  problema. São leituras do autor jogando, não medições registradas em log.
 - **No Wine 11.22, no Linux:** rodadas automáticas do boot ao lobby batem com os mesmos quadros de
   referência do build de Linux, em Vulkan e em OpenGL. Jogado com janela em Vulkan (lobby, Central
   Area, liberação do Death Valley, tutorial; até 1440p 16:9) e, por pouco tempo, em OpenGL. No Wine
