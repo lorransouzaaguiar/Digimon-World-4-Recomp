@@ -18,7 +18,7 @@ caminho para as três plataformas (macOS via MoltenVK).
   desempenho (excelente, mas só na máquina dele; no Windows real, 60 fps em 4K com Vulkan e
   quedas para ~40 fps com OpenGL nas áreas pesadas), e que acredita que já dá para zerar
   (expectativa dele; ninguém jogou até o fim).
-- **Publicado:** release v1.0.1 (2026-11-26, névoa de distância; antes v1.0.0, do mesmo dia, número escolhido pelo usuário por não haver mais bug conhecido de
+- **Publicado:** release v1.1.0 (2026-11-26, importar save de Xbox pelo launcher; número pedido pelo usuário por ser feature nova; antes v1.0.1, do mesmo dia, névoa de distância; antes v1.0.0, do mesmo dia, número escolhido pelo usuário por não haver mais bug conhecido de
   imagem e som, mesmo sem o jogo ter sido zerado; antes v0.5.2, de 2026-11-25; AppImage + tar.gz + `.zip` de Windows com launcher;
   todo release leva Linux e Windows, e o Windows não é mais apresentado como "experimental" — pedido
   do usuário; antes v0.5.1, v0.5.0, v0.4.1, v0.4.0, v0.3.2, v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
@@ -88,7 +88,7 @@ caminho para as três plataformas (macOS via MoltenVK).
   é um pouco mais escuro e ele decidiu deixar assim; depois jogou várias outras áreas e relatou a
   névoa normal em todas (2026-11-26). Não visto: Vulkan e Windows nessa arena (o usuário pediu para
   não pôr isso no README).
-- **Saves de Xbox (GameFAQs etc.; `DW4R-14`, ainda sem release):** o jogo os recusa ("corrupted")
+- **Saves de Xbox (GameFAQs etc.; `DW4R-14`, na v1.1.0):** o jogo os recusa ("corrupted")
   porque o port assina com chave zerada: `SaveData.dat` = 2 blocos de 32772 bytes + HMAC-SHA1 de 20
   bytes cada (`PORT_NOTES.md` §8). O "Importar .zip…" do launcher aceita um `.zip` com
   `UDATA/42410002/` e reassina (`launcher/xsave.py`, `scripts/test_xsave.py`). Testado sem janela,
