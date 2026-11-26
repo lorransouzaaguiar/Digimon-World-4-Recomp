@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "recomp_types.h"
 #include "xbox_memory_layout.h"
@@ -219,6 +220,32 @@ void sub_000BC050_enter(void)
         return;
     for (uint32_t i = 0; i < 8; i++)
         MEMF(g_ecx + i * 16) *= k;
+}
+
+/* 0x0024D660: espera pelo vblank das threads CRI (vsync 0x0024D910 e servidor
+ * 0x0024D990, que decodificam e entregam o som em fluxo -- musica e vozes
+ * ADX). DW4_CRI_TRACE=1 registra quando uma delas fica mais de 60 ms sem
+ * voltar a esta espera: e quanto tempo o som em fluxo ficou sem ser
+ * alimentado (o buffer dele tem 341 ms; passando disso o trecho repete). */
+void sub_0024D660_enter(void)
+{
+    static int on = -1;
+    static __thread double last;
+    struct timespec ts;
+    double now;
+
+    if (on < 0) {
+        const char *e = getenv("DW4_CRI_TRACE");
+        on = e && *e && *e != '0';
+    }
+    if (!on)
+        return;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    now = (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1e6;
+    if (last != 0.0 && now - last > 60.0)
+        fprintf(stderr, "[CRI] espera de vblank: %.0f ms desde a anterior (ret guest 0x%08X, flip %llu)\n",
+                now - last, MEM32(g_esp), (unsigned long long)dw4_frame_count());
+    last = now;
 }
 
 /* ── Funcoes embrulhadas ──────────────────────────────────────────────────── *
