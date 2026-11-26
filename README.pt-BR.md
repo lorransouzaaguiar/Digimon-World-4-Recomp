@@ -2,8 +2,6 @@
 
 [English](README.md) · **Português (Brasil)**
 
-[![Listed on PlayPorted](https://playported.com/badge.svg)](https://playported.com/ports/2606-digimon-world-4/)
-
 **Recompilação estática experimental de Digimon World 4 (Xbox original, 2005)** em um programa
 nativo x86-64, feito com o [xboxrecomp](https://github.com/sp00nznet/xboxrecomp).
 O código do próprio jogo é traduzido para C uma vez e compilado nativamente; o runtime do
