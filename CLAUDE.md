@@ -15,7 +15,8 @@ caminho para as três plataformas (macOS via MoltenVK).
 - **Jogável:** boot, vídeos, menus, criação do Digimon, save/load, lobby, tutorial e primeira fase,
   a 60 fps (CachyOS, NVIDIA). Fases seguintes, chefes e multijogador **não foram testados**.
   Em 2026-11-26 o usuário relatou Linux e Windows 11 jogáveis, fluidos e no mesmo patamar de
-  desempenho (excelente, mas só na máquina dele), e que acredita que já dá para zerar
+  desempenho (excelente, mas só na máquina dele; no Windows real, 60 fps em 4K com Vulkan e
+  quedas para ~40 fps com OpenGL nas áreas pesadas), e que acredita que já dá para zerar
   (expectativa dele; ninguém jogou até o fim).
 - **Publicado:** release v0.5.2 (2026-11-25, o quarto do dia; AppImage + tar.gz + `.zip` de Windows com launcher;
   todo release leva Linux e Windows, e o Windows não é mais apresentado como "experimental" — pedido

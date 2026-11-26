@@ -549,7 +549,10 @@ jogar e para desenvolver, correções de runtime candidatas a portar e a discuss
 "O jogo no Windows e no Linux está jogável, estão no mesmo patamar de desempenho. Acredito que
 como está hoje o jogo já dá para zerar, só não foi testado até o final ainda. Mas está fluido."
 E depois: "o jogo já tem o desempenho excelente na minha máquina, porém só foi testado nela."
-Ou seja: Windows 11 real jogado e fluido (sem números registrados); uma máquina só (RTX 5070,
+Mais tarde no mesmo dia, sobre o **Windows 11 real**: "roda a 60 fps em 4K também com Vulkan;
+em OpenGL vi quedas de framerate em áreas pesadas para 40 fps". (Leituras dele jogando, sem log;
+a resolução do teste com OpenGL não foi dita.)
+Ou seja: Windows 11 real jogado e fluido; uma máquina só (RTX 5070,
 Ryzen 7 5700X); o alcance testado continua sendo as primeiras áreas; "dá para zerar" é
 expectativa dele, não teste. Os READMEs passaram a dizer isso no lugar de "só o começo foi
 testado / nunca foi executado".

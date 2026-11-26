@@ -50,7 +50,7 @@ but has not been played yet: expect bugs there.
 | Shortcut that quits the game, FPS/CPU/GPU overlay, choice of display (all set in the launcher, since v0.5.0) | ✅ |
 | Updates from the launcher (AppImage and Windows `.zip`, since v0.5.0) | ✅ done on Windows 11 (v0.5.1 to v0.5.2); the AppImage's own update has only been run against a test server |
 | Linux (AppImage and `.tar.gz`) | ✅ where the port is developed and tested the most |
-| Windows 10/11 (`.zip`, since v0.4.0; with the launcher since v0.4.1) | ✅ Vulkan and OpenGL, no DirectX; played on Windows 11, as smooth as on Linux; the automated checks run under Wine |
+| Windows 10/11 (`.zip`, since v0.4.0; with the launcher since v0.4.1) | ✅ Vulkan and OpenGL, no DirectX; played on Windows 11: 60 fps at 4K on Vulkan, as on Linux; OpenGL drops to about 40 fps in heavy areas; the automated checks run under Wine |
 | macOS | ⬜ planned, not started |
 | Steam Deck | ⬜ not tested |
 
@@ -67,8 +67,8 @@ Everything in this README was tested on **one** computer. Nothing else has been 
 | Memory | 32 GB |
 | System | CachyOS Linux (Arch-based), kernel 7.3, Wayland session, two displays; Windows 11 on the same computer (dual boot) |
 
-All the numbers below are from the Linux build. What was tested of the Windows build is in
-[its own section](#windows-build-what-was-tested).
+The tables below are from the Linux build. The Windows build reaches the same 60 fps at 4K on
+Vulkan; what was tested of it is in [its own section](#windows-build-what-was-tested).
 
 Frame rate, with the limiter off (the game then runs at up to 60 fps, twice the console's speed),
 on Vulkan:
@@ -111,9 +111,11 @@ repeats before, 0 of 5 after, and it was confirmed by ear with the AppImage.
 The Windows build is cross-compiled on Linux (MinGW-w64) and is the same code: same renderers,
 same shaders, same widescreen rules.
 
-- **On Windows 11** (same computer): the game is played there and runs smoothly, at the same
-  level of performance as the Linux build, as reported by the author playing both; no frame-rate
-  numbers were recorded on Windows.
+- **On Windows 11** (same computer, real Windows, not Wine): the game is played there. With
+  **Vulkan it holds 60 fps at 4K** (3840×2160), the same as the Linux build. With **OpenGL the
+  frame rate dropped to about 40 fps in the heavy areas**; OpenGL copies every frame back through
+  memory, which is also why it is the slower one on Linux. Use Vulkan (the default) unless it
+  gives you trouble. These are the author's readings while playing, not logged measurements.
 - **Under Wine 11.22 on Linux:** automated runs from boot to the lobby match the same reference
   frames as the Linux build, on Vulkan and on OpenGL. Played with a window on Vulkan (lobby,
   Central Area, unlocking Death Valley, the tutorial; up to 1440p 16:9) and briefly on OpenGL.
