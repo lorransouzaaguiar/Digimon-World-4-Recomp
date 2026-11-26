@@ -222,8 +222,17 @@ em `PORT_NOTES.md` §7.0. Validado sem janela (2 reloads durante o cenário do l
   não calculava a distância de névoa da função fixa, então a névoa preta da arena não agia (patch
   4.22, `PORT_NOTES.md` §7.12). Goldens passam no Vulkan, no OpenGL e no Wine. **O usuário jogou a
   arena no Linux com OpenGL depois da correção:** "melhor que antes", o original ainda é um pouco
-  mais escuro, e ele decidiu deixar assim. Não visto: a arena no Vulkan e no Windows; as outras
-  áreas com a névoa ligada (só o lobby, sem janela).
+  mais escuro, e ele decidiu deixar assim. Depois jogou várias outras áreas e relatou a névoa
+  normal em todas. Não visto: a arena no Vulkan e no Windows.
+
+- **Importar save de Xbox pelo launcher (2026-11-26, `DW4R-14`, ainda sem release):** "Importar
+  .zip…" aceita um `.zip` com `UDATA/42410002/` (console, emulador, site de saves) e assina o
+  `SaveData.dat` de novo com a chave do port; sem isso o jogo diz "This game is corrupted and cannot
+  be used" (`launcher/xsave.py`, `PORT_NOTES.md` §8). Só os arquivos do save são trocados, depois
+  do backup de sempre. `scripts/test_xsave.py` passa (saves sintéticos, `.zip` malformados, fluxo
+  pelo Backend do Qt); com um save real do GameFAQs o resultado é idêntico ao arquivo que carregou
+  no jogo sem janela e com o qual o usuário jogou. Não testado: o botão na tela, o Windows, saves
+  com mais de um Digimon ou de outra região do jogo.
 
 - **Modelos 3D salpicados de preto na seleção de Digimon**: giro das tiras de triângulos + sentido
   de face no renderizador (`PORT_NOTES.md` §7.4). Validado sem janela e confirmado pelo usuário.
@@ -379,6 +388,10 @@ Não conferido no pacote: janela real, som, controle, leitura de imagem de disco
 
 Terminal Area (lobby), Central Area, Death Valley e Humid Cave — a parte inicial do jogo. Nada
 depois disso foi executado. É o que os READMEs passam a dizer.
+
+**2026-11-26:** com um save importado (nível 956) o usuário jogou várias áreas mais adiante e a
+arena de um chefe, no Linux, e segue avançando pelos chefes para zerar; os nomes das áreas não
+foram informados.
 
 ## Desempenho: CPU, núcleos e GPU (2026-11-24, branch `DW4R-2`)
 

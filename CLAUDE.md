@@ -85,11 +85,17 @@ caminho para as três plataformas (macOS via MoltenVK).
   de névoa da função fixa (`ffp_vertex()`, `PORT_NOTES.md` §4.22 e §7.12; `RECOMP_NO_FFP_FOG=1`
   desliga). Achado na arena de um chefe (fundo em arco-íris; no Xbox é quase preto), com um save do
   GameFAQs reassinado à mão. O usuário jogou a arena no Linux com OpenGL: melhorou, o original ainda
-  é um pouco mais escuro e ele decidiu deixar assim. Não visto: Vulkan e Windows nessa arena, e as
-  outras áreas com a névoa (só o lobby sem janela).
-- **Saves de Xbox (GameFAQs etc.):** o jogo os recusa ("corrupted") porque o port assina com chave
-  zerada: `SaveData.dat` = 2 blocos de 32772 bytes + HMAC-SHA1 de 20 bytes cada. O "Importar .zip"
-  do launcher ainda não reassina nem aceita o formato `UDATA/`; foi feito à mão uma vez.
+  é um pouco mais escuro e ele decidiu deixar assim; depois jogou várias outras áreas e relatou a
+  névoa normal em todas (2026-11-26). Não visto: Vulkan e Windows nessa arena (o usuário pediu para
+  não pôr isso no README).
+- **Saves de Xbox (GameFAQs etc.; `DW4R-14`, ainda sem release):** o jogo os recusa ("corrupted")
+  porque o port assina com chave zerada: `SaveData.dat` = 2 blocos de 32772 bytes + HMAC-SHA1 de 20
+  bytes cada (`PORT_NOTES.md` §8). O "Importar .zip…" do launcher aceita um `.zip` com
+  `UDATA/42410002/` e reassina (`launcher/xsave.py`, `scripts/test_xsave.py`). Testado sem janela,
+  com saves sintéticos e com um save real do GameFAQs (o mesmo arquivo carregou no jogo e o usuário
+  jogou com ele); o botão na tela e o Windows não foram testados.
+- **Progresso do usuário (2026-11-26):** com esse save (nível 956) ele está avançando pelos chefes
+  para zerar; várias áreas além da Humid Cave jogadas no Linux sem relato de problema.
 - **Memória do guest:** `RECOMP_HEAP_RECLAIM=1` é default desde a v0.3.1 (sem ela a memória
   contígua enche e a tela fica branca após alguns minutos); `DW4_NO_HEAP_RECLAIM=1` desliga.
 - **Licença: MIT** (`LICENSE`, escolhida em 2026-11-24). Testado só no começo do jogo: Terminal
@@ -151,7 +157,8 @@ src/hooks/                    todo o código próprio do runtime
   prof.c                      amostrador de CPU (DW4_PROF; relatorio: scripts/prof_report.py)
 src/recompiled/               C GERADO do default.xbe (ignorado; scripts/regen.sh)
 launcher/                     launcher Qt Quick (Linux e Windows): dw4_launcher.py, qml/Main.qml, xiso.py,
-                              updater.py (atualizacao pelos releases do GitHub; sem Qt)
+                              updater.py (atualizacao pelos releases do GitHub; sem Qt),
+                              xsave.py (save de Xbox -> port: reassina o SaveData.dat; sem Qt)
 packaging/                    AppRun, .desktop, ícone, README do pacote; windows/ (entrada .exe e README)
 scripts/                      setup, regen, soak, triage, golden, f9_diff, package_release...
 tests/scenarios/              roteiros de entrada (sintaxe em src/hooks/input_script.c)
@@ -179,6 +186,7 @@ scripts/triage.py <log>                          # resumo e veredito de um log
 scripts/regen.sh                                 # regenera src/recompiled/ (após mudar sementes)
 scripts/test_pad.sh                              # plugar/desplugar controle virtual (sem jogo, ~5 s)
 scripts/test_updater.py                          # atualizacao do launcher contra um servidor local (~2 s); --online consulta o GitHub
+scripts/test_xsave.py                            # importacao de saves de Xbox pelo launcher, com saves sinteticos (~2 s)
 scripts/soak.py --scenario tests/scenarios/osd.txt --timeout 60            # mostrador de desempenho (capturas osd_*.bmp)
 scripts/soak.py --scenario tests/scenarios/quit_teclado.txt --timeout 60   # atalho de fechar: da INCOMPLETO de proposito; vale o [QUIT] no log
 ./launcher.sh --selftest                         # launcher fora da tela
@@ -235,7 +243,7 @@ scripts/package_win.sh vX.Y.Z                    # .zip de Windows em dist/ (+ .
 
 ## Ao terminar uma tarefa
 
-- Rode `scripts/soak.py --golden` (e `--opengl --golden` se mexeu em renderização ou em `osd.c`; `scripts/test_updater.py` se mexeu em `launcher/updater.py`; e
+- Rode `scripts/soak.py --golden` (e `--opengl --golden` se mexeu em renderização ou em `osd.c`; `scripts/test_updater.py` se mexeu em `launcher/updater.py`; `scripts/test_xsave.py` se mexeu em `launcher/xsave.py` ou na importação de saves; e
   `scripts/build_win.sh` + `scripts/soak.py --wine --golden` se mexeu em `host_os*`, `main.c`,
   `gl_host.c`, CMake ou toolkit); se a imagem mudou de propósito, confira e atualize as
   referências (`scripts/golden.py <shots> --update`).

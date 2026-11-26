@@ -115,8 +115,8 @@ were updated.
 Distance fog (v1.0.1): the game keeps a fog on in its 3D scenes and the port did not apply it;
 in one boss arena, where it is black, the backdrop came out as a bright rainbow instead of nearly
 black. Fixed in both renderers (the fix is shared by them); played on Linux with OpenGL in that
-arena, where the backdrop is still somewhat brighter than on the console. The other areas with
-the fog on were only seen in the lobby.
+arena, where the backdrop is still somewhat brighter than on the console, and in several other
+areas, where the fog looks normal.
 
 Skipping the intro movie (v1.0.0): the game could close when the movie was skipped with START
 (about 1 scripted run in 20), a race between two of the game's own threads that the console's
@@ -226,7 +226,7 @@ checkout:
 | Play | game files: pick a disc image (`.iso`) or a folder; detected graphics card, version, Play button; updates (see below) |
 | Graphics | graphics API (Vulkan or OpenGL); internal resolution (480p to 4K), aspect ratio (4:3, 16:9, 21:9) and frame-rate limit (30 or 60); the display the game opens on, fullscreen and vertical sync; the experimental parallel mode |
 | Controls | keyboard as controller 1 on/off; shortcuts that quit the game and toggle the FPS/CPU/GPU overlay (keyboard and controller); the key table |
-| Saves & data | save folder, list of saves, backup, `.zip` export and import (the current saves are backed up first) |
+| Saves & data | save folder, list of saves, backup, `.zip` export and import (the current saves are backed up first). Import also takes an Xbox save of the game (a `.zip` with the `UDATA/42410002/` folder, from a console, an emulator or a save site) and signs it again for the port |
 | Support | what to try if the game is slow, log folder, a problem report (system, processor, graphics card, options, frame-rate summary) without your home folder's name |
 
 The interface is in Portuguese (Brazil) or English, chosen from the system language; it can be
@@ -420,6 +420,7 @@ presentation mode on Vulkan.
   (nothing appears on the display), which exercises the Vulkan swapchain.
 - CPU profile without `perf`: `scripts/soak.py -e DW4_PROF=/tmp/p.txt -e DW4_PROF_FROM=3900`, then
   `scripts/prof_report.py /tmp/p.txt`.
+- `scripts/test_xsave.py` tests the Xbox save import with synthetic saves.
 - `scripts/test_updater.py` tests the launcher's updater against a local server (`--online` also
   asks GitHub); `DW4_CRI_TRACE=1` logs when one of the game's audio threads falls behind.
 - `scripts/soak.py --wine` runs the Windows build under Wine the same way, and `--wine --gamescope
