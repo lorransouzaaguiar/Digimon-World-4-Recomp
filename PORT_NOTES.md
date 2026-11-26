@@ -1084,6 +1084,10 @@ está no executor do toolkit (cache de vértices pós-transformação, como SSX 
   mostrador nas capturas (os frames de referência só conferem com ele desligado). Visto em
   Vulkan e OpenGL, 480p 4:3, 1080p 16:9 e 720p 21:9, no boot e no lobby, e no `.exe` pelo Wine
   (GPU `--`). Os contadores do Windows (`pdh.dll`) não rodaram em lugar nenhum.
+- **Limite de 260 caracteres do Windows (2026-11-25):** a pasta de preparo da atualização soma
+  ~53 caracteres de `%APPDATA%\dw4-recomp\update\new\` (mais o nome do usuário) + 43 da pasta do
+  pacote + o caminho dentro dele. `package_win.sh` falha acima de 125 neste último; `updater.py`
+  (`_long`) usa o prefixo `\\?\`. Lembrar: quem extrai é o launcher instalado, não o novo.
 - **`scripts/test_updater.py`** (~2 s, sem janela, numa pasta temporária): um servidor HTTP local
   faz as vezes da API do GitHub. `--online` consulta também o release de verdade. O launcher só
   aceita trocar o endereço consultado por `DW4_UPDATE_API=http://127.0.0.1:...`.

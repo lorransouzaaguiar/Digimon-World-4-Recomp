@@ -37,7 +37,7 @@ if "--install-update" in sys.argv[1:]:
 
 from PySide6.QtCore import (Property, QObject, QProcess, QProcessEnvironment, Qt, QTimer, QUrl,
                             Signal, Slot)
-from PySide6.QtGui import QDesktopServices, QGuiApplication
+from PySide6.QtGui import QDesktopServices, QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow  # noqa: F401  (registra o tipo da janela)
 
@@ -1327,8 +1327,20 @@ def main() -> int:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         os.environ.setdefault("QT_QUICK_BACKEND", "software")
     os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Basic")
+    if WIN:
+        # Sem isto a barra de tarefas agrupa a janela com o "pythonw.exe" que a abriu
+        # e mostra o icone dele, nao o do projeto.
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("dw4recomp.launcher")
+        except (OSError, AttributeError):
+            pass
     app = QGuiApplication(sys.argv[:1])
     app.setApplicationName("Digimon World 4 - Recomp")
+    for icon in (HERE / "dw4-recomp.png", ROOT / "packaging" / "dw4-recomp.png"):
+        if icon.is_file():              # icone da janela (no Windows vinha o generico)
+            app.setWindowIcon(QIcon(str(icon)))
+            break
     app.setDesktopFileName("dw4-recomp-launcher")
     backend = Backend()
     if "--screenshot" in args:          # so para a captura; nada disto e gravado

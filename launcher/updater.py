@@ -52,6 +52,18 @@ MAX_ASSET = 1024 * 1024 * 1024           # nenhum pacote passa perto de 1 GB
 WIN = os.name == "nt"
 
 
+def _long(path) -> str:
+    """Caminho que o Windows aceita com mais de 260 caracteres (prefixo \\\\?\\).
+
+    A atualizacao da v0.5.0 para a v0.5.1 parou num arquivo do Qt cujo caminho,
+    dentro da pasta de preparo em %APPDATA%, passava do limite ("No such file or
+    directory" ao criar o arquivo). Fora do Windows devolve o caminho como veio."""
+    p = os.path.abspath(str(path))
+    if not WIN or p.startswith("\\\\?\\"):
+        return p
+    return "\\\\?\\UNC\\" + p[2:] if p.startswith("\\\\") else "\\\\?\\" + p
+
+
 class UpdateError(Exception):
     """`code` escolhe o texto mostrado ao usuario (STR["upd_err_<code>"])."""
 
@@ -302,10 +314,10 @@ def stage_windows(zip_path: Path, stage: Path) -> Path:
                 if os.path.commonpath([base, out]) != base:
                     raise UpdateError("bad", "nome invalido no pacote: " + info.filename)
                 if info.is_dir():
-                    os.makedirs(out, exist_ok=True)
+                    os.makedirs(_long(out), exist_ok=True)
                     continue
-                os.makedirs(os.path.dirname(out), exist_ok=True)
-                with z.open(info) as src, open(out, "wb") as dst:
+                os.makedirs(_long(os.path.dirname(out)), exist_ok=True)
+                with z.open(info) as src, open(_long(out), "wb") as dst:
                     shutil.copyfileobj(src, dst, 1 << 20)
     except UpdateError:
         shutil.rmtree(stage, ignore_errors=True)
@@ -347,11 +359,11 @@ def copy_over(src: Path, dst: Path, tries: int = 30, pause: float = 1.0, log=Non
     que so existe em `dst` (arquivos do usuario) fica. Um arquivo ainda em uso
     e tentado de novo `tries` vezes."""
     src, dst = Path(src), Path(dst)
-    for base, dirs, files in os.walk(src):
+    for base, dirs, files in os.walk(_long(src)):
         dirs.sort()
-        rel = Path(base).relative_to(src)
+        rel = Path(os.path.relpath(base, _long(src)))
         try:
-            (dst / rel).mkdir(parents=True, exist_ok=True)
+            os.makedirs(_long(dst / rel), exist_ok=True)
         except OSError as e:
             if log:
                 log("mkdir %s: %s" % (rel, e))
@@ -360,8 +372,8 @@ def copy_over(src: Path, dst: Path, tries: int = 30, pause: float = 1.0, log=Non
             out, tmp = dst / rel / name, dst / rel / (name + ".dw4new")
             for attempt in range(tries):
                 try:
-                    shutil.copy2(Path(base) / name, tmp)
-                    os.replace(tmp, out)
+                    shutil.copy2(_long(Path(base) / name), _long(tmp))
+                    os.replace(_long(tmp), _long(out))
                     break
                 except OSError as e:
                     if log and attempt in (0, tries - 1):

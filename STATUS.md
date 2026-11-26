@@ -544,6 +544,34 @@ jogar e para desenvolver, correções de runtime candidatas a portar e a discuss
   launcher não abre terminal. A janela do OpenGL usa o renderizador padrão da SDL, que
   no Windows é Direct3D por dentro da SDL — o nosso código não usa DirectX.
 
+## Atualização no Windows falhou por caminho longo; ícone genérico — corrigido na v0.5.2 (2026-11-25, `DW4R-8`)
+
+**Release v0.5.2:** o usuário abriu o `.zip` da v0.5.2 em Windows 11 real e confirmou o ícone
+("funcionou o ícone"). A atualização v0.5.1 → v0.5.2 pelo launcher **ainda não foi feita em
+Windows real**: só no Wine.
+
+Primeira atualização de verdade (v0.5.0 → v0.5.1), feita pelo usuário em **Windows 11 real**:
+
+- **Falhou** com "Não foi possível gravar a atualização: [Errno 2] ... qrc_qmake_Qt_labs_assetdownloader_init.cpp.obj".
+  O caminho completo do arquivo na pasta de preparo (`%APPDATA%\dw4-recomp\update\new\<pacote>\...`)
+  tinha 262 caracteres, acima do limite de 260 do Windows. Nada foi instalado (a falha é antes da
+  cópia) e o usuário atualizou baixando o `.zip`. Os 4 arquivos longos eram restos de compilação
+  que vêm na roda do PySide6 (`objects-Debug`, `objects-RelWithDebInfo`), sem uso.
+- **Correção em dois lados**, porque quem prepara a atualização é o launcher **já instalado**
+  (v0.5.0/v0.5.1, que não sabe lidar com caminho longo): (1) `package_win.sh` tira esses restos e
+  recusa pacote com caminho acima de 125 caracteres (o maior caiu de 219 para 109, sem contar a
+  pasta do pacote); (2) `updater.py` usa caminhos `\\?\` no Windows para extrair e copiar.
+  Em caso de erro a tela agora mostra também o botão da página de download.
+- **Ícone:** a janela do launcher e a barra de tarefas mostravam o ícone genérico (a janela é do
+  `pythonw.exe`). O launcher passa a definir o ícone da janela e um AppUserModelID próprio; o
+  `dw4_recomp.exe` ganhou o ícone como recurso (a SDL o usa na janela do jogo).
+- **Conferido no Wine:** a v0.5.1 publicada (atualizador antigo) preparando e instalando o pacote
+  novo; o atualizador novo extraindo e copiando o pacote antigo com caminhos de 398 caracteres;
+  `--wine --golden`. **Não conferido:** a atualização em Windows real (o Wine não impõe o limite
+  de 260 do mesmo jeito).
+- Do lado bom: no Windows real a consulta, o download e a conferência do hash funcionaram, e a
+  v0.5.1 instalada à mão abriu normalmente.
+
 ## Áudio repetindo — RESOLVIDO, release v0.5.1 (2026-11-25)
 
 Relato do usuário com o AppImage da v0.5.0: "áudio repetindo às vezes". Causa: na camada Linux

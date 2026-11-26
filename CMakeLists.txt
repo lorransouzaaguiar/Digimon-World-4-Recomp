@@ -128,6 +128,14 @@ target_link_libraries(dw4_recomp PRIVATE
     xboxrecomp SDL2::SDL2 Threads::Threads m ${CMAKE_DL_LIBS})
 
 if(WIN32)
+    # Icone do executavel: e o que a SDL poe na janela do jogo e o que o
+    # Explorer e a barra de tarefas mostram. O .rc e escrito na pasta de build
+    # (o caminho do .ico nao entra no executavel).
+    enable_language(RC)
+    file(WRITE ${CMAKE_BINARY_DIR}/dw4_icon.rc
+         "1 ICON \"${CMAKE_SOURCE_DIR}/packaging/windows/dw4-recomp.ico\"\n")
+    target_sources(dw4_recomp PRIVATE ${CMAKE_BINARY_DIR}/dw4_icon.rc)
+
     # libgcc e winpthreads dentro do executavel: o pacote nao precisa levar as
     # DLLs do MinGW. SDL2, libepoxy e Vulkan continuam em DLL (bibliotecas de
     # importacao).

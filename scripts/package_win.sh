@@ -81,7 +81,7 @@ cp "$BUILD/dw4_recomp.exe" "$DIST/$NAME.debug.exe"
 cp "$SDL2_ROOT/$TRIPLET/bin/SDL2.dll" "$BUILD/libepoxy-0.dll" "$PKG/game/"
 
 # ── 2. Launcher ──────────────────────────────────────────────────────────────
-cp launcher/dw4_launcher.py launcher/xiso.py launcher/updater.py "$PKG/launcher/"
+cp launcher/dw4_launcher.py launcher/xiso.py launcher/updater.py packaging/dw4-recomp.png "$PKG/launcher/"
 cp launcher/qml/*.qml "$PKG/launcher/qml/"
 echo "$VERSION" > "$PKG/launcher/VERSION"
 
@@ -100,7 +100,12 @@ printf 'python312.zip\r\n.\r\nLib\\site-packages\r\n' > "$PKG/python/python312._
     cd PySide6
     rm -f ./*.exe ./*.lib ./*.pyi opengl32sw.dll
     rm -rf translations resources include lib glue doc metatypes typesystems scripts support \
-           plugins/sqldrivers plugins/designer plugins/qmltooling qml/QtTest
+           plugins/sqldrivers plugins/designer plugins/qmltooling qml/QtTest qml/Qt/labs/assetdownloader
+    # Restos de compilacao que vem na roda do PySide6 (objects-Debug, objects-RelWithDebInfo):
+    # nao sao usados e tem os caminhos mais longos do pacote -- foi um deles que estourou o limite
+    # de 260 caracteres do Windows na atualizacao da v0.5.0 para a v0.5.1.
+    find . -type d -name 'objects-*' -prune -exec rm -rf {} +
+    find . -type f \( -name '*.obj' -o -name '*.pdb' \) -delete
     for m in Concurrent DBus Designer Help LabsStyleKit OpenGLWidgets PrintSupport QmlFeatures \
              QuickControls2 QuickTest QuickWidgets Sql Svg SvgWidgets Test UiTools Widgets Xml; do
         rm -f "Qt$m.pyd"
@@ -166,6 +171,14 @@ from https://www.python.org/ (PSF License, see Python-PSF.txt).
 EOT
 
 # ── Barreiras ────────────────────────────────────────────────────────────────
+# Caminhos curtos: o Windows limita um caminho a 260 caracteres, e a atualizacao
+# extrai o pacote em %APPDATA%\dw4-recomp\update\new\<pasta do pacote>\ (ate ~115
+# caracteres com um nome de usuario comprido). O launcher das versoes 0.5.0 e
+# 0.5.1 nao sabe passar desse limite, entao o pacote tem de caber.
+MAXREL=125
+LONG="$(cd "$PKG" && find . -type f | awk -v m=$MAXREL '{ if (length($0) - 2 > m) print length($0) - 2, $0 }' | sort -rn | head -3)"
+[ -z "$LONG" ] || die "caminho com mais de $MAXREL caracteres dentro do pacote (limite de 260 do Windows): $LONG"
+
 BAD="$(find "$PKG" -type f \( -iname '*.xbe' -o -iname '*.afs' -o -iname '*.igb' -o -iname '*.iso' \
         -o -iname '*.img' -o -iname '*.bmp' \) | head -5)"
 [ -z "$BAD" ] || die "arquivo do jogo ou de save dentro do pacote: $BAD"
