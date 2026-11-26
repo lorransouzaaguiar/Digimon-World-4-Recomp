@@ -1,6 +1,6 @@
 # STATUS — Digimon World 4 (Xbox NTSC-U) → Linux nativo
 
-Última atualização: 2026-11-26 (release v1.0.1)
+Última atualização: 2026-11-26 (release v1.1.0)
 
 | Marco | Estado |
 |---|---|
@@ -225,7 +225,7 @@ em `PORT_NOTES.md` §7.0. Validado sem janela (2 reloads durante o cenário do l
   mais escuro, e ele decidiu deixar assim. Depois jogou várias outras áreas e relatou a névoa
   normal em todas. Não visto: a arena no Vulkan e no Windows.
 
-- **Importar save de Xbox pelo launcher (2026-11-26, `DW4R-14`, ainda sem release):** "Importar
+- **Importar save de Xbox pelo launcher (2026-11-26, `DW4R-14`, na v1.1.0):** "Importar
   .zip…" aceita um `.zip` com `UDATA/42410002/` (console, emulador, site de saves) e assina o
   `SaveData.dat` de novo com a chave do port; sem isso o jogo diz "This game is corrupted and cannot
   be used" (`launcher/xsave.py`, `PORT_NOTES.md` §8). Só os arquivos do save são trocados, depois
