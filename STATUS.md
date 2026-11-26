@@ -1,6 +1,6 @@
 # STATUS — Digimon World 4 (Xbox NTSC-U) → Linux nativo
 
-Última atualização: 2026-11-23
+Última atualização: 2026-11-26 (release v1.0.0)
 
 | Marco | Estado |
 |---|---|

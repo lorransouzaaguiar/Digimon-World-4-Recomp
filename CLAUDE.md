@@ -18,7 +18,8 @@ caminho para as três plataformas (macOS via MoltenVK).
   desempenho (excelente, mas só na máquina dele; no Windows real, 60 fps em 4K com Vulkan e
   quedas para ~40 fps com OpenGL nas áreas pesadas), e que acredita que já dá para zerar
   (expectativa dele; ninguém jogou até o fim).
-- **Publicado:** release v0.5.2 (2026-11-25, o quarto do dia; AppImage + tar.gz + `.zip` de Windows com launcher;
+- **Publicado:** release v1.0.0 (2026-11-26; número escolhido pelo usuário por não haver mais bug conhecido de
+  imagem e som, mesmo sem o jogo ter sido zerado; antes v0.5.2, de 2026-11-25; AppImage + tar.gz + `.zip` de Windows com launcher;
   todo release leva Linux e Windows, e o Windows não é mais apresentado como "experimental" — pedido
   do usuário; antes v0.5.1, v0.5.0, v0.4.1, v0.4.0, v0.3.2, v0.3.1, v0.3.0, v0.2.0 e v0.1.0) em
   `github.com/lorransouzaaguiar/Digimon-World-4-Recomp` (preparado para ficar público: licença
@@ -69,13 +70,13 @@ caminho para as três plataformas (macOS via MoltenVK).
   (a do AppImage no Linux só rodou contra o servidor de teste). `package_win.sh` recusa caminho acima de 125 caracteres.
 - **Aberto:** fechar pela janela caiu na saída dentro do gamescope (`PORT_NOTES.md` §8); texgen só nos modos lineares (sphere/reflection/normal map faltam);
   HUD em widescreen só conferido com 1 jogador.
-- **Chão que escurecia / sombras (2026-11-26, `DW4R-12`, sem release ainda):** a causa era o texgen
+- **Chão que escurecia / sombras (2026-11-26, `DW4R-12`, na v1.0.0):** a causa era o texgen
   ignorado no passe de sombra projetada; corrigido em `ffp_vertex()` no toolkit (`PORT_NOTES.md`
   §4.8 e §7.8). O usuário jogou no Linux com Vulkan e com OpenGL (1440p 16:9; Central Area e
   cavernas): o chão não escurece mais e os Digimon têm sombra correta ("tá 100%"). Sem janela:
   goldens passam nos dois renderizadores e no Wine (referências atualizadas, com sombra).
   Em Windows 11 real o usuário jogou o pacote de teste da `DW4R-12` em 2026-11-26 ("tá perfeito"; Vulkan, 1440p).
-- **Crash ao pular a abertura (2026-11-26, `DW4R-12`, sem release ainda):** corrida entre a thread
+- **Crash ao pular a abertura (2026-11-26, `DW4R-12`, na v1.0.0):** corrida entre a thread
   principal e a mwidle do CRI (no console a prioridade impede); a passada da mwidle agora respeita
   a seção crítica do CRI (`sub_00257FB0` embrulhada em `recomp_manual.c`, `PORT_NOTES.md` §4.21;
   `DW4_CRI_IDLE_GATE=0` desliga). Sem janela: 128 de 128 limpas (antes ~5%), Wine 16 de 16. O usuário
