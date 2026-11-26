@@ -17,9 +17,11 @@ Publicar é ação externa: só faça quando o usuário pedir, e confirme a vers
 ## 2. Notas bilíngues
 
 Crie `docs/releases/vX.Y.Z.md` seguindo `docs/releases/v0.1.0.md`: links no topo, seção
-**English** e seção **Português (Brasil)** com o mesmo conteúdo — como começar, requisitos, o que
-mudou, problemas conhecidos, como relatar. Escreva só o que foi verificado; o que não foi testado
-entra em "problemas conhecidos". Sempre o aviso de que os arquivos do jogo não vêm junto.
+**English** e seção **Português (Brasil)** com o mesmo conteúdo — o que mudou, como atualizar, como
+começar, testado, como relatar. Escreva só o que foi verificado. **Sem seção "Não testado" e sem
+seção "Problemas conhecidos"** (pedido do usuário em 2026-11-26, a partir da v1.1.0): o que não foi
+testado e os limites conhecidos ficam no `STATUS.md` e são ditos ao usuário na conversa, não nas
+notas. Sempre o aviso de que os arquivos do jogo não vêm junto.
 
 Os links de idioma do topo precisam de âncora explícita **e própria de cada versão**:
 
